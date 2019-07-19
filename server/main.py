@@ -28,22 +28,6 @@ def read_fixed_message(conn) -> ByteString:
         return None
     return buf
 
-def read_label_byte_tensor(conn) -> Dict[int, int]:
-    buf = read_fixed_message(conn)
-    if buf is None:
-        return None
-    arr = np.frombuffer(buf, dtype=np.uint8)
-    ind = np.argpartition(arr, -3)[-3:][::-1]
-    return {k: v for k, v in zip(ind, arr[ind])}
-
-# def read_ohc_tensor(conn):
-#     buf = read_fixed_message(conn)
-#     if buf is None:
-#         return None
-#     if any(x for x in buf if x > 1):
-#         raise Exception('Buffer cannot contain byte value that is not 0 or 1')
-#     return ''.join(str(x) for x in buf)
-
 def read_image(conn):
     buf = read_fixed_message(conn)
     if buf is None:
@@ -119,13 +103,10 @@ def main():
 
     for i in itertools.count():
         data = read_fixed_message(conn)
-        # data = read_label_byte_tensor(conn)
         if data is None:
             break
 
         print(i, len(data), str_preview(data))
-        # print(i, data)
-
         predictions = predict(sess, model, data)
         pprint(imagenet_utils.decode_predictions(predictions)[0])
 
