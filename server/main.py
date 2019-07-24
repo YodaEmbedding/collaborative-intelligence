@@ -42,8 +42,9 @@ def str_preview(s, max_len=16):
     return f'{s[:max_len - 6]}...{s[-3:]}'
 
 def predict(sess, model, data):
+    input_shape = model.layers[1].input_shape[1:]
     t = tf.decode_raw(input_bytes=data, out_type=float, little_endian=True)
-    t = tf.reshape(t, (-1, 7, 7, 512))
+    t = tf.reshape(t, (-1, *input_shape))
     with sess.as_default():
         t = t.eval()
     return model.predict(t)
@@ -87,7 +88,8 @@ def main():
 
     print('Loading model...')
     sess = tf.Session()
-    model_name = 'mobilenet_v1_1.0_224'
+    # model_name = 'mobilenet_v1_1.0_224'
+    model_name = 'resnet34'
     model = keras.models.load_model(f'{model_name}-server.h5')
 
     if not DEBUG:
