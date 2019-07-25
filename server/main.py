@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 
+import importlib.util
 import itertools
 import socket
+import sys
 import time
+from contextlib import suppress
 from pprint import pprint
 from typing import Dict, ByteString
 
@@ -11,6 +14,12 @@ from keras.applications import imagenet_utils
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
+
+spec = importlib.util.spec_from_file_location(
+    'model_def',
+    '/mnt/data/code/experiments/py/tensorflow/resnet-keras-split/main.py')
+model_def = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(model_def)
 
 IP = '0.0.0.0'
 PORT = 5678
@@ -41,13 +50,13 @@ def str_preview(s, max_len=16):
         return s
     return f'{s[:max_len - 6]}...{s[-3:]}'
 
-def predict(sess, model, data):
+def decode_data(sess, model, data, dtype=tf.float32):
     input_shape = model.layers[1].input_shape[1:]
-    t = tf.decode_raw(input_bytes=data, out_type=float, little_endian=True)
+    t = tf.decode_raw(input_bytes=data, out_type=dtype, little_endian=True)
     t = tf.reshape(t, (-1, *input_shape))
     with sess.as_default():
         t = t.eval()
-    return model.predict(t)
+    return t
 
 class ConnMonkey:
     """Simulate a connection using given file data cyclically."""
@@ -85,12 +94,17 @@ class SockMonkey:
 
 def main():
     DEBUG = False
+    DTYPE = tf.uint8
+
+    # model_name = 'mobilenet_v1_1.0_224'
+    model_name = 'resnet34'
+    model_filename = f'{model_name}-server.h5'
 
     print('Loading model...')
     sess = tf.Session()
-    # model_name = 'mobilenet_v1_1.0_224'
-    model_name = 'resnet34'
-    model = keras.models.load_model(f'{model_name}-server.h5')
+    model = keras.models.load_model(
+        model_filename,
+        custom_objects={'DecoderLayer': model_def.DecoderLayer})
 
     if not DEBUG:
         print('Waiting for connection...')
@@ -100,16 +114,18 @@ def main():
         conn, addr = sock.accept()
         print(f'Established connection on\n{conn}\n{addr}')
     else:
-        conn = ConnMonkey('monitor.dat')
+        conn = ConnMonkey('resnet34-float-add_8-monitor.dat')
         sock = SockMonkey()
 
     for i in itertools.count():
-        data = read_fixed_message(conn)
-        if data is None:
+        msg = read_fixed_message(conn)
+        if msg is None:
             break
 
+        data = msg
         print(i, len(data), str_preview(data))
-        predictions = predict(sess, model, data)
+        t = decode_data(sess, model, data, dtype=DTYPE)
+        predictions = model.predict(t)
         pprint(imagenet_utils.decode_predictions(predictions)[0])
 
     # for i in itertools.count():
@@ -126,6 +142,11 @@ def main():
     # cv2.destroyAllWindows()
 
     sock.close()
+
+    with suppress(NameError):
+        with open('last_run_final_frame.dat', 'wb') as f:
+            f.write(data)
+        np.save('last_run_final_frame.npy', t)
 
 if __name__ == '__main__':
     main()
