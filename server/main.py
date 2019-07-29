@@ -60,6 +60,18 @@ def decode_data(sess, model, data, dtype=tf.float32):
         t = t.eval()
     return t
 
+class SockMonkey:
+    """Simulate a socket that generates connections that use given file data."""
+
+    def __init__(self, filename):
+        self._filename = filename
+
+    def close(self):
+        pass
+
+    def accept(self):
+        return ConnMonkey(self._filename), ('Virtual Address', -1)
+
 class ConnMonkey:
     """Simulate a connection using given file data cyclically."""
 
@@ -90,10 +102,6 @@ class ConnMonkey:
         result = b''.join(xs)
         return result
 
-class SockMonkey:
-    def close(self):
-        pass
-
 def main():
     DEBUG = False
     DTYPE = tf.uint8
@@ -110,46 +118,51 @@ def main():
         custom_objects={'DecoderLayer': model_def.DecoderLayer})
 
     if not DEBUG:
-        print('Waiting for connection...')
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.bind((IP, PORT))
         sock.listen(1)
+    else:
+        sock = SockMonkey('resnet34-float-add_8-monitor.dat')
+
+    while True:
+        print('Waiting for connection...')
         conn, addr = sock.accept()
         print(f'Established connection on\n{conn}\n{addr}')
-    else:
-        conn = ConnMonkey('resnet34-float-add_8-monitor.dat')
-        sock = SockMonkey()
 
-    for i in itertools.count():
-        msg = read_fixed_message(conn)
-        if msg is None:
-            break
+        for i in itertools.count():
+            msg = read_fixed_message(conn)
+            if msg is None:
+                break
 
-        data = msg
-        print(i, len(data), str_preview(data))
-        t = decode_data(sess, model, data, dtype=DTYPE)
-        predictions = model.predict(t)
-        pprint(imagenet_utils.decode_predictions(predictions)[0])
+            data = msg
+            t = decode_data(sess, model, data, dtype=DTYPE)
+            predictions = model.predict(t)
+            decoded_pred = imagenet_utils.decode_predictions(predictions)[0]
+            decoded_pred_str = '\n'.join(
+                f'{name:12} {desc:24} {score:0.3f}'
+                for name, desc, score in decoded_pred)
+            print(i, len(data), str_preview(data))
+            print(decoded_pred_str)
+            print('')
 
-    # for i in itertools.count():
-    #     img = read_image(conn)
-    #     if img is None:
-    #         break
-    #
-    #     print(i, img.shape)
-    #     cv2.imshow('Preview', img)
-    #     key = cv2.waitKey(30) & 0xff
-    #     if key == 27:
-    #         break
-    #
-    # cv2.destroyAllWindows()
+        print('Closing connection...')
+        conn.close()
 
+        with suppress(NameError):
+            with open('last_run_final_frame.dat', 'wb') as f:
+                f.write(data)
+            np.save('last_run_final_frame.npy', t)
+
+    # NOTE This never executes...
     sock.close()
-
-    with suppress(NameError):
-        with open('last_run_final_frame.dat', 'wb') as f:
-            f.write(data)
-        np.save('last_run_final_frame.npy', t)
 
 if __name__ == '__main__':
     main()
+
+# TODO
+# Multiple clients, scarce resources (GPU)
+# Deal with overload of requests from clients (skip outdated requests)
+# More resources: load multiple instances of model
+# Handle client reconnection attempts gracefully
+# Signal loss from client -> timeout on recv
+# Exception handling: https://docs.python.org/3/library/socket.html#example
