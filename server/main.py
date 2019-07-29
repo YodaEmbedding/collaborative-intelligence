@@ -48,9 +48,12 @@ def read_image(conn):
     return img
 
 def str_preview(s, max_len=16):
+    def unquoted(x: ByteString) -> str:
+        return repr(x)[2:-1]
+
     if len(s) < max_len:
         return s
-    return f'{s[:max_len - 6]}...{s[-3:]}'
+    return f'{unquoted(s[:max_len - 6])}...{unquoted(s[-3:])}'
 
 def decode_data(sess, model, data, dtype=tf.float32):
     input_shape = model.layers[1].input_shape[1:]
