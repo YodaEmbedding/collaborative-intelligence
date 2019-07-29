@@ -97,10 +97,11 @@ class SockMonkey:
 def main():
     DEBUG = False
     DTYPE = tf.uint8
-
-    # model_name = 'mobilenet_v1_1.0_224'
     model_name = 'resnet34'
-    model_filename = f'{model_name}-server.h5'
+    # model_name = 'mobilenet_v1_1.0_224'
+
+    opt_suffix = '-float' if DTYPE == tf.float32 else ''
+    model_filename = f'{model_name}-server{opt_suffix}.h5'
 
     print('Loading model...')
     sess = tf.Session()
