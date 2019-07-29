@@ -2,6 +2,7 @@
 
 import importlib.util
 import itertools
+import os
 import socket
 import sys
 import time
@@ -17,7 +18,8 @@ from tensorflow import keras
 
 spec = importlib.util.spec_from_file_location(
     'model_def',
-    '/mnt/data/code/experiments/py/tensorflow/resnet-keras-split/main.py')
+    os.path.expandvars(
+        '$HOME/code/experiments/py/tensorflow/resnet-keras-split/main.py'))
 model_def = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(model_def)
 
