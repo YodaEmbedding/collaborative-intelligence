@@ -1,7 +1,5 @@
 package com.sicariusnoctis.collaborativeintelligence
 
-import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.ImageFormat
 import android.os.Bundle
 import android.renderscript.*
@@ -18,16 +16,10 @@ import kotlinx.android.synthetic.main.activity_main.*
 
 class MainActivity : AppCompatActivity() {
     private val TAG = MainActivity::class.qualifiedName
-    private var isInitRenderScript = false
     private lateinit var fotoapparat: Fotoapparat
     private lateinit var networkThread: NetworkThread
     private lateinit var rs: RenderScript
-    private lateinit var yuvToRgbIntrinsic: ScriptIntrinsicYuvToRGB
-    private lateinit var resizeIntrinsic: ScriptIntrinsicResize
-    private lateinit var inData: Allocation
-    private lateinit var rgbaData: Allocation
-    private lateinit var resizedData: Allocation
-
+    private lateinit var postprocessor: CameraPreviewPostprocessor
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -101,47 +93,14 @@ class MainActivity : AppCompatActivity() {
 
     // TODO what if processing is too slow? copy frame (meh), then skip frame processor if frame in-processing lock acquired? (or wait? nah...)
     private fun frameProcessor(frame: Frame) {
-        if (!isInitRenderScript) {
-            initRenderScript(frame.size.width, frame.size.height)
+        if (!::postprocessor.isInitialized) {
+            postprocessor = CameraPreviewPostprocessor(rs, frame.size.width, frame.size.height)
         }
 
-        val rgba = rsProcess(frame.image)
+        val rgba = postprocessor.process(frame)
         // classifier.fillOutputByteArray(outputTransmittedBytes)
         val outputTransmittedBytes = rgba
         networkThread.writeData(outputTransmittedBytes)
-    }
-
-    // TODO ensure camera outputs NV21... or YUVxx? What is default setting?
-    // TODO crop?
-    // TODO RGBA?
-    // TODO reduce rescale aliasing through blur https://medium.com/@petrakeas/alias-free-resize-with-renderscript-5bf15a86ce3
-    // TODO correct orientation... shouldn't ALWAYS be rotating, though...
-    private fun rsProcess(byteArray: ByteArray): ByteArray {
-        inData.copyFrom(byteArray)
-        yuvToRgbIntrinsic.setInput(inData)
-        yuvToRgbIntrinsic.forEach(rgbaData)
-        resizeIntrinsic.setInput(rgbaData)
-        resizeIntrinsic.forEach_bicubic(resizedData)
-
-        var outBuffer = ByteArray(resizedData.bytesSize)
-        resizedData.copyTo(outBuffer)
-
-        return outBuffer
-    }
-
-    private fun initRenderScript(width: Int, height: Int) {
-        val yuvType = Type.createX(rs, Element.U8(rs), width * height * 3 / 2)
-        val rgbaType = Type.createXY(rs, Element.RGBA_8888(rs), width, height)
-        val resizeType = Type.createXY(rs, Element.RGBA_8888(rs), 224, 224)
-
-        inData = Allocation.createTyped(rs, yuvType, Allocation.USAGE_SCRIPT)
-        rgbaData = Allocation.createTyped(rs, rgbaType, Allocation.USAGE_SCRIPT)
-        resizedData = Allocation.createTyped(rs, resizeType, Allocation.USAGE_SCRIPT)
-
-        yuvToRgbIntrinsic = ScriptIntrinsicYuvToRGB.create(rs, Element.U8_4(rs))
-        resizeIntrinsic = ScriptIntrinsicResize.create(rs)
-
-        isInitRenderScript = true
     }
 
     // TODO E/BufferQueueProducer: [SurfaceTexture-0-22526-3] cancelBuffer: BufferQueue has been abandoned
