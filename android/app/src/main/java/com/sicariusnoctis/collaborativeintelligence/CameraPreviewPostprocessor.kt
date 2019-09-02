@@ -2,9 +2,8 @@ package com.sicariusnoctis.collaborativeintelligence
 
 import android.graphics.ImageFormat
 import android.renderscript.*
+import android.renderscript.Script.LaunchOptions
 import io.fotoapparat.preview.Frame
-import android.renderscript.Allocation
-import android.util.Log
 
 class CameraPreviewPostprocessor {
     private val TAG = CameraPreviewPostprocessor::class.qualifiedName
@@ -13,160 +12,80 @@ class CameraPreviewPostprocessor {
     private val width: Int
     private val height: Int
 
-    // private val allocations: List<Allocation>
-    // private val intrinsics: List<Script>
-    // private val scriptGroup: ScriptGroup
-
     private val inputAllocation: Allocation
     private val rgbaAllocation: Allocation
+    private val cropAllocation: Allocation
     private val resizeAllocation: Allocation
     private val outputAllocation: Allocation
 
     private val yuvToRGB: ScriptIntrinsicYuvToRGB
     private val resize: ScriptIntrinsicResize
-    private val preprocess: ScriptC_preprocess
+    private val crop: ScriptC_crop
+    private val preprocess: ScriptC_preprocess // TODO rename to more descriptive
 
-    // private var yuvToRgbIntrinsic: ScriptIntrinsicYuvToRGB
-    // private var resizeIntrinsic: ScriptIntrinsicResize
-    // private var inData: Allocation
-    // private var rgbaData: Allocation
-    // private var resizedData: Allocation
-    // private var inputAllocation: Allocation
-    // private var scriptAllocation: Allocation
-    // private var outputAllocation: Allocation
-    // private var outputAllocationRGB: Allocation
-    // private var scriptHandle: ScriptC_preprocess
+    private val cropLaunchOptions: LaunchOptions
 
-    // TODO Process:
+    // TODO ensure camera outputs NV21... or YUVxx? What is default setting?
+    // TODO... write doc-comment
     // YUV -> RGBA
     // Crop
-    // Blur
+    // Blur https://medium.com/@petrakeas/alias-free-resize-with-renderscript-5bf15a86ce3
     // Resize
     // RGBA -> ARGB [reorderable]
+    // Rotate [optionally, if required]
+    // RGBA -> array((224, 224, 3), dtype=float32)
+    // normalize [optional] with IMAGE_MEAN, IMAGE_STD
     constructor(rs: RenderScript, width: Int, height: Int) {
         this.rs = rs
         this.width = width
         this.height = height
 
+        val side = minOf(width, height)
         val yuvType = Type.Builder(rs, Element.YUV(rs))
             .setX(width)
             .setY(height)
             .setYuvFormat(ImageFormat.NV21)
             .create()
         val rgbaType = Type.createXY(rs, Element.RGBA_8888(rs), width, height)
-        val resizedType = Type.createXY(rs, Element.RGBA_8888(rs), 224, 224)
+        val cropType = Type.createXY(rs, Element.RGBA_8888(rs), side, side)
+        val resizeType = Type.createXY(rs, Element.RGBA_8888(rs), 224, 224)
         val outputType = Type.createXY(rs, Element.RGBA_8888(rs), 224, 224)
         // val outputType = Type.createXY(rs, Element.U32(rs), 224, 224)
 
         inputAllocation = Allocation.createTyped(rs, yuvType, Allocation.USAGE_SCRIPT)
         rgbaAllocation = Allocation.createTyped(rs, rgbaType, Allocation.USAGE_SCRIPT)
-        resizeAllocation = Allocation.createTyped(rs, resizedType, Allocation.USAGE_SCRIPT)
+        cropAllocation = Allocation.createTyped(rs, cropType, Allocation.USAGE_SCRIPT)
+        resizeAllocation = Allocation.createTyped(rs, resizeType, Allocation.USAGE_SCRIPT)
         outputAllocation = Allocation.createTyped(rs, outputType, Allocation.USAGE_SCRIPT)
         
-        // TODO save these into some object instance list...? Prevent garbage collection?
         yuvToRGB = ScriptIntrinsicYuvToRGB.create(rs, Element.U8_4(rs))
+        crop = ScriptC_crop(rs)
         resize = ScriptIntrinsicResize.create(rs)
         preprocess = ScriptC_preprocess(rs)
 
-        yuvToRGB.setInput(inputAllocation)
-        resize.setInput(rgbaAllocation)
+        val xStart = (width - side) / 2
+        val yStart = (height - side) / 2
+        cropLaunchOptions = LaunchOptions()
+            .setX(xStart, xStart + side)
+            .setY(yStart, yStart + side)
 
-        // yuvToRGB.setInput(inputAllocation) // TODO remove
-        //
-        // var builder = ScriptGroup.Builder2(rs)
-        // val unbound = builder.addInput()
-        // val cYuvToRGB = builder.addKernel(
-        //     yuvToRGB.kernelID,
-        //     rgbaType,
-        //     unbound
-        // )
-        // val cResize = builder.addKernel(
-        //     resize.kernelID_bicubic,
-        //     resizedType,
-        //     cYuvToRGB.`return`
-        // )
-        // val cPreprocess = builder.addKernel(
-        //     preprocess.kernelID_preprocess,
-        //     outputType,
-        //     cResize.`return`
-        // )
-        // // builder.addInvoke()
-        //
-        // scriptGroup =
-        //     builder.create("CameraPreviewPostprocessor", cPreprocess.`return`)
+        yuvToRGB.setInput(inputAllocation)
+        resize.setInput(cropAllocation)
+        crop._xStart = xStart.toLong()
+        crop._yStart = yStart.toLong()
+        crop._output = cropAllocation
     }
 
     fun process(frame: Frame): ByteArray {
         inputAllocation.copyFrom(frame.image)
         yuvToRGB.forEach(rgbaAllocation)
+        crop.forEach_crop(rgbaAllocation, cropLaunchOptions) // TODO the arguments could be reversed...
         resize.forEach_bicubic(resizeAllocation)
         preprocess.forEach_preprocess(resizeAllocation, outputAllocation)
         val byteArray = ByteArray(outputAllocation.bytesSize)
         outputAllocation.copyTo(byteArray)
         return byteArray
-
-        // Log.e(TAG, "Look here")
-        // inputAllocation.copyFrom(frame.image)
-        // val outObj = scriptGroup.execute(inputAllocation)
-        // Log.e(TAG, "${outObj.javaClass.canonicalName}")
-        // outputAllocation.copyFrom(outObj)
-        // val byteArray = ByteArray(outputAllocation.bytesSize)
-        // outputAllocation.copyTo(byteArray)
-        // return byteArray
     }
-
-    // TODO ensure camera outputs NV21... or YUVxx? What is default setting?
-    // TODO crop?
-    // TODO RGBA?
-    // TODO reduce rescale aliasing through blur https://medium.com/@petrakeas/alias-free-resize-with-renderscript-5bf15a86ce3
-    // TODO correct orientation... shouldn't ALWAYS be rotating, though...
-    // private fun rsProcess(frame: Frame): ByteArray {
-    //     inData.copyFrom(frame.image)
-    //     yuvToRgbIntrinsic.setInput(inData)
-    //     yuvToRgbIntrinsic.forEach(rgbaData)
-    //     resizeIntrinsic.setInput(rgbaData)
-    //     resizeIntrinsic.forEach_bicubic(resizedData)
-    //
-    //     var outBuffer = ByteArray(resizedData.bytesSize)
-    //     resizedData.copyTo(outBuffer)
-    //
-    //     return outBuffer
-    // }
-
-    // private fun initRenderScript(width: Int, height: Int) {
-    //     val yuvType = Type.createX(rs, Element.U8(rs), width * height * 3 / 2)
-    //     val rgbaType = Type.createXY(rs, Element.RGBA_8888(rs), width, height)
-    //     val resizeType = Type.createXY(rs, Element.RGBA_8888(rs), 224, 224)
-    //
-    //     inData = Allocation.createTyped(rs, yuvType, Allocation.USAGE_SCRIPT)
-    //     rgbaData = Allocation.createTyped(rs, rgbaType, Allocation.USAGE_SCRIPT)
-    //     resizedData = Allocation.createTyped(rs, resizeType, Allocation.USAGE_SCRIPT)
-    //
-    //     yuvToRgbIntrinsic = ScriptIntrinsicYuvToRGB.create(rs, Element.U8_4(rs))
-    //     resizeIntrinsic = ScriptIntrinsicResize.create(rs)
-    //
-    //     isInitRenderScript = true
-    // }
-
-    // private fun initRenderScript(width: Int, height: Int) {
-    //     val yuvTypeBuilder = Type.Builder(rs, Element.YUV(rs))
-    //         .setX(width)
-    //         .setY(height)
-    //         .setYuvFormat(ImageFormat.NV21)
-    //         .create()
-    //     val rgbType = Type.createXY(rs, Element.RGBA_8888(rs), width, height)
-    //     val rgbCroppedType = Type.createXY(rs, Element.RGBA_8888(rs), width, height)
-    //
-    //     inputAllocation = Allocation.createTyped(rs, yuvTypeBuilder, Allocation.USAGE_SCRIPT)
-    //     scriptAllocation = Allocation.createTyped(rs, rgbType, Allocation.USAGE_SCRIPT)
-    //     outputAllocation = Allocation.createTyped(rs, rgbType, Allocation.USAGE_SCRIPT)
-    //     outputAllocationRGB = Allocation.createTyped(rs, rgbCroppedType, Allocation.USAGE_SCRIPT)
-    //
-    //     scriptHandle = ScriptC_preprocess(rs)
-    //
-    //     isInitRenderScript = true
-    // }
-
 
     // private fun rsProcess(frame: Frame): ByteArray {
     //     inputAllocation.copyFrom(frame.image)
