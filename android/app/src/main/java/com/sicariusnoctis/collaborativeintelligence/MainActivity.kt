@@ -10,6 +10,7 @@ import io.fotoapparat.configuration.CameraConfiguration
 import io.fotoapparat.log.logcat
 import io.fotoapparat.log.loggers
 import io.fotoapparat.parameter.ScaleType
+import io.fotoapparat.parameter.camera.CameraParameters
 import io.fotoapparat.preview.Frame
 import io.fotoapparat.selector.*
 import kotlinx.android.synthetic.main.activity_main.*
@@ -20,18 +21,30 @@ class MainActivity : AppCompatActivity() {
     private lateinit var networkThread: NetworkThread
     private lateinit var rs: RenderScript
     private lateinit var postprocessor: CameraPreviewPostprocessor
+    private var cameraParameters: CameraParameters? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        initFotoapparat()
-        networkThread = NetworkThread() // TODO No real need to lateinit... unless specifying IP, port
         rs = RenderScript.create(this)
+        networkThread = NetworkThread() // TODO Don't need lateinit unless specifying IP, port
+        initFotoapparat()
     }
 
     override fun onStart() {
         super.onStart()
         fotoapparat.start()
+        fotoapparat.getCurrentParameters().whenAvailable {
+            cameraParameters = it
+            val previewResolution = cameraParameters?.previewResolution
+            if (!::postprocessor.isInitialized) {
+                postprocessor = CameraPreviewPostprocessor(
+                    rs,
+                    previewResolution!!.width,
+                    previewResolution!!.height
+                )
+            }
+        }
     }
 
     override fun onStop() {
@@ -93,10 +106,6 @@ class MainActivity : AppCompatActivity() {
 
     // TODO what if processing is too slow? copy frame (meh), then skip frame processor if frame in-processing lock acquired? (or wait? nah...)
     private fun frameProcessor(frame: Frame) {
-        if (!::postprocessor.isInitialized) {
-            postprocessor = CameraPreviewPostprocessor(rs, frame.size.width, frame.size.height)
-        }
-
         val rgba = postprocessor.process(frame)
         // classifier.fillOutputByteArray(outputTransmittedBytes)
         val outputTransmittedBytes = rgba
