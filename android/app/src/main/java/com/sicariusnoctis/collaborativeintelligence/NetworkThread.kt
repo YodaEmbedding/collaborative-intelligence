@@ -17,7 +17,7 @@ class NetworkThread : Thread() {
                 networkAdapter.writeData(data)
             }
         } catch (e: InterruptedException) {
-
+            currentThread().interrupt()
         } finally {
             networkAdapter.close()
         }

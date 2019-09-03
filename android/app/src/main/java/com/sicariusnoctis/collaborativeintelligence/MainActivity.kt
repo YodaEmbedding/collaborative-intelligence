@@ -18,7 +18,7 @@ import kotlinx.android.synthetic.main.activity_main.*
 class MainActivity : AppCompatActivity() {
     private val TAG = MainActivity::class.qualifiedName
     private lateinit var fotoapparat: Fotoapparat
-    private lateinit var networkThread: NetworkThread
+    private var networkThread: NetworkThread? = null
     private lateinit var rs: RenderScript
     private lateinit var postprocessor: CameraPreviewPostprocessor
     private var cameraParameters: CameraParameters? = null
@@ -27,7 +27,6 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         rs = RenderScript.create(this)
-        networkThread = NetworkThread() // TODO Don't need lateinit unless specifying IP, port
         initFotoapparat()
     }
 
@@ -45,21 +44,22 @@ class MainActivity : AppCompatActivity() {
                 )
             }
         }
+        networkThread = NetworkThread()
+        networkThread?.start()
     }
 
     override fun onStop() {
         super.onStop()
         fotoapparat.stop()
+        networkThread?.interrupt()
     }
 
     override fun onResume() {
         super.onResume()
-        networkThread.start()
     }
 
     override fun onPause() {
         super.onPause()
-        networkThread.interrupt()
     }
 
     private fun bindViews() {
@@ -109,7 +109,7 @@ class MainActivity : AppCompatActivity() {
         val rgba = postprocessor.process(frame)
         // classifier.fillOutputByteArray(outputTransmittedBytes)
         val outputTransmittedBytes = rgba
-        networkThread.writeData(outputTransmittedBytes)
+        networkThread?.writeData(outputTransmittedBytes)
     }
 
     // TODO E/BufferQueueProducer: [SurfaceTexture-0-22526-3] cancelBuffer: BufferQueue has been abandoned
