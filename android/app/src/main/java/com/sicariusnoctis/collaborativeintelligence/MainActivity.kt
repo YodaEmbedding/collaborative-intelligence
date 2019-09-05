@@ -1,6 +1,6 @@
 package com.sicariusnoctis.collaborativeintelligence
 
-import android.graphics.ImageFormat
+import android.hardware.camera2.CameraCharacteristics
 import android.os.Bundle
 import android.renderscript.*
 import android.util.Log
@@ -21,7 +21,6 @@ class MainActivity : AppCompatActivity() {
     private var networkThread: NetworkThread? = null
     private lateinit var rs: RenderScript
     private lateinit var postprocessor: CameraPreviewPostprocessor
-    private var cameraParameters: CameraParameters? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,19 +32,22 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         fotoapparat.start()
-        fotoapparat.getCurrentParameters().whenAvailable {
-            cameraParameters = it
-            val previewResolution = cameraParameters?.previewResolution
+        fotoapparat.getCurrentParameters().whenAvailable { cameraParameters ->
+            val resolution = cameraParameters?.previewResolution!!
             if (!::postprocessor.isInitialized) {
-                postprocessor = CameraPreviewPostprocessor(
-                    rs,
-                    previewResolution!!.width,
-                    previewResolution!!.height
-                )
+                postprocessor = CameraPreviewPostprocessor(rs, resolution.width, resolution.height)
             }
         }
         networkThread = NetworkThread()
         networkThread?.start()
+
+        // TODO neither of these gives the correct rotation compensation for the preview...
+        // what does fotoapparat say? Look at log, maybe
+        // val rotation = CameraPreviewPostprocessor.getRotation(this, CameraCharacteristics.LENS_FACING_BACK)
+        // Log.e(TAG, "Rotation: $rotation")
+        //
+        // val rotation2 = CameraPreviewPostprocessor.getRotationCompensation(this, CameraPreviewPostprocessor.getCameraId(this, CameraCharacteristics.LENS_FACING_BACK))
+        // Log.e(TAG, "Rotation: $rotation2")
     }
 
     override fun onStop() {
