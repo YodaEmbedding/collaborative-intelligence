@@ -35,7 +35,15 @@ class MainActivity : AppCompatActivity() {
         fotoapparat.getCurrentParameters().whenAvailable { cameraParameters ->
             val resolution = cameraParameters?.previewResolution!!
             if (!::postprocessor.isInitialized) {
-                postprocessor = CameraPreviewPostprocessor(rs, resolution.width, resolution.height)
+                postprocessor = CameraPreviewPostprocessor(
+                    rs,
+                    resolution.width,
+                    resolution.height,
+                    CameraPreviewPostprocessor.getRotationCompensation(
+                        this,
+                        CameraCharacteristics.LENS_FACING_BACK
+                    )
+                )
             }
         }
         networkThread = NetworkThread()
