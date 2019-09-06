@@ -16,6 +16,8 @@ class CameraPreviewPostprocessor {
     private val rs: RenderScript
     private val width: Int
     private val height: Int
+    private val outWidth: Int
+    private val outHeight: Int
     private val rotationCompensation: Int
 
     private val inputAllocation: Allocation
@@ -51,6 +53,8 @@ class CameraPreviewPostprocessor {
         this.rs = rs
         this.width = width
         this.height = height
+        this.outWidth = outWidth
+        this.outHeight = outHeight
         this.rotationCompensation = rotationCompensation
 
         val side = minOf(width, height)
@@ -84,8 +88,7 @@ class CameraPreviewPostprocessor {
         crop._yStart = ((height - side) / 2).toLong()
         resize.setInput(cropAllocation)
         rotate._input = resizeAllocation
-        rotate._width = outHeight.toLong()
-        rotate._height = outWidth.toLong()
+        rotateUpdateParams()
         convert._output = outputAllocation
         convert._width = outWidth.toLong()
     }
@@ -109,6 +112,20 @@ class CameraPreviewPostprocessor {
             90 -> rotate.forEach_rotate90(aout)
             180 -> rotate.forEach_rotate180(aout)
             270 -> rotate.forEach_rotate270(aout)
+            else -> throw IllegalArgumentException("Rotation required is not a multiple of 90")
+        }
+    }
+
+    private fun rotateUpdateParams() {
+        when (rotationCompensation) {
+            0, 180 -> {
+                rotate._width = outWidth.toLong()
+                rotate._height = outHeight.toLong()
+            }
+            90, 270 -> {
+                rotate._width = outHeight.toLong()
+                rotate._height = outWidth.toLong()
+            }
             else -> throw IllegalArgumentException("Rotation required is not a multiple of 90")
         }
     }
