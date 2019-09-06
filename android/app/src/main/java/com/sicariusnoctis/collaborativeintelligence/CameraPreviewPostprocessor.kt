@@ -7,12 +7,9 @@ import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.renderscript.*
-import android.util.Log
 import android.view.Surface.*
 import android.view.WindowManager
-import io.fotoapparat.characteristic.LensPosition
 import io.fotoapparat.preview.Frame
-import java.lang.IllegalArgumentException
 import java.lang.Math.floorMod
 
 class CameraPreviewPostprocessor {
@@ -34,17 +31,23 @@ class CameraPreviewPostprocessor {
     private val rotate: ScriptC_rotate
     private val convert: ScriptC_convert
 
-    // TODO ensure camera outputs NV21... or YUVxx? What is default setting?
-    // TODO... write doc-comment
-    // YUV -> RGBA
-    // Crop
-    // Blur https://medium.com/@petrakeas/alias-free-resize-with-renderscript-5bf15a86ce3
-    // Resize
-    // RGBA -> ARGB [reorderable]
-    // Rotate [optionally, if required]
-    // RGBA -> array((224, 224, 3), dtype=float32)
-    // normalize [optional] with IMAGE_MEAN, IMAGE_STD
-    constructor(rs: RenderScript, width: Int, height: Int, rotationCompensation: Int) {
+    /**
+    Process camera preview for model input.
+
+    Convert YUV to RGBA, crop, resize, rotate, convert 32-bit RGBA to 24-bit RGB.
+     */
+    // TODO Convert to ScriptGroup for optimizations
+    // TODO Try executing algorithms on YUV images? (possibly faster?)
+    // TODO Blur https://medium.com/@petrakeas/alias-free-resize-with-renderscript-5bf15a86ce3
+    // TODO Normalize [optional] with IMAGE_MEAN, IMAGE_STD
+    constructor(
+        rs: RenderScript,
+        width: Int,
+        height: Int,
+        outWidth: Int,
+        outHeight: Int,
+        rotationCompensation: Int
+    ) {
         this.rs = rs
         this.width = width
         this.height = height
@@ -58,9 +61,9 @@ class CameraPreviewPostprocessor {
             .create()
         val rgbaType = Type.createXY(rs, Element.RGBA_8888(rs), width, height)
         val cropType = Type.createXY(rs, Element.RGBA_8888(rs), side, side)
-        val resizeType = Type.createXY(rs, Element.RGBA_8888(rs), 224, 224)
-        val rotateType = Type.createXY(rs, Element.RGBA_8888(rs), 224, 224)
-        val outputType = Type.createX(rs, Element.U8(rs), 224 * 224 * 3)
+        val resizeType = Type.createXY(rs, Element.RGBA_8888(rs), outWidth, outHeight)
+        val rotateType = Type.createXY(rs, Element.RGBA_8888(rs), outWidth, outHeight)
+        val outputType = Type.createX(rs, Element.U8(rs), outWidth * outHeight * 3)
 
         inputAllocation = Allocation.createTyped(rs, yuvType, Allocation.USAGE_SCRIPT)
         rgbaAllocation = Allocation.createTyped(rs, rgbaType, Allocation.USAGE_SCRIPT)
@@ -81,10 +84,10 @@ class CameraPreviewPostprocessor {
         crop._yStart = ((height - side) / 2).toLong()
         resize.setInput(cropAllocation)
         rotate._input = resizeAllocation
-        rotate._width = 224
-        rotate._height = 224
+        rotate._width = outHeight.toLong()
+        rotate._height = outWidth.toLong()
         convert._output = outputAllocation
-        convert._width = 224
+        convert._width = outWidth.toLong()
     }
 
     fun process(frame: Frame): ByteArray {
@@ -111,42 +114,12 @@ class CameraPreviewPostprocessor {
     }
 
     companion object {
-        private val TAG = CameraPreviewPostprocessor::class.qualifiedName
-
         private val rotationToDegrees = mapOf(
             ROTATION_0 to 0,
             ROTATION_90 to 90,
             ROTATION_180 to 180,
             ROTATION_270 to 270
         )
-
-        private val ORIENTATIONS = mapOf(
-            ROTATION_0 to 90,
-            ROTATION_90 to 0,
-            ROTATION_180 to 270,
-            ROTATION_270 to 180
-        )
-
-        @JvmStatic
-        @Throws(CameraAccessException::class)
-        fun getRotationCompensation2(context: Context, cameraId: String): Int {
-            // Get the device's current rotation relative to its "native" orientation.
-            // Then, from the ORIENTATIONS table, look up the angle the image must be
-            // rotated to compensate for the device's rotation.
-            val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            val deviceRotationAdjusted =
-                ORIENTATIONS.getValue(windowManager.defaultDisplay.rotation)
-
-            // On most devices, the sensor orientation is 90 degrees, but for some
-            // devices it is 270 degrees. For devices with a sensor orientation of
-            // 270, rotate the image an additional 180 ((270 + 270) % 360) degrees.
-            val cameraManager = context.getSystemService(CAMERA_SERVICE) as CameraManager
-            val sensorOrientation = cameraManager
-                .getCameraCharacteristics(cameraId)
-                .get(CameraCharacteristics.SENSOR_ORIENTATION)!!
-
-            return (deviceRotationAdjusted + sensorOrientation + 270) % 360
-        }
 
         @JvmStatic
         @Throws(CameraAccessException::class)
@@ -162,26 +135,6 @@ class CameraPreviewPostprocessor {
 
             val polarity = if (facing == CameraCharacteristics.LENS_FACING_FRONT) 1 else -1
             return floorMod(sensorOrientation + polarity * deviceRotation, 360)
-        }
-
-        @JvmStatic
-        fun lensPositionToLensFacing(lensPosition: LensPosition): Int {
-            return when (lensPosition) {
-                LensPosition.Front -> CameraCharacteristics.LENS_FACING_FRONT
-                LensPosition.Back -> CameraCharacteristics.LENS_FACING_BACK
-                LensPosition.External -> CameraCharacteristics.LENS_FACING_EXTERNAL
-            }
-        }
-
-        @JvmStatic
-        fun getCameraId(context: Context, facing: Int): String {
-            val manager = context.getSystemService(CAMERA_SERVICE) as CameraManager
-
-            return manager.cameraIdList.first {
-                manager
-                    .getCameraCharacteristics(it)
-                    .get(CameraCharacteristics.LENS_FACING) == facing
-            }
         }
     }
 }

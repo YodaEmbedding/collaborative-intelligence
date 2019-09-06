@@ -2,7 +2,7 @@ package com.sicariusnoctis.collaborativeintelligence
 
 import android.hardware.camera2.CameraCharacteristics
 import android.os.Bundle
-import android.renderscript.*
+import android.renderscript.RenderScript
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import io.fotoapparat.Fotoapparat
@@ -10,7 +10,6 @@ import io.fotoapparat.configuration.CameraConfiguration
 import io.fotoapparat.log.logcat
 import io.fotoapparat.log.loggers
 import io.fotoapparat.parameter.ScaleType
-import io.fotoapparat.parameter.camera.CameraParameters
 import io.fotoapparat.preview.Frame
 import io.fotoapparat.selector.*
 import kotlinx.android.synthetic.main.activity_main.*
@@ -39,6 +38,8 @@ class MainActivity : AppCompatActivity() {
                     rs,
                     resolution.width,
                     resolution.height,
+                    224,
+                    224,
                     CameraPreviewPostprocessor.getRotationCompensation(
                         this,
                         CameraCharacteristics.LENS_FACING_BACK
@@ -48,32 +49,12 @@ class MainActivity : AppCompatActivity() {
         }
         networkThread = NetworkThread()
         networkThread?.start()
-
-        // TODO neither of these gives the correct rotation compensation for the preview...
-        // what does fotoapparat say? Look at log, maybe
-        // val rotation = CameraPreviewPostprocessor.getRotation(this, CameraCharacteristics.LENS_FACING_BACK)
-        // Log.e(TAG, "Rotation: $rotation")
-        //
-        // val rotation2 = CameraPreviewPostprocessor.getRotationCompensation(this, CameraPreviewPostprocessor.getCameraId(this, CameraCharacteristics.LENS_FACING_BACK))
-        // Log.e(TAG, "Rotation: $rotation2")
     }
 
     override fun onStop() {
         super.onStop()
         fotoapparat.stop()
         networkThread?.interrupt()
-    }
-
-    override fun onResume() {
-        super.onResume()
-    }
-
-    override fun onPause() {
-        super.onPause()
-    }
-
-    private fun bindViews() {
-        // ...
     }
 
     private fun initFotoapparat() {
@@ -106,7 +87,6 @@ class MainActivity : AppCompatActivity() {
             cameraConfiguration = cameraConfiguration,
             logger = loggers(
                 logcat()
-                // fileLogger(this)
             ),
             cameraErrorCallback = { error ->
                 Log.e(TAG, "$error")
@@ -114,7 +94,8 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    // TODO what if processing is too slow? copy frame (meh), then skip frame processor if frame in-processing lock acquired? (or wait? nah...)
+    // TODO what if processing is too slow?
+    // TODO copy frame (meh), then skip frame processor if frame in-processing lock acquired? or wait?
     private fun frameProcessor(frame: Frame) {
         val rgba = postprocessor.process(frame)
         // classifier.fillOutputByteArray(outputTransmittedBytes)
