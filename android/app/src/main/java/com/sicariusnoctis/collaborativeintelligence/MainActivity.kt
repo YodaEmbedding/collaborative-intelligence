@@ -12,14 +12,21 @@ import io.fotoapparat.log.loggers
 import io.fotoapparat.parameter.ScaleType
 import io.fotoapparat.preview.Frame
 import io.fotoapparat.selector.*
+import io.reactivex.internal.schedulers.ComputationScheduler
+import io.reactivex.internal.schedulers.IoScheduler
+import io.reactivex.processors.PublishProcessor
+import io.reactivex.rxkotlin.subscribeBy
 import kotlinx.android.synthetic.main.activity_main.*
 
 class MainActivity : AppCompatActivity() {
     private val TAG = MainActivity::class.qualifiedName
+
     private lateinit var fotoapparat: Fotoapparat
-    private var networkThread: NetworkThread? = null
-    private lateinit var rs: RenderScript
+    private lateinit var inference: Inference
     private lateinit var postprocessor: CameraPreviewPostprocessor
+    private lateinit var rs: RenderScript
+    private val frameProcessor: PublishProcessor<Frame> = PublishProcessor.create()
+    private var networkThread: NetworkThread? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,6 +38,7 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         fotoapparat.start()
+        // TODO extract to reduce clutter...
         fotoapparat.getCurrentParameters().whenAvailable { cameraParameters ->
             val resolution = cameraParameters?.previewResolution!!
             if (!::postprocessor.isInitialized) {
@@ -47,8 +55,27 @@ class MainActivity : AppCompatActivity() {
                 )
             }
         }
+
+        inference = Inference(this)
+
         networkThread = NetworkThread()
         networkThread?.start()
+
+        // TODO Backpressure strategies? Also check if frames are dropped...
+        frameProcessor
+            .map { postprocessor.process(it) }
+            .map { inference.run(it) }
+            .observeOn(IoScheduler())
+            .doOnNext { networkThread?.writeData(it) }
+            .subscribeOn(ComputationScheduler())
+            .subscribeBy(
+                { error ->
+                    error.printStackTrace()
+                },
+                { },
+                { item ->
+                    {} // maybe save to stats on main thread? or observable...
+                })
     }
 
     override fun onStop() {
@@ -76,7 +103,7 @@ class MainActivity : AppCompatActivity() {
             ),
             jpegQuality = manualJpegQuality(90),
             sensorSensitivity = lowestSensorSensitivity(),
-            frameProcessor = this::frameProcessor
+            frameProcessor = this.frameProcessor!!::onNext
         )
 
         fotoapparat = Fotoapparat(
@@ -94,14 +121,20 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    // TODO make this part of RxJava stream...
     // TODO what if processing is too slow?
     // TODO copy frame (meh), then skip frame processor if frame in-processing lock acquired? or wait?
-    private fun frameProcessor(frame: Frame) {
-        val rgba = postprocessor.process(frame)
-        // classifier.fillOutputByteArray(outputTransmittedBytes)
-        val outputTransmittedBytes = rgba
-        networkThread?.writeData(outputTransmittedBytes)
-    }
+    // private fun frameProcessor(frame: Frame) {
+    //     val inputBytes = postprocessor.process(frame)
+    //     // classifier.startInference(inputBytes, future_callback)
+    //     val outputTransmittedBytes = inputBytes
+    //     networkThread?.writeData(outputTransmittedBytes)
+    // }
+
+    // TODO Inference
+    // TODO Stats
+    // TODO Network receiver
+    // TODO Video
 
     // TODO E/BufferQueueProducer: [SurfaceTexture-0-22526-3] cancelBuffer: BufferQueue has been abandoned
     // TODO why does the stream freeze on server-side?
