@@ -33,15 +33,16 @@ class CameraPreviewPostprocessor {
     private val rotate: ScriptC_rotate
     private val convert: ScriptC_convert
 
+    // TODO Convert to ScriptGroup for optimizations
+    // TODO Try executing algorithms on YUV images? (possibly faster?)
+    // TODO Blur https://medium.com/@petrakeas/alias-free-resize-with-renderscript-5bf15a86ce3
+    // TODO Change camera preview resolution https://github.com/RedApparat/Fotoapparat/issues/377
+    // TODO Normalize [optional] with IMAGE_MEAN, IMAGE_STD
     /**
     Process camera preview for model input.
 
     Convert YUV to RGBA, crop, resize, rotate, convert 32-bit RGBA to 24-bit RGB.
      */
-    // TODO Convert to ScriptGroup for optimizations
-    // TODO Try executing algorithms on YUV images? (possibly faster?)
-    // TODO Blur https://medium.com/@petrakeas/alias-free-resize-with-renderscript-5bf15a86ce3
-    // TODO Normalize [optional] with IMAGE_MEAN, IMAGE_STD
     constructor(
         rs: RenderScript,
         width: Int,
@@ -93,6 +94,7 @@ class CameraPreviewPostprocessor {
         convert._width = outWidth.toLong()
     }
 
+    // TODO Slight inefficiency from allocating new ByteArray instead of reusing a direct ByteBuffer
     fun process(frame: Frame): ByteArray {
         inputAllocation.copyFrom(frame.image)
         yuvToRGB.forEach(rgbaAllocation)
