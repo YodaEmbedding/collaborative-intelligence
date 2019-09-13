@@ -1,23 +1,18 @@
 package com.sicariusnoctis.collaborativeintelligence
 
-import io.reactivex.*
-import java.io.BufferedReader
-import java.io.InputStream
-import java.io.InputStreamReader
-import java.lang.Thread
-import java.util.Optional
+import io.reactivex.BackpressureStrategy
+import io.reactivex.Flowable
+import java.util.*
 import java.util.concurrent.LinkedBlockingQueue
 
 class NetworkReadThread : Thread {
     val outputStream: Flowable<String>
 
-    private val inputStream: BufferedReader
+    private val networkAdapter: NetworkAdapter
     private val queue = LinkedBlockingQueue<Optional<String>>()
 
-    constructor(inputStream: InputStream) : super() {
-        // TODO BufferedInputStream for byte data?
-        // https://stackoverflow.com/questions/15538509/dealing-with-end-of-file-using-bufferedreader-read
-        this.inputStream = BufferedReader(InputStreamReader(inputStream))
+    constructor(networkAdapter: NetworkAdapter) : super() {
+        this.networkAdapter = networkAdapter
         this.outputStream = Flowable.create({ subscriber ->
             // TODO Wait until thread is alive using CountDownLatch?
             // TODO thread.isAlive()? socket.isOpen? volatile boolean flag?
@@ -29,13 +24,13 @@ class NetworkReadThread : Thread {
             }
             subscriber.onComplete()
         }, BackpressureStrategy.MISSING)
+        // TODO BackpressureStrategy
     }
 
     override fun run() {
         try {
             while (true) {
-                val data = inputStream.readLine() ?: break
-                println("Found data! $data")
+                val data = networkAdapter.readData() ?: break
                 queue.put(Optional.of(data))
             }
         } catch (e: InterruptedException) {
