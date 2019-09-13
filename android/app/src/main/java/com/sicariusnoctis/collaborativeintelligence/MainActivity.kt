@@ -9,22 +9,29 @@ import io.fotoapparat.Fotoapparat
 import io.fotoapparat.configuration.CameraConfiguration
 import io.fotoapparat.log.logcat
 import io.fotoapparat.log.loggers
+import io.fotoapparat.parameter.Resolution
 import io.fotoapparat.parameter.ScaleType
 import io.fotoapparat.parameter.camera.CameraParameters
 import io.fotoapparat.preview.Frame
 import io.fotoapparat.selector.*
+import io.reactivex.Scheduler
 import io.reactivex.Single
 import io.reactivex.internal.schedulers.ComputationScheduler
 import io.reactivex.internal.schedulers.IoScheduler
 import io.reactivex.processors.PublishProcessor
 import io.reactivex.rxkotlin.subscribeBy
+import io.reactivex.schedulers.Schedulers
 import kotlinx.android.synthetic.main.activity_main.*
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
     private val TAG = MainActivity::class.qualifiedName
 
     private lateinit var fotoapparat: Fotoapparat
     private lateinit var inference: Inference
+    private lateinit var inferenceExecutor: ExecutorService
+    private lateinit var inferenceScheduler: Scheduler
     private lateinit var postprocessor: CameraPreviewPostprocessor
     private lateinit var rs: RenderScript
     private val frameProcessor: PublishProcessor<Frame> = PublishProcessor.create()
@@ -42,7 +49,9 @@ class MainActivity : AppCompatActivity() {
         super.onStart()
         fotoapparat.start()
         fotoapparat.getCurrentParameters().whenAvailable(this::onCameraParametersAvailable)
-        inference = Inference(this)
+        inferenceExecutor = Executors.newSingleThreadExecutor()
+        inferenceScheduler = Schedulers.from(inferenceExecutor)
+        inferenceExecutor.submit { inference = Inference(this) }
         networkAdapter = NetworkAdapter()
         connectNetworkAdapter()
     }
@@ -50,6 +59,9 @@ class MainActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         fotoapparat.stop()
+        // TODO shouldn't this be part of "doFinally" for frameProcessor?
+        inferenceExecutor.submit { inference.close() }
+        // TODO release inferenceExecutor?
         networkAdapter?.close()
         networkReadThread?.interrupt()
     }
@@ -120,7 +132,7 @@ class MainActivity : AppCompatActivity() {
     private fun connectNetworkAdapter() {
         Single.just(networkAdapter!!)
             .subscribeOn(IoScheduler())
-            .map { it.connect() }
+            .doOnSuccess { it.connect() }
             .subscribeBy(
                 { it.printStackTrace() },
                 { subscribeNetworkIo() }
@@ -134,11 +146,14 @@ class MainActivity : AppCompatActivity() {
             .subscribeBy { Log.i(TAG, "Received message: $it") }
         networkReadThread!!.start()
 
+        // TODO Prevent duplicate subscriptions!
+        // TODO Kill observable after some time?
         // TODO Backpressure strategies? Also check if frames are dropped...
         frameProcessor
             .subscribeOn(ComputationScheduler())
             // .doOnNext { Log.i(TAG, "Received preview frame") }
             .map { postprocessor.process(it) }
+            .observeOn(inferenceScheduler)
             .map { inference.run(it) }
             .observeOn(IoScheduler())
             // TODO Handle java.net.SocketException (if disconnection occurs mid-write)
@@ -149,6 +164,10 @@ class MainActivity : AppCompatActivity() {
                 // TODO save to stats on main thread? or observable...
                 { })
     }
+
+    // TODO I think the predictions are incorrect... check if rewinding... or uint8 types...
+    // or correct resnet34.tflite... or image orientation!
+    // or thread synchronization (overwrites?)... try disabling threading for a bit
 
     // TODO Stats: timer, battery, # frames dropped
     // TODO Video
