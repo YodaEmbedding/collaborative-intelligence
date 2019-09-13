@@ -10,6 +10,7 @@ import io.fotoapparat.configuration.CameraConfiguration
 import io.fotoapparat.log.logcat
 import io.fotoapparat.log.loggers
 import io.fotoapparat.parameter.ScaleType
+import io.fotoapparat.parameter.camera.CameraParameters
 import io.fotoapparat.preview.Frame
 import io.fotoapparat.selector.*
 import io.reactivex.Single
@@ -39,36 +40,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-
         fotoapparat.start()
-        // TODO extract to reduce clutter...
-        fotoapparat.getCurrentParameters().whenAvailable { cameraParameters ->
-            val resolution = cameraParameters?.previewResolution!!
-            if (!::postprocessor.isInitialized) {
-                postprocessor = CameraPreviewPostprocessor(
-                    rs,
-                    resolution.width,
-                    resolution.height,
-                    224,
-                    224,
-                    CameraPreviewPostprocessor.getRotationCompensation(
-                        this,
-                        CameraCharacteristics.LENS_FACING_BACK
-                    )
-                )
-            }
-        }
-
+        fotoapparat.getCurrentParameters().whenAvailable(this::onCameraParametersAvailable)
         inference = Inference(this)
-
         networkAdapter = NetworkAdapter()
-        Single.just(networkAdapter!!)
-            .subscribeOn(IoScheduler())
-            .map { it.connect() }
-            .subscribeBy(
-                { it.printStackTrace() },
-                { subscribeNetworkIo() }
-            )
+        connectNetworkAdapter()
     }
 
     override fun onStop() {
@@ -97,7 +73,11 @@ class MainActivity : AppCompatActivity() {
             ),
             jpegQuality = manualJpegQuality(90),
             sensorSensitivity = lowestSensorSensitivity(),
-            frameProcessor = this.frameProcessor!!::onNext
+            // frameProcessor = this.frameProcessor::onNext
+            frameProcessor = { frame: Frame ->
+                Log.i(TAG, "Received preview frame")
+                this.frameProcessor.onNext(frame)
+            }
         )
 
         fotoapparat = Fotoapparat(
@@ -115,6 +95,38 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    private fun onCameraParametersAvailable(cameraParameters: CameraParameters?) {
+        val resolution = cameraParameters!!.previewResolution
+
+        if (::postprocessor.isInitialized)
+            return
+
+        val rotationCompensation =
+            CameraPreviewPostprocessor.getRotationCompensation(
+                this,
+                CameraCharacteristics.LENS_FACING_BACK
+            )
+
+        postprocessor = CameraPreviewPostprocessor(
+            rs,
+            resolution.width,
+            resolution.height,
+            224,
+            224,
+            rotationCompensation
+        )
+    }
+
+    private fun connectNetworkAdapter() {
+        Single.just(networkAdapter!!)
+            .subscribeOn(IoScheduler())
+            .map { it.connect() }
+            .subscribeBy(
+                { it.printStackTrace() },
+                { subscribeNetworkIo() }
+            )
+    }
+
     private fun subscribeNetworkIo() {
         networkReadThread = NetworkReadThread(networkAdapter!!)
         networkReadThread!!.outputStream
@@ -125,6 +137,7 @@ class MainActivity : AppCompatActivity() {
         // TODO Backpressure strategies? Also check if frames are dropped...
         frameProcessor
             .subscribeOn(ComputationScheduler())
+            // .doOnNext { Log.i(TAG, "Received preview frame") }
             .map { postprocessor.process(it) }
             .map { inference.run(it) }
             .observeOn(IoScheduler())
@@ -137,8 +150,7 @@ class MainActivity : AppCompatActivity() {
                 { })
     }
 
-    // TODO Stats
-    // TODO Network receiver
+    // TODO Stats: timer, battery, # frames dropped
     // TODO Video
 
     // TODO E/BufferQueueProducer: [SurfaceTexture-0-22526-3] cancelBuffer: BufferQueue has been abandoned
