@@ -77,8 +77,8 @@ class MainActivity : AppCompatActivity() {
     private fun initFotoapparat() {
         val cameraConfiguration = CameraConfiguration(
             pictureResolution = highestResolution(),
-            previewResolution = this::selectPreviewResolution,
-            previewFpsRange = highestFps(),
+            previewResolution = ::selectPreviewResolution,
+            previewFpsRange = ::selectFpsRange,
             focusMode = firstAvailable(
                 continuousFocusPicture(),
                 continuousFocusVideo(),
@@ -113,12 +113,6 @@ class MainActivity : AppCompatActivity() {
                 Log.e(TAG, "$error")
             }
         )
-    }
-
-    private fun selectPreviewResolution(iterable: Iterable<Resolution>): Resolution? {
-        return iterable
-            .sortedBy { it.area }
-            .firstOrNull { it.width >= 224 && it.height >= 224 }
     }
 
     private fun onCameraParametersAvailable(cameraParameters: CameraParameters?) {
