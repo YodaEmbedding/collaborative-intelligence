@@ -6,7 +6,7 @@ import os
 import socket
 import sys
 import time
-from contextlib import suppress
+from contextlib import closing, suppress
 from datetime import datetime
 from typing import Dict, ByteString
 
@@ -64,7 +64,7 @@ def decode_data(sess, model, data, dtype=tf.float32):
     return t
 
 class SockMonkey:
-    """Simulate a socket that generates connections that use given file data."""
+    """Simulate a socket that generates connections."""
 
     def __init__(self, filename):
         self._filename = filename
@@ -105,32 +105,30 @@ class ConnMonkey:
         result = b''.join(xs)
         return result
 
-def main():
-    DEBUG = False
-    DTYPE = tf.uint8
-    model_name = 'resnet34'
-    # model_name = 'mobilenet_v1_1.0_224'
+class Main:
+    def __init__(self, debug, dtype, model_name):
+        self.dtype = dtype
 
-    opt_suffix = '-float' if DTYPE == tf.float32 else ''
-    model_filename = f'{model_name}-server{opt_suffix}.h5'
+        opt_suffix = '-float' if dtype == tf.float32 else ''
+        model_filename = f'{model_name}-server{opt_suffix}.h5'
 
-    print('Loading model...')
-    sess = tf.Session()
-    model = keras.models.load_model(
-        model_filename,
-        custom_objects={'DecoderLayer': model_def.DecoderLayer})
+        print('Loading model...')
+        self.sess = tf.Session()
+        self.model = keras.models.load_model(
+            model_filename,
+            custom_objects={'DecoderLayer': model_def.DecoderLayer})
 
-    if not DEBUG:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind((IP, PORT))
-        sock.listen(1)
-    else:
-        sock = SockMonkey('resnet34-float-add_8-monitor.dat')
+        if not debug:
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.sock.bind((IP, PORT))
+            self.sock.listen(1)
+        else:
+            self.sock = SockMonkey('resnet34-float-add_8-monitor.dat')
 
-    while True:
+    def start_connection(self):
         print('Waiting for connection...')
-        conn, addr = sock.accept()
+        conn, addr = self.sock.accept()
         print(f'Established connection on\n{conn}\n{addr}')
 
         for i in itertools.count():
@@ -143,10 +141,11 @@ def main():
 
             t1 = time.time()
             data = msg
-            data_tensor = decode_data(sess, model, data, dtype=DTYPE)
+            data_tensor = decode_data(
+                self.sess, self.model, data, dtype=self.dtype)
 
             t2 = time.time()
-            predictions = model.predict(data_tensor)
+            predictions = self.model.predict(data_tensor)
 
             t3 = time.time()
             decoded_pred = imagenet_utils.decode_predictions(predictions)[0]
@@ -173,8 +172,17 @@ def main():
                 f.write(data)
             np.save('last_run_final_frame.npy', data_tensor)
 
-    # NOTE This never executes...
-    sock.close()
+def main():
+    DEBUG = False
+    DTYPE = tf.uint8
+    MODEL_NAME = 'resnet34'
+    # MODEL_NAME = 'mobilenet_v1_1.0_224'
+
+    main = Main(DEBUG, DTYPE, MODEL_NAME)
+
+    with closing(main.sock):
+        while True:
+            main.start_connection()
 
 if __name__ == '__main__':
     main()
