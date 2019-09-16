@@ -19,8 +19,8 @@ class NetworkAdapter {
 
         // TODO BufferedInputStream for byte data?
         // https://stackoverflow.com/questions/15538509/dealing-with-end-of-file-using-bufferedreader-read
-        inputStream = BufferedReader(InputStreamReader(socket?.inputStream))
-        outputStream = DataOutputStream(socket?.outputStream)
+        inputStream = BufferedReader(InputStreamReader(socket!!.inputStream))
+        outputStream = DataOutputStream(socket!!.outputStream)
     }
 
     fun close() {
