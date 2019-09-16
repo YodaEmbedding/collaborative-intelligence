@@ -182,7 +182,12 @@ def main():
 
     with closing(main.sock):
         while True:
-            main.start_connection()
+            try:
+                main.start_connection()
+            except ConnectionResetError as e:
+                print(e)
+            except BrokenPipeError as e:
+                print(e)
 
 if __name__ == '__main__':
     main()
