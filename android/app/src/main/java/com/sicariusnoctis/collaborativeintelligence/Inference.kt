@@ -1,15 +1,15 @@
 package com.sicariusnoctis.collaborativeintelligence
 
 import android.content.Context
+import org.tensorflow.lite.Interpreter
+import org.tensorflow.lite.gpu.GpuDelegate
 import java.io.Closeable
 import java.io.FileInputStream
 import java.io.IOException
 import java.nio.ByteBuffer
+import java.nio.ByteOrder.nativeOrder
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel.MapMode.READ_ONLY
-import java.nio.ByteOrder.nativeOrder
-import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.gpu.GpuDelegate
 
 class Inference : Closeable {
     private val gpuDelegate: GpuDelegate
@@ -31,30 +31,30 @@ class Inference : Closeable {
         tfliteOptions
             .setNumThreads(1)  // TODO 1 thread?
             // .setUseNNAPI(true)
-            .addDelegate(gpuDelegate)
+            // .addDelegate(gpuDelegate)
         tflite = Interpreter(tfliteModel, tfliteOptions)
 
-        inputBuffer = ByteBuffer
-            .allocateDirect(224 * 224 * 3 * 4)
-            .order(nativeOrder())
+        inputBuffer = ByteBuffer.allocateDirect(224 * 224 * 3 * 4)
+        inputBuffer.order(nativeOrder())
         outputBuffer = ByteBuffer.allocateDirect(14 * 14 * 256 * 1)
+        outputBuffer.order(nativeOrder())
+            // .order(LITTLE_ENDIAN)
     }
 
     // TODO Could possibly eliminate copying by exposing buffers? But not "thread-safe"...
     fun run(inputArray: ByteArray): ByteArray {
         inputBuffer.rewind()
         inputBuffer.put(inputArray)
+
+        // TODO flip? read/write buffer modes...
         // inputBuffer.rewind() // TODO needed?
-
-        // TODO flip? read write buffer...
-
         outputBuffer.rewind()
         tflite.run(inputBuffer, outputBuffer)
-        outputBuffer.rewind() // TODO needed?
 
+        // val outputArray = ByteArray(14 * 14 * 256 * 1)
         val outputArray = ByteArray(outputBuffer.limit())
+        outputBuffer.rewind()
         outputBuffer.get(outputArray)
-        // outputBuffer.rewind() // TODO needed?
         return outputArray
     }
 
