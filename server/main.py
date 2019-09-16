@@ -7,7 +7,7 @@ import socket
 import sys
 import time
 from contextlib import suppress
-from pprint import pprint
+from datetime import datetime
 from typing import Dict, ByteString
 
 import cv2
@@ -138,6 +138,8 @@ def main():
             if msg is None:
                 break
 
+            now = datetime.now()
+
             t1 = time.time()
             data = msg
             data_tensor = decode_data(sess, model, data, dtype=DTYPE)
@@ -151,6 +153,7 @@ def main():
                 f'{name:12} {desc:24} {score:0.3f}'
                 for name, desc, score in decoded_pred)
 
+            print(now.isoformat(sep=' ', timespec='milliseconds'))
             print(i, len(data), str_preview(data))
             print(decoded_pred_str)
             print(f'Read:       {1000 * (t1 - t0):4.0f} ms')
