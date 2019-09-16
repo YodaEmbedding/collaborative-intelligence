@@ -162,6 +162,8 @@ def main():
             print(f'Total:      {1000 * (t3 - t0):4.0f} ms')
             print('')
 
+            conn.send(f'{i} {decoded_pred}\n'.encode('utf8'))  # TODO move to separate thread...
+
         print('Closing connection...')
         conn.close()
 
