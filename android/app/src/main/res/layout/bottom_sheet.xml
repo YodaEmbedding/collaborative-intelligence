@@ -3,43 +3,66 @@
         xmlns:android="http://schemas.android.com/apk/res/android"
         xmlns:app="http://schemas.android.com/apk/res-auto"
         xmlns:tools="http://schemas.android.com/tools"
-        android:id="@+id/bottom_sheet"
+        android:id="@+id/bottomSheet"
         android:layout_width="match_parent"
-        android:layout_height="340dp"
-        android:orientation="vertical"
+        android:layout_height="wrap_content"
         android:background="@android:color/background_light"
-        app:behavior_hideable="true"
-        app:behavior_peekHeight="80dp"
+        android:orientation="vertical"
+        app:behavior_peekHeight="156dp"
         app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior">
 
     <LinearLayout
-            android:id="@+id/bottom_sheet_peek"
+            android:id="@+id/bottomSheetPeekLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
         <ImageView
-                android:id="@+id/draggable_hint"
+                android:id="@+id/draggableHint"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:layout_margin="6dp"
+                android:layout_marginVertical="6dp"
                 android:src="@drawable/ic_expand_less_black_24dp"
                 android:tint="@color/colorPrimary" />
 
         <TextView
-                android:id="@+id/textView"
+                android:id="@+id/bottomSheetResults"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginHorizontal="12dp"
-                android:layout_marginVertical="24dp"
-                android:text="TextView" />
+                android:layout_height="96dp"
+                android:layout_marginHorizontal="24dp"
+                android:layout_marginVertical="12dp"
+                android:text="Results" />
+
+        <View
+                android:layout_width="match_parent"
+                android:layout_height="2dp"
+                android:layout_marginHorizontal="24dp"
+                android:background="@android:color/darker_gray" />
 
     </LinearLayout>
 
-    <TextView
-            android:id="@+id/textView2"
+    <LinearLayout
+            android:id="@+id/bottomSheetContentLayout"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="TextView" />
+            android:layout_height="256dp"
+            android:orientation="vertical">
+
+        <TextView
+                android:id="@+id/bottomSheetConfigurations"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="24dp"
+                android:layout_marginVertical="12dp"
+                android:text="Configurations" />
+
+        <TextView
+                android:id="@+id/bottomSheetStatistics"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="24dp"
+                android:layout_marginVertical="12dp"
+                android:text="Statistics" />
+
+    </LinearLayout>
 
 </LinearLayout>
