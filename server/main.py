@@ -133,19 +133,30 @@ def main():
         print(f'Established connection on\n{conn}\n{addr}')
 
         for i in itertools.count():
+            t0 = time.time()
             msg = read_fixed_message(conn)
             if msg is None:
                 break
 
+            t1 = time.time()
             data = msg
-            t = decode_data(sess, model, data, dtype=DTYPE)
-            predictions = model.predict(t)
+            data_tensor = decode_data(sess, model, data, dtype=DTYPE)
+
+            t2 = time.time()
+            predictions = model.predict(data_tensor)
+
+            t3 = time.time()
             decoded_pred = imagenet_utils.decode_predictions(predictions)[0]
             decoded_pred_str = '\n'.join(
                 f'{name:12} {desc:24} {score:0.3f}'
                 for name, desc, score in decoded_pred)
+
             print(i, len(data), str_preview(data))
             print(decoded_pred_str)
+            print(f'Read:       {1000 * (t1 - t0):4.0f} ms')
+            print(f'Feed input: {1000 * (t2 - t1):4.0f} ms')
+            print(f'Inference:  {1000 * (t3 - t2):4.0f} ms')
+            print(f'Total:      {1000 * (t3 - t0):4.0f} ms')
             print('')
 
         print('Closing connection...')
@@ -154,7 +165,7 @@ def main():
         with suppress(NameError):
             with open('last_run_final_frame.dat', 'wb') as f:
                 f.write(data)
-            np.save('last_run_final_frame.npy', t)
+            np.save('last_run_final_frame.npy', data_tensor)
 
     # NOTE This never executes...
     sock.close()
