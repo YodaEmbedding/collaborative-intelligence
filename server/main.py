@@ -132,47 +132,57 @@ class Main:
         print(f'Established connection on\n{conn}\n{addr}')
 
         for i in itertools.count():
-            t0 = time.time()
-            msg = read_fixed_message(conn)
-            if msg is None:
+            fine, data, data_tensor = self._loop_once(i, conn)
+            if not fine:
                 break
-
-            now = datetime.now()
-
-            t1 = time.time()
-            data = msg
-            data_tensor = decode_data(
-                self.sess, self.model, data, dtype=self.dtype)
-
-            t2 = time.time()
-            predictions = self.model.predict(data_tensor)
-
-            t3 = time.time()
-            decoded_pred = imagenet_utils.decode_predictions(predictions)[0]
-            decoded_pred_str = '\n'.join(
-                f'{name:12} {desc:24} {score:0.3f}'
-                for name, desc, score in decoded_pred)
-            conn.send(f'{i} {decoded_pred}\n'.encode('utf8'))  # TODO move to separate thread...
-
-            t4 = time.time()
-
-            print(now.isoformat(sep=' ', timespec='milliseconds'))
-            print(i, len(data), str_preview(data))
-            print(decoded_pred_str)
-            print(f'Read:       {1000 * (t1 - t0):4.0f} ms')
-            print(f'Feed input: {1000 * (t2 - t1):4.0f} ms')
-            print(f'Inference:  {1000 * (t3 - t2):4.0f} ms')
-            print(f'Send:       {1000 * (t4 - t3):4.0f} ms')
-            print(f'Total:      {1000 * (t4 - t0):4.0f} ms')
-            print('')
 
         print('Closing connection...')
         conn.close()
+
+        if data is None or data_tensor is None:
+            return
 
         with suppress(NameError):
             with open('last_run_final_frame.dat', 'wb') as f:
                 f.write(data)
             np.save('last_run_final_frame.npy', data_tensor)
+
+    def _loop_once(self, i, conn):
+        t0 = time.time()
+        msg = read_fixed_message(conn)
+        if msg is None:
+            return False, None, None
+
+        now = datetime.now()
+
+        t1 = time.time()
+        data = msg
+        data_tensor = decode_data(
+            self.sess, self.model, data, dtype=self.dtype)
+
+        t2 = time.time()
+        predictions = self.model.predict(data_tensor)
+
+        t3 = time.time()
+        decoded_pred = imagenet_utils.decode_predictions(predictions)[0]
+        decoded_pred_str = '\n'.join(
+            f'{name:12} {desc:24} {score:0.3f}'
+            for name, desc, score in decoded_pred)
+        conn.send(f'{i} {decoded_pred}\n'.encode('utf8'))
+
+        t4 = time.time()
+
+        print(now.isoformat(sep=' ', timespec='milliseconds'))
+        print(i, len(data), str_preview(data))
+        print(decoded_pred_str)
+        print(f'Read:       {1000 * (t1 - t0):4.0f} ms')
+        print(f'Feed input: {1000 * (t2 - t1):4.0f} ms')
+        print(f'Inference:  {1000 * (t3 - t2):4.0f} ms')
+        print(f'Send:       {1000 * (t4 - t3):4.0f} ms')
+        print(f'Total:      {1000 * (t4 - t0):4.0f} ms')
+        print('')
+
+        return True, data, data_tensor
 
 def main():
     DEBUG = False
