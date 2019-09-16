@@ -152,6 +152,9 @@ class Main:
             decoded_pred_str = '\n'.join(
                 f'{name:12} {desc:24} {score:0.3f}'
                 for name, desc, score in decoded_pred)
+            conn.send(f'{i} {decoded_pred}\n'.encode('utf8'))  # TODO move to separate thread...
+
+            t4 = time.time()
 
             print(now.isoformat(sep=' ', timespec='milliseconds'))
             print(i, len(data), str_preview(data))
@@ -159,10 +162,9 @@ class Main:
             print(f'Read:       {1000 * (t1 - t0):4.0f} ms')
             print(f'Feed input: {1000 * (t2 - t1):4.0f} ms')
             print(f'Inference:  {1000 * (t3 - t2):4.0f} ms')
-            print(f'Total:      {1000 * (t3 - t0):4.0f} ms')
+            print(f'Send:       {1000 * (t4 - t3):4.0f} ms')
+            print(f'Total:      {1000 * (t4 - t0):4.0f} ms')
             print('')
-
-            conn.send(f'{i} {decoded_pred}\n'.encode('utf8'))  # TODO move to separate thread...
 
         print('Closing connection...')
         conn.close()
