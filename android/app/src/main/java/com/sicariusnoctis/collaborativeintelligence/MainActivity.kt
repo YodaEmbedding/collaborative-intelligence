@@ -303,13 +303,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // TODO I think the predictions are incorrect... check if rewinding... or uint8 types...
-    // or correct resnet34.tflite... or image orientation!
-    // or correct weights from memory?
-    // or thread synchronization (overwrites?)... try disabling threading for a bit
-    // check what data is computed by looking at bytes
-    // compare various data (e.g. red color, fully black image, etc) with working version
-
     // TODO Stats: timer, battery, # frames dropped
     // TODO Video
 

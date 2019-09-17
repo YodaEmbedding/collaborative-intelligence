@@ -68,7 +68,7 @@ class CameraPreviewPostprocessor {
         val cropType = Type.createXY(rs, Element.RGBA_8888(rs), side, side)
         val resizeType = Type.createXY(rs, Element.RGBA_8888(rs), outWidth, outHeight)
         val rotateType = Type.createXY(rs, Element.RGBA_8888(rs), outWidth, outHeight)
-        val outputType = Type.createX(rs, Element.U8(rs), outWidth * outHeight * 3)
+        val outputType = Type.createX(rs, Element.U8_4(rs), outWidth * outHeight * 3)
 
         inputAllocation = Allocation.createTyped(rs, yuvType, Allocation.USAGE_SCRIPT)
         rgbaAllocation = Allocation.createTyped(rs, rgbaType, Allocation.USAGE_SCRIPT)
@@ -101,7 +101,7 @@ class CameraPreviewPostprocessor {
         crop.forEach_crop(cropAllocation)
         resize.forEach_bicubic(resizeAllocation)
         applyRotationCompensation(rotateAllocation)
-        convert.forEach_rgba2rgb(rotateAllocation)
+        convert.forEach_rgba2rgbFloat(rotateAllocation)
 
         val byteArray = ByteArray(outputAllocation.bytesSize)
         outputAllocation.copyTo(byteArray)
