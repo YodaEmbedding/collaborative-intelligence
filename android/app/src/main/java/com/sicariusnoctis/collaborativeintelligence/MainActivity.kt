@@ -15,7 +15,9 @@ import io.fotoapparat.parameter.ScaleType
 import io.fotoapparat.parameter.camera.CameraParameters
 import io.fotoapparat.preview.Frame
 import io.fotoapparat.selector.*
-import io.reactivex.*
+import io.reactivex.Flowable
+import io.reactivex.Scheduler
+import io.reactivex.Single
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.Disposable
 import io.reactivex.internal.schedulers.IoScheduler
@@ -25,7 +27,6 @@ import io.reactivex.rxkotlin.zipWith
 import io.reactivex.schedulers.Schedulers
 import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.android.synthetic.main.bottom_sheet.*
-import org.reactivestreams.Subscriber
 import java.time.Instant
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -41,7 +42,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var rs: RenderScript
     private val frameProcessor: PublishProcessor<Frame> = PublishProcessor.create()
     private var networkAdapter: NetworkAdapter? = null
-    // private var networkReadThread: NetworkReadThread? = null
     private var statistics = Statistics()
     private var subscriptions = listOf<Disposable>()
 
@@ -69,9 +69,12 @@ class MainActivity : AppCompatActivity() {
         // TODO shouldn't this be part of "doFinally" for frameProcessor?
         inferenceExecutor.submit { inference.close() }
         // TODO release inferenceExecutor?
-        // networkReadThread?.interrupt()
-        subscriptions.forEach { x -> x.dispose() }
         networkAdapter?.close()
+    }
+
+    override fun onDestroy() {
+        subscriptions.forEach { x -> x.dispose() }
+        super.onDestroy()
     }
 
     private fun initFotoapparat() {
@@ -128,12 +131,7 @@ class MainActivity : AppCompatActivity() {
             )
 
         postprocessor = CameraPreviewPostprocessor(
-            rs,
-            resolution.width,
-            resolution.height,
-            224,
-            224,
-            rotationCompensation
+            rs, resolution.width, resolution.height, 224, 224, rotationCompensation
         )
     }
 
@@ -148,16 +146,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun subscribeNetworkIo() {
-
-        // TODO
-        // Observable.range(0, Int.MAX_VALUE)
-        //     .subscribeOn(IoScheduler())
-        //     .doOnNextTimed { read() }
-        //     // .doOnNext(read)
-        //     // .doOnNext(process_read_item)
-        //     .subscribeBy { }
-
-        // TODO catch exception and emit onError(exception)
+        // TODO WRONG! some of the samples might be lost in transmission...
+        // so you should explicitly have readData return sample number and item!
+        // Note: if server changes the frame number, the client can crash... HMMM
 
         val networkReadSubscription = Flowable
             .fromIterable(Iterable {
@@ -169,12 +160,9 @@ class MainActivity : AppCompatActivity() {
                     while (true) {
                         // TODO pointless argument t = null
                         val item = timeWrapper(
-                            i,
-                            null,
-                            { x -> networkAdapter!!.readData() },
+                            i, null, { x -> networkAdapter!!.readData() },
                             statistics::setNetworkRead
-                        )
-                            ?: break
+                        ) ?: break
                         yield(Pair(i, item))
                         ++i
                     }
@@ -184,49 +172,42 @@ class MainActivity : AppCompatActivity() {
             // .zipWith(Flowable.range(0, Int.MAX_VALUE)) { item, i -> Pair(i, item) }
             .subscribeOn(IoScheduler())
             .observeOn(AndroidSchedulers.mainThread())
-            .subscribeBy {
-                Log.i(TAG, "Received frame ${it.first}:\n${it.second}")
-                bottomSheetResults.text = it.second
-                bottomSheetStatistics.text = statistics.display()
-            }
-
-        // TODO add doOnNextTimed for read...
-
-        // networkReadThread = NetworkReadThread(networkAdapter!!)
-        // val networkReadSubscription = networkReadThread!!.outputStream
-        //     .subscribeOn(IoScheduler())
-        //     .observeOn(AndroidSchedulers.mainThread())
-        //     .subscribeBy {
-        //         Log.i(TAG, "Received message: $it")
-        //         bottomSheetResults.text = it
-        //         bottomSheetStatistics.text = statistics.display()
-        //     }
-        // networkReadThread!!.start()
-
-        // TODO .onTerminateDetach()
+            .subscribeBy(
+                { it.printStackTrace() },
+                { },
+                { (i, message) ->
+                    Log.i(TAG, "Received message $i:\n$message")
+                    bottomSheetResults.text = message
+                    bottomSheetStatistics.text = statistics.display()
+                })
 
         // TODO Prevent duplicate subscriptions! (e.g. if onStart called multiple times); unsubscribe?
-        // TODO Kill observable after some time?
-        // TODO Backpressure strategies? Also check if frames are dropped...
+        // TODO .onTerminateDetach()
         val networkWriteSubscription = frameProcessor
+            // TODO use IndexedValue<Frame>
             .zipWith(Flowable.range(0, Int.MAX_VALUE)) { frame, i -> Pair(i, frame) }
             // TODO Don't do everything on inference thread...
             // .subscribeOn(ComputationScheduler())
             .subscribeOn(inferenceScheduler)
             // TODO always keep one frame in buffer so that we don't have to wait?
-            .onBackpressureDrop { statistics.frameDropped() }
+            // .onBackpressureDrop { statistics.frameDropped() }
+            .onBackpressureLatest()
             .doOnNext { Log.i(TAG, "Starting processing frame ${it.first}") }
             .mapTimed(statistics::setPreprocess) { postprocessor.process(it) }
+            // .map { (i, x) ->
+            //     val arr = ByteArray(224 * 224) { if (it % 3 == 0) 250.toByte() else 0.toByte() }
+            //     Pair(i, arr)
+            // }
+            .doOnNext { statistics.appendSampleString(it.first, it.second.toPreviewString()) }
             // TODO implement pull strategy so backpressure doesn't build due to inference
             // .observeOn(inferenceScheduler)
             .mapTimed(statistics::setInference) { inference.run(it) }
+            .doOnNext { (i, x) -> statistics.appendSampleString(i, "\n${x.toPreviewString()}") }
             .observeOn(IoScheduler())
-            // TODO Handle java.net.SocketException (if disconnection occurs mid-write)
             .doOnNextTimed(statistics::setNetworkWrite) { networkAdapter!!.writeData(it) }
             .subscribeBy(
                 { it.printStackTrace() },
                 { },
-                // TODO save to stats on main thread? or observable...
                 { Log.i(TAG, "Finished processing frame ${it.first}") }
             )
 
@@ -287,12 +268,17 @@ class MainActivity : AppCompatActivity() {
         // return timed(timeFunc, mapper, this::map, { s, _, r -> Pair(s, r) })
     }
 
+    private fun ByteArray.toHexString() = joinToString("") { "%02x".format(it) }
+
+    private fun ByteArray.toPreviewString() =
+        take(12).toByteArray().toHexString() + "..." + takeLast(3).toByteArray().toHexString()
+
     companion object {
         @JvmStatic
         private fun selectPreviewResolution(iterable: Iterable<Resolution>): Resolution? {
             return iterable
                 .sortedBy { it.area }
-                .firstOrNull { it.width >= 224 && it.height >= 224 }
+                .firstOrNull { it.width >= 224 * 2 && it.height >= 224 * 2 }
         }
 
         @JvmStatic
@@ -304,7 +290,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     // TODO Stats: timer, battery, # frames dropped
-    // TODO Video
+    // TODO Video input
+    // TODO Flip switch for client vs server inference... or maybe a draggable slider for the layer! (no, too much, I think...)
 
     // TODO E/BufferQueueProducer: [SurfaceTexture-0-22526-3] cancelBuffer: BufferQueue has been abandoned
     // TODO why does the stream freeze on server-side?

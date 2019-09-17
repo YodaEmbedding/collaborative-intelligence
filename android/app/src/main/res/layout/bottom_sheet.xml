@@ -44,7 +44,7 @@
     <LinearLayout
             android:id="@+id/bottomSheetContentLayout"
             android:layout_width="match_parent"
-            android:layout_height="256dp"
+            android:layout_height="360dp"
             android:orientation="vertical">
 
         <TextView

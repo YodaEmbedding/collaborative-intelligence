@@ -31,6 +31,7 @@ class NetworkAdapter {
     }
 
     fun readData(): String? {
+        // TODO alternate format: frame number, then string? with length specifier rather than readLine?
         val data = inputStream!!.readLine()
         Log.i(TAG, "Received: $data")
         return data
