@@ -14,6 +14,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 # pylint: disable-msg=E0611
+from tensorflow.python.framework.ops import Tensor
 from tensorflow.python.keras.applications import imagenet_utils
 from tensorflow.python.keras.layers import Layer
 from tensorflow.python.keras.preprocessing import image
