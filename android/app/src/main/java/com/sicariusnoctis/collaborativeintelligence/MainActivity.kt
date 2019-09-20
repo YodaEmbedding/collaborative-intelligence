@@ -187,11 +187,12 @@ class MainActivity : AppCompatActivity() {
             // TODO use IndexedValue<Frame>
             .zipWith(Flowable.range(0, Int.MAX_VALUE)) { frame, i -> Pair(i, frame) }
             // TODO Don't do everything on inference thread...
-            // .subscribeOn(ComputationScheduler())
-            .subscribeOn(inferenceScheduler)
+            .subscribeOn(IoScheduler())
+            // .subscribeOn(inferenceScheduler)
             // TODO always keep one frame in buffer so that we don't have to wait?
             // .onBackpressureDrop { statistics.frameDropped() }
             .onBackpressureLatest()
+            // .observeOn(inferenceScheduler)
             .doOnNext { Log.i(TAG, "Starting processing frame ${it.first}") }
             .mapTimed(statistics::setPreprocess) { postprocessor.process(it) }
             // .map { (i, x) ->
@@ -201,6 +202,7 @@ class MainActivity : AppCompatActivity() {
             .doOnNext { statistics.appendSampleString(it.first, it.second.toPreviewString()) }
             // TODO implement pull strategy so backpressure doesn't build due to inference
             // .observeOn(inferenceScheduler)
+            .observeOn(inferenceScheduler)
             .mapTimed(statistics::setInference) { inference.run(it) }
             .doOnNext { (i, x) -> statistics.appendSampleString(i, "\n${x.toPreviewString()}") }
             .observeOn(IoScheduler())

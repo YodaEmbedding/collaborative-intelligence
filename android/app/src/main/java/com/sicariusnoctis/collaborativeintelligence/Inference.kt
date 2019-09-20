@@ -31,7 +31,7 @@ class Inference : Closeable {
         tfliteOptions
             .setNumThreads(1)  // TODO 1 thread?
             // .setUseNNAPI(true)
-            // .addDelegate(gpuDelegate)
+            .addDelegate(gpuDelegate)
         tflite = Interpreter(tfliteModel, tfliteOptions)
 
         // TODO gpuDelegate.bindGlBufferToTensor(outputTensor, outputSsboId);
