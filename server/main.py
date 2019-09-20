@@ -19,15 +19,19 @@ from tensorflow import keras
 spec = importlib.util.spec_from_file_location(
     "model_def",
     os.path.expandvars(
-        "$HOME/code/experiments/py/tensorflow/resnet-keras-split/main.py"))
+        "$HOME/code/experiments/py/tensorflow/resnet-keras-split/main.py"
+    ),
+)
 model_def = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(model_def)
 
 IP = "0.0.0.0"
 PORT = 5678
 
+
 def read_eol(conn):
     return conn.recv(1, socket.MSG_WAITALL) == b"\x00"
+
 
 def read_fixed_message(conn) -> ByteString:
     msg_len_buf = conn.recv(4, socket.MSG_WAITALL)
@@ -39,6 +43,7 @@ def read_fixed_message(conn) -> ByteString:
         return None
     return buf
 
+
 def read_image(conn):
     buf = read_fixed_message(conn)
     if buf is None:
@@ -46,6 +51,7 @@ def read_image(conn):
     buf = np.frombuffer(buf, dtype=np.uint8)
     img = cv2.imdecode(buf, cv2.IMREAD_UNCHANGED)
     return img
+
 
 def str_preview(s, max_len=16):
     def unquoted(x: ByteString) -> str:
@@ -55,6 +61,7 @@ def str_preview(s, max_len=16):
         return s
     return f"{unquoted(s[:max_len - 6])}...{unquoted(s[-3:])}"
 
+
 def decode_data(sess, model, data, dtype=tf.float32):
     input_shape = model.layers[1].input_shape[1:]
     t = tf.decode_raw(input_bytes=data, out_type=dtype, little_endian=True)
@@ -62,6 +69,7 @@ def decode_data(sess, model, data, dtype=tf.float32):
     with sess.as_default():
         t = t.eval()
     return t
+
 
 class SockMonkey:
     """Simulate a socket that generates connections."""
@@ -75,6 +83,7 @@ class SockMonkey:
     def accept(self):
         return ConnMonkey(self._filename), ("Virtual Address", -1)
 
+
 class ConnMonkey:
     """Simulate a connection using given file data cyclically."""
 
@@ -85,10 +94,11 @@ class ConnMonkey:
         with open(filename, "rb") as f:
             self._data = f.read()
         self._data = (
-            len(self._data).to_bytes(4, byteorder="big") +
-            b"\x00" +
-            self._data +
-            b"\x00")
+            len(self._data).to_bytes(4, byteorder="big")
+            + b"\x00"
+            + self._data
+            + b"\x00"
+        )
 
     def recv(self, num_bytes, flags):
         if flags != socket.MSG_WAITALL:
@@ -96,7 +106,7 @@ class ConnMonkey:
         xs = []
         remaining = num_bytes
         while remaining > 0:
-            x = self._data[self._pos:self._pos+remaining]
+            x = self._data[self._pos : self._pos + remaining]
             self._pos += len(x)
             time.sleep(self._pos // len(self._data) * ConnMonkey.FPS)
             self._pos %= len(self._data)
@@ -104,6 +114,7 @@ class ConnMonkey:
             xs.append(x)
         result = b"".join(xs)
         return result
+
 
 class Main:
     def __init__(self, debug, dtype, model_name):
@@ -116,7 +127,8 @@ class Main:
         self.sess = tf.Session()
         self.model = keras.models.load_model(
             model_filename,
-            custom_objects={"DecoderLayer": model_def.DecoderLayer})
+            custom_objects={"DecoderLayer": model_def.DecoderLayer},
+        )
 
         if not debug:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -158,7 +170,8 @@ class Main:
         t1 = time.time()
         data = msg
         data_tensor = decode_data(
-            self.sess, self.model, data, dtype=self.dtype)
+            self.sess, self.model, data, dtype=self.dtype
+        )
 
         t2 = time.time()
         predictions = self.model.predict(data_tensor)
@@ -167,7 +180,8 @@ class Main:
         decoded_pred = imagenet_utils.decode_predictions(predictions)[0]
         decoded_pred_str = "\n".join(
             f"{name:12} {desc:24} {score:0.3f}"
-            for name, desc, score in decoded_pred)
+            for name, desc, score in decoded_pred
+        )
         conn.send(f"{i} {decoded_pred}\n".encode("utf8"))
 
         t4 = time.time()
@@ -183,6 +197,7 @@ class Main:
         print("")
 
         return True, data, data_tensor
+
 
 def main():
     DEBUG = False
@@ -200,6 +215,7 @@ def main():
                 print(e)
             except BrokenPipeError as e:
                 print(e)
+
 
 if __name__ == "__main__":
     main()
