@@ -1,8 +1,9 @@
-from typing import Dict, Tuple
+from typing import Callable, Dict, List, Sequence, Tuple, Union
 
 import tensorflow as tf
 from tensorflow import keras
 # pylint: disable-msg=E0611
+from tensorflow.python.framework.ops import Tensor
 from tensorflow.python.keras.layers import Layer
 import tensorflow.python.keras.backend as K
 #pylint: enable-msg=E0611
@@ -50,7 +51,9 @@ class DecoderLayer(Layer):
 
 def split_model(
     model: keras.Model,
-    split_layer_name: str
+    split_layer_name: str,
+    encoder: Callable[[Tensor], Tensor],
+    decoder: Callable[[Tensor], Tensor],
 ) -> Tuple[keras.Model, keras.Model]:
     """Split model by given layer index.
 
@@ -58,26 +61,23 @@ def split_model(
     layer to beginning of server model.
     """
     split_idx = _get_layer_idx_by_name(model, split_layer_name)
-    clip_range = (-2, 2)
     layers = model.layers
     first_layer = layers[0]
     split_layer = layers[split_idx]
 
-    input_layer1 = keras.Input(_input_shape(first_layer))
-    outputs1 = _copy_graph(split_layer, {first_layer.name: input_layer1})
-    outputs1 = EncoderLayer(clip_range)(outputs1)
-    model1 = keras.Model(inputs=input_layer1, outputs=outputs1)
-    # model1 = _model_from_layers(split_layer, layers[0])
+    inputs1 = keras.Input(_input_shape(first_layer))
+    outputs1 = _copy_graph(split_layer, {first_layer.name: inputs1})
+    outputs1 = encoder(outputs1)
+    model1 = keras.Model(inputs=inputs1, outputs=outputs1)
 
-    input_layer2 = keras.Input(_input_shape(split_layer), dtype='uint8')
-    top_layer2 = DecoderLayer(clip_range)(input_layer2)
-    outputs2 = _copy_graph(layers[-1], {split_layer.name: top_layer2})
-    model2 = keras.Model(inputs=input_layer2, outputs=outputs2)
-    # model2 = _model_from_layers(layers[-1], split_layer)
+    inputs2 = keras.Input(_input_shape(split_layer), dtype=outputs1.dtype)
+    inputs2_ = decoder(inputs2)
+    outputs2 = _copy_graph(layers[-1], {split_layer.name: inputs2_})
+    model2 = keras.Model(inputs=inputs2, outputs=outputs2)
 
     return model1, model2
 
-def _copy_graph(layer: Layer, layer_lut: Dict[Layer, Layer]) -> Layer:
+def _copy_graph(layer: Layer, layer_lut: Dict[str, Tensor]) -> Tensor:
     """Recursively copy graph.
 
     Starting from the given layer, recursively copy graph consisting of
@@ -98,23 +98,20 @@ def _copy_graph(layer: Layer, layer_lut: Dict[Layer, Layer]) -> Layer:
     layer_lut[layer.name] = lookup
     return lookup
 
-# def _model_from_layers(layer, top_layer) -> keras.Model:
-#     shape = top_layer.input_shape
-#     shape = shape[0][1:] if isinstance(shape, list) else shape[1:]
-#     input_layer = keras.Input(shape)
-#     outputs = _copy_graph(layer, {top_layer.name: input_layer})
-#     return keras.Model(inputs=input_layer, outputs=outputs)
-
 def _get_layer_idx_by_name(model: keras.Model, name: str) -> int:
+    """Get layer index in a model by name."""
     return next(i for i, layer in enumerate(model.layers) if layer.name == name)
 
 def _input_shape(layer: Layer) -> Tuple[int, ...]:
-    """Determine layer input shape."""
-    shape = layer.input_shape
-    return shape[0][1:] if isinstance(shape, list) else shape[1:]
+    """Return layer input shape, trimming first dimension."""
+    return _squeeze_shape(layer.input_shape)[1:]
 
-def _model_from_layers(layer, top_layer) -> keras.Model:
-    """Create model from subgraph between `layer` and `top_layer`."""
-    input_layer = keras.Input(_input_shape(top_layer))
-    outputs = _copy_graph(layer, {top_layer.name: input_layer})
-    return keras.Model(inputs=input_layer, outputs=outputs)
+def _squeeze_shape(
+    shape: Union[Sequence[int], Sequence[Sequence[int]]]
+) -> Sequence[int]:
+    """Squeeze shape into 1D."""
+    if isinstance(shape[0], Sequence):
+        if len(shape) > 1:
+            raise ValueError("Shape can't be squeezed into 1D.")
+        shape = shape[0]
+    return shape
