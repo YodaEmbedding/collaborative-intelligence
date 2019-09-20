@@ -51,13 +51,10 @@ def read_image(conn):
     return img
 
 
-def str_preview(s, max_len=16):
-    def unquoted(x: ByteString) -> str:
-        return repr(x)[2:-1]
-
+def str_preview(s: ByteString, max_len=16):
     if len(s) < max_len:
-        return s
-    return f"{unquoted(s[:max_len - 6])}...{unquoted(s[-3:])}"
+        return s.hex()
+    return f'{s[:max_len - 6].hex()}...{s[-3:].hex()}'
 
 
 def decode_data(sess, model, data, dtype=tf.float32):
