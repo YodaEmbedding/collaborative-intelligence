@@ -8,7 +8,7 @@ import sys
 import time
 from contextlib import closing, suppress
 from datetime import datetime
-from typing import Dict, ByteString
+from typing import ByteString, Optional
 
 import cv2
 from keras.applications import imagenet_utils
@@ -18,9 +18,7 @@ from tensorflow import keras
 
 spec = importlib.util.spec_from_file_location(
     "model_def",
-    os.path.expandvars(
-        "$HOME/code/experiments/py/tensorflow/resnet-keras-split/main.py"
-    ),
+    "../tools/split.py",
 )
 model_def = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(model_def)
@@ -33,7 +31,7 @@ def read_eol(conn):
     return conn.recv(1, socket.MSG_WAITALL) == b"\x00"
 
 
-def read_fixed_message(conn) -> ByteString:
+def read_fixed_message(conn) -> Optional[ByteString]:
     msg_len_buf = conn.recv(4, socket.MSG_WAITALL)
     if len(msg_len_buf) != 4 or not read_eol(conn):
         return None
@@ -99,6 +97,9 @@ class ConnMonkey:
             + self._data
             + b"\x00"
         )
+
+    def close(self):
+        pass
 
     def recv(self, num_bytes, flags):
         if flags != socket.MSG_WAITALL:
@@ -203,6 +204,7 @@ def main():
     DEBUG = False
     DTYPE = tf.uint8
     MODEL_NAME = "resnet34"
+    # MODEL_NAME = "vgg19-block4_pool"
     # MODEL_NAME = "mobilenet_v1_1.0_224"
 
     main = Main(DEBUG, DTYPE, MODEL_NAME)
