@@ -70,7 +70,7 @@ def split_model(
     outputs1 = encoder(outputs1)
     model1 = keras.Model(inputs=inputs1, outputs=outputs1)
 
-    inputs2 = keras.Input(_input_shape(split_layer), dtype=outputs1.dtype)
+    inputs2 = keras.Input(_output_shape(split_layer), dtype=outputs1.dtype)
     inputs2_ = decoder(inputs2)
     outputs2 = _copy_graph(layers[-1], {split_layer.name: inputs2_})
     model2 = keras.Model(inputs=inputs2, outputs=outputs2)
@@ -105,6 +105,10 @@ def _get_layer_idx_by_name(model: keras.Model, name: str) -> int:
 def _input_shape(layer: Layer) -> Tuple[int, ...]:
     """Return layer input shape, trimming first dimension."""
     return _squeeze_shape(layer.input_shape)[1:]
+
+def _output_shape(layer: Layer) -> Tuple[int, ...]:
+    """Return layer output shape, trimming first dimension."""
+    return _squeeze_shape(layer.output_shape)[1:]
 
 def _squeeze_shape(
     shape: Union[Sequence[int], Sequence[Sequence[int]]]
