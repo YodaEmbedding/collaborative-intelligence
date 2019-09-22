@@ -57,12 +57,15 @@ def str_preview(s: ByteString, max_len=16):
     return f'{s[:max_len - 6].hex()}...{s[-3:].hex()}'
 
 
+def tf_to_np_dtype(tf_dtype):
+    return {tf.uint8: np.uint8, tf.float32: np.float32}[tf_dtype]
+
+
 def decode_data(sess, model, data, dtype=tf.float32):
     input_shape = model.layers[1].input_shape[1:]
-    t = tf.decode_raw(input_bytes=data, out_type=dtype, little_endian=True)
-    t = tf.reshape(t, (-1, *input_shape))
-    with sess.as_default():
-        t = t.eval()
+    t = np.frombuffer(data, dtype=tf_to_np_dtype(dtype)).reshape(
+        (-1, *input_shape)
+    )
     return t
 
 
