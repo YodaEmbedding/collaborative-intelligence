@@ -2,6 +2,7 @@
 
 import importlib.util
 import itertools
+import json
 import os
 import socket
 import sys
@@ -67,6 +68,11 @@ def decode_data(sess, model, data, dtype=tf.float32):
         (-1, *input_shape)
     )
     return t
+
+
+def decode_predictions(predictions):
+    decoded_pred = imagenet_utils.decode_predictions(predictions)[0][:3]
+    return [(name, desc, float(score)) for name, desc, score in decoded_pred]
 
 
 class SockMonkey:
@@ -181,17 +187,20 @@ class Main:
         predictions = self.model.predict(data_tensor)
 
         t3 = time.time()
-        decoded_pred = imagenet_utils.decode_predictions(predictions)[0]
+        decoded_pred = decode_predictions(predictions)
         decoded_pred_str = "\n".join(
             f"{name:12} {desc:24} {score:0.3f}"
             for name, desc, score in decoded_pred
         )
-        conn.send(
-            f"{i} "
-            f"{1000 * (t2 - t1):4.0f}ms "
-            f"{1000 * (t3 - t2):4.0f}ms "
-            f"{decoded_pred[:3]}\n".encode("utf8")
+        msg = json.dumps(
+            {
+                "frame": i,
+                "read_time": 1000 * (t2 - t1),
+                "inference_time": 1000 * (t3 - t2),
+                "predictions": decoded_pred,
+            }
         )
+        conn.send(f"{msg}\n".encode("utf8"))
 
         t4 = time.time()
 
