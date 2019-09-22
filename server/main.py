@@ -54,7 +54,7 @@ def read_image(conn):
 def str_preview(s: ByteString, max_len=16):
     if len(s) < max_len:
         return s.hex()
-    return f'{s[:max_len - 6].hex()}...{s[-3:].hex()}'
+    return f"{s[:max_len - 6].hex()}...{s[-3:].hex()}"
 
 
 def tf_to_np_dtype(tf_dtype):
@@ -186,7 +186,12 @@ class Main:
             f"{name:12} {desc:24} {score:0.3f}"
             for name, desc, score in decoded_pred
         )
-        conn.send(f"{i} {1000 * (t2 - t1):4.0f}ms {1000 * (t3 - t2):4.0f}ms {decoded_pred[:3]}\n".encode("utf8"))
+        conn.send(
+            f"{i} "
+            f"{1000 * (t2 - t1):4.0f}ms "
+            f"{1000 * (t3 - t2):4.0f}ms "
+            f"{decoded_pred[:3]}\n".encode("utf8")
+        )
 
         t4 = time.time()
 
