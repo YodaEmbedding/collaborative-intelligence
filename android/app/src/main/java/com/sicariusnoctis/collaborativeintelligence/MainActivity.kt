@@ -210,58 +210,54 @@ class MainActivity : AppCompatActivity() {
         subscriptions = listOf(networkReadSubscription, networkWriteSubscription)
     }
 
-    // private fun <R, S, T, U, V> timed(
-    //     timeFunc: (S, Instant, Instant) -> Unit,
+    // private fun <R, T, U, V> timed(
+    //     timeFunc: (Int, Instant, Instant) -> Unit,
     //     mapper: (T) -> R,
-    //     thisFunc: ((Pair<S, T>) -> U) -> Flowable<Pair<S, V>>,
-    //     resultFunc: (S, T, R) -> U
-    // ): Flowable<Pair<S, V>> {
-    //     return thisFunc { (s, t) ->
-    //         // Consider using Clock.systemUTC().instant()
-    //         // or Instant.now(Clock.systemUTC())
+    //     thisFunc: ((Pair<Int, T>) -> U) -> Flowable<Pair<Int, V>>,
+    //     resultFunc: (Int, T, R) -> U
+    // ): Flowable<Pair<Int, V>> {
+    //     return thisFunc { (frameNum, x) ->
     //         val start = Instant.now()
-    //         val r = mapper(t)
+    //         val result = mapper(x)
     //         val end = Instant.now()
-    //         timeFunc(s, start, end)
-    //         resultFunc(s, t, r)
+    //         timeFunc(frameNum, start, end)
+    //         resultFunc(frameNum, x, result)
     //     }
     // }
+    //
+    // Usages:
+    // doOnNextTimed: return timed(timeFunc, onNext, this::doOnNext, { _, _, _ -> })
+    // mapTimed:      return timed(timeFunc, mapper, this::map, { s, _, r -> Pair(s, r) })
 
-    // TODO replace S with Int...
-
-    private fun <R, S, T> timeWrapper(
-        s: S,
-        t: T,
+    private fun <R, T> timeWrapper(
+        frameNum: Int,
+        x: T,
         mapper: (T) -> R,
-        timeFunc: (S, Instant, Instant) -> Unit
+        timeFunc: (Int, Instant, Instant) -> Unit
     ): R {
-        // Consider using Clock.systemUTC().instant()
-        // or Instant.now(Clock.systemUTC())
         val start = Instant.now()
-        val result = mapper(t)
+        val result = mapper(x)
         val end = Instant.now()
-        timeFunc(s, start, end)
+        timeFunc(frameNum, start, end)
         return result
     }
 
-    private fun <S, T> Flowable<Pair<S, T>>.doOnNextTimed(
-        timeFunc: (S, Instant, Instant) -> Unit,
+    private fun <T> Flowable<Pair<Int, T>>.doOnNextTimed(
+        timeFunc: (Int, Instant, Instant) -> Unit,
         onNext: (T) -> Unit
-    ): Flowable<Pair<S, T>> {
-        return this.doOnNext { (s, t) ->
-            timeWrapper(s, t, onNext, timeFunc)
+    ): Flowable<Pair<Int, T>> {
+        return this.doOnNext { (frameNum, x) ->
+            timeWrapper(frameNum, x, onNext, timeFunc)
         }
-        // return timed(timeFunc, onNext, this::doOnNext, { _, _, _ -> })
     }
 
-    private fun <R, S, T> Flowable<Pair<S, T>>.mapTimed(
-        timeFunc: (S, Instant, Instant) -> Unit,
+    private fun <R, T> Flowable<Pair<Int, T>>.mapTimed(
+        timeFunc: (Int, Instant, Instant) -> Unit,
         mapper: (T) -> R
-    ): Flowable<Pair<S, R>> {
-        return this.map { (s, t) ->
-            Pair(s, timeWrapper(s, t, mapper, timeFunc))
+    ): Flowable<Pair<Int, R>> {
+        return this.map { (frameNum, x) ->
+            Pair(frameNum, timeWrapper(frameNum, x, mapper, timeFunc))
         }
-        // return timed(timeFunc, mapper, this::map, { s, _, r -> Pair(s, r) })
     }
 
     private fun ByteArray.toHexString() = joinToString("") { "%02x".format(it) }
