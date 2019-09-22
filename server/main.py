@@ -183,7 +183,7 @@ class Main:
             f"{name:12} {desc:24} {score:0.3f}"
             for name, desc, score in decoded_pred
         )
-        conn.send(f"{i} {1000 * (t2 - t1):4.0f} {1000 * (t3 - t2):4.0f} {decoded_pred[:3]}\n".encode("utf8"))
+        conn.send(f"{i} {1000 * (t2 - t1):4.0f}ms {1000 * (t3 - t2):4.0f}ms {decoded_pred[:3]}\n".encode("utf8"))
 
         t4 = time.time()
 
