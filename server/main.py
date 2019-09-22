@@ -195,7 +195,8 @@ class Main:
         msg = json.dumps(
             {
                 "frame": i,
-                "read_time": int(1000 * (t2 - t1)),
+                "read_time": int(1000 * (t1 - t0)),
+                "feed_time": int(1000 * (t2 - t1)),
                 "inference_time": int(1000 * (t3 - t2)),
                 "predictions": decoded_pred,
             }
