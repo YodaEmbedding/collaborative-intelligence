@@ -186,23 +186,17 @@ class MainActivity : AppCompatActivity() {
         val networkWriteSubscription = frameProcessor
             // TODO use IndexedValue<Frame>
             .zipWith(Flowable.range(0, Int.MAX_VALUE)) { frame, i -> Pair(i, frame) }
-            // TODO Don't do everything on inference thread...
-            .subscribeOn(IoScheduler())
             // .subscribeOn(inferenceScheduler)
-            // TODO always keep one frame in buffer so that we don't have to wait?
-            // .onBackpressureDrop { statistics.frameDropped() }
-            .onBackpressureLatest()
-            // .observeOn(inferenceScheduler)
+            // .subscribeOn(IoScheduler(), false)
+            // .subscribeOn(IoScheduler(), true)
+            .subscribeOn(IoScheduler())
+            // .onBackpressureLatest()
+            .onBackpressureDrop { statistics.frameDropped() }
             .doOnNext { Log.i(TAG, "Starting processing frame ${it.first}") }
             .mapTimed(statistics::setPreprocess) { postprocessor.process(it) }
-            // .map { (i, x) ->
-            //     val arr = ByteArray(224 * 224) { if (it % 3 == 0) 250.toByte() else 0.toByte() }
-            //     Pair(i, arr)
-            // }
             .doOnNext { statistics.appendSampleString(it.first, it.second.toPreviewString()) }
-            // TODO implement pull strategy so backpressure doesn't build due to inference
             // .observeOn(inferenceScheduler)
-            .observeOn(inferenceScheduler)
+            .observeOn(inferenceScheduler, false, 1)
             .mapTimed(statistics::setInference) { inference.run(it) }
             .doOnNext { (i, x) -> statistics.appendSampleString(i, "\n${x.toPreviewString()}") }
             .observeOn(IoScheduler())
@@ -293,7 +287,6 @@ class MainActivity : AppCompatActivity() {
 
     // TODO Stats: timer, battery, # frames dropped
     // TODO Video input
-    // TODO Flip switch for client vs server inference... or maybe a draggable slider for the layer! (no, too much, I think...)
 
     // TODO E/BufferQueueProducer: [SurfaceTexture-0-22526-3] cancelBuffer: BufferQueue has been abandoned
     // TODO why does the stream freeze on server-side?

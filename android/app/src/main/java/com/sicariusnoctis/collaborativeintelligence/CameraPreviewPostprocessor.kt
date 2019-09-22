@@ -37,7 +37,7 @@ class CameraPreviewPostprocessor {
     // TODO Try executing algorithms on YUV images? (possibly faster?)
     // TODO Blur https://medium.com/@petrakeas/alias-free-resize-with-renderscript-5bf15a86ce3
     // TODO Change camera preview resolution https://github.com/RedApparat/Fotoapparat/issues/377
-    // TODO Normalize [optional] with IMAGE_MEAN, IMAGE_STD
+    // TODO Normalize [optional] with mean/std (R, G, B) tuples
     /**
     Process camera preview for model input.
 
