@@ -113,6 +113,9 @@ class ConnMonkey:
         result = b"".join(xs)
         return result
 
+    def send(self, s: ByteString):
+        print(s.decode("utf8"))
+
 
 class Main:
     def __init__(self, debug, dtype, model_name):
