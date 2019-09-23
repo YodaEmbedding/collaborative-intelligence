@@ -73,7 +73,7 @@ def tf_to_np_dtype(tf_dtype):
     return {tf.uint8: np.uint8, tf.float32: np.float32}[tf_dtype]
 
 
-def decode_data(sess, model, data, dtype=tf.float32):
+def decode_data(model, data, dtype=tf.float32):
     input_shape = model.layers[1].input_shape[1:]
     t = np.frombuffer(data, dtype=tf_to_np_dtype(dtype)).reshape(
         (-1, *input_shape)
@@ -185,10 +185,12 @@ class Main:
         conn, addr = self.sock.accept()
         print(f"Established connection on\n{conn}\n{addr}")
 
+        data, data_tensor = None, None
         for i in itertools.count():
-            fine, data, data_tensor = self._loop_once(i, conn)
-            if not fine:
+            result = self._loop_once(i, conn)
+            if result is None:
                 break
+            data, data_tensor = result
 
         print("Closing connection...")
         conn.close()
@@ -205,15 +207,13 @@ class Main:
         t0 = time.time()
         msg = read_tensor_frame(conn)
         if msg is None:
-            return False, None, None
+            return None
         frame_number, data = msg
 
         now = datetime.now()
 
         t1 = time.time()
-        data_tensor = decode_data(
-            self.sess, self.model, data, dtype=self.dtype
-        )
+        data_tensor = decode_data(self.model, data, dtype=self.dtype)
 
         t2 = time.time()
         predictions = self.model.predict(data_tensor)
@@ -245,7 +245,7 @@ class Main:
         print(f"Total:      {1000 * (t4 - t0):4.0f} ms")
         print("")
 
-        return True, data, data_tensor
+        return data, data_tensor
 
 
 def main():
