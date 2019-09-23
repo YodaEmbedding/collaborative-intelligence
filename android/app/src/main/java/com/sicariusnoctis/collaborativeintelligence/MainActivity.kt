@@ -157,7 +157,7 @@ class MainActivity : AppCompatActivity() {
                         val (result, start, end) = timed { networkAdapter!!.readData() }
                         if (result == null) break
                         statistics.setNetworkRead(result.frameNumber, start, end)
-                        yield(result)
+                        yield(result!!)
                     }
                 }
             })
