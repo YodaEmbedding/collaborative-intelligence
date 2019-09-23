@@ -210,36 +210,13 @@ class MainActivity : AppCompatActivity() {
         subscriptions = listOf(networkReadSubscription, networkWriteSubscription)
     }
 
-    // private fun <R, T, U, V> timed(
-    //     timeFunc: (Int, Instant, Instant) -> Unit,
-    //     mapper: (T) -> R,
-    //     thisFunc: ((Pair<Int, T>) -> U) -> Flowable<Pair<Int, V>>,
-    //     resultFunc: (Int, T, R) -> U
-    // ): Flowable<Pair<Int, V>> {
-    //     return thisFunc { (frameNum, x) ->
-    //         val start = Instant.now()
-    //         val result = mapper(x)
-    //         val end = Instant.now()
-    //         timeFunc(frameNum, start, end)
-    //         resultFunc(frameNum, x, result)
-    //     }
-    // }
-    //
-    // Usages:
-    // doOnNextTimed: return timed(timeFunc, onNext, this::doOnNext, { _, _, _ -> })
-    // mapTimed:      return timed(timeFunc, mapper, this::map, { s, _, r -> Pair(s, r) })
-
-    private fun <R, T> timeWrapper(
-        frameNum: Int,
-        x: T,
-        mapper: (T) -> R,
-        timeFunc: (Int, Instant, Instant) -> Unit
-    ): R {
+    private fun <R> timed(
+        func: () -> R
+    ): Triple<R, Instant, Instant> {
         val start = Instant.now()
-        val result = mapper(x)
+        val result = func()
         val end = Instant.now()
-        timeFunc(frameNum, start, end)
-        return result
+        return Triple(result, start, end)
     }
 
     private fun <T> Flowable<Pair<Int, T>>.doOnNextTimed(
@@ -247,7 +224,8 @@ class MainActivity : AppCompatActivity() {
         onNext: (T) -> Unit
     ): Flowable<Pair<Int, T>> {
         return this.doOnNext { (frameNum, x) ->
-            timeWrapper(frameNum, x, onNext, timeFunc)
+            val (_, start, end) = timed { onNext(x) }
+            timeFunc(frameNum, start, end)
         }
     }
 
@@ -256,7 +234,9 @@ class MainActivity : AppCompatActivity() {
         mapper: (T) -> R
     ): Flowable<Pair<Int, R>> {
         return this.map { (frameNum, x) ->
-            Pair(frameNum, timeWrapper(frameNum, x, mapper, timeFunc))
+            val (result, start, end) = timed { mapper(x) }
+            timeFunc(frameNum, start, end)
+            Pair(frameNum, result)
         }
     }
 
