@@ -1,13 +1,12 @@
 package com.sicariusnoctis.collaborativeintelligence
 
 import android.util.Log
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import java.io.BufferedReader
 import java.io.DataOutputStream
 import java.io.InputStreamReader
 import java.net.Socket
-import java.nio.ByteBuffer
-import kotlinx.serialization.*
-import kotlinx.serialization.json.Json
 
 class NetworkAdapter {
     private val TAG = NetworkAdapter::class.qualifiedName
@@ -38,14 +37,18 @@ class NetworkAdapter {
         return Json.parse(ResultResponse.serializer(), msg)
     }
 
-    fun writeData(msg: ByteArray) {
-        val msgLen = ByteBuffer.allocate(4).putInt(msg.size).array()
+    fun writeData(frameNumber: Int, data: ByteArray) {
         val eol = ByteArray(1) { 0 }
-        Log.i(TAG, "Message size: ${msg.size}")
-        outputStream!!.write(msgLen)
-        outputStream!!.write(eol)
-        outputStream!!.write(msg)
-        outputStream!!.write(eol)
+        Log.i(TAG, "Tensor message size: ${data.size}")
+
+        with(outputStream!!) {
+            writeInt(frameNumber)
+            write(eol)
+            writeInt(data.size)
+            write(eol)
+            write(data)
+            write(eol)
+        }
     }
 }
 

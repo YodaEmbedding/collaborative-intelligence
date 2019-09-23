@@ -190,7 +190,7 @@ class MainActivity : AppCompatActivity() {
             .mapTimed(statistics::setInference) { inference.run(it) }
             .doOnNext { (i, x) -> statistics.appendSampleString(i, "\n${x.toPreviewString()}") }
             .observeOn(IoScheduler())
-            .doOnNextTimed(statistics::setNetworkWrite) { networkAdapter!!.writeData(it) }
+            .doOnNextFrameTimed(statistics::setNetworkWrite, networkAdapter!!::writeData)
             .subscribeBy(
                 { it.printStackTrace() },
                 { },
@@ -209,13 +209,13 @@ class MainActivity : AppCompatActivity() {
         return Triple(result, start, end)
     }
 
-    private fun <T> Flowable<Pair<Int, T>>.doOnNextTimed(
+    private fun <T> Flowable<Pair<Int, T>>.doOnNextFrameTimed(
         timeFunc: (Int, Instant, Instant) -> Unit,
-        onNext: (T) -> Unit
+        onNext: (Int, T) -> Unit
     ): Flowable<Pair<Int, T>> {
-        return this.doOnNext { (frameNum, x) ->
-            val (_, start, end) = timed { onNext(x) }
-            timeFunc(frameNum, start, end)
+        return this.doOnNext { (frameNumber, x) ->
+            val (_, start, end) = timed { onNext(frameNumber, x) }
+            timeFunc(frameNumber, start, end)
         }
     }
 
@@ -223,10 +223,10 @@ class MainActivity : AppCompatActivity() {
         timeFunc: (Int, Instant, Instant) -> Unit,
         mapper: (T) -> R
     ): Flowable<Pair<Int, R>> {
-        return this.map { (frameNum, x) ->
+        return this.map { (frameNumber, x) ->
             val (result, start, end) = timed { mapper(x) }
-            timeFunc(frameNum, start, end)
-            Pair(frameNum, result)
+            timeFunc(frameNumber, start, end)
+            Pair(frameNumber, result)
         }
     }
 
