@@ -9,7 +9,7 @@ import sys
 import time
 from contextlib import closing, suppress
 from datetime import datetime
-from typing import Any, ByteString, List, Optional
+from typing import Any, ByteString, List, Optional, Tuple
 
 import cv2
 from keras.applications import imagenet_utils
@@ -50,6 +50,17 @@ def read_image(conn):
     buf = np.frombuffer(buf, dtype=np.uint8)
     img = cv2.imdecode(buf, cv2.IMREAD_UNCHANGED)
     return img
+
+
+def read_tensor_frame(conn) -> Optional[Tuple[int, ByteString]]:
+    frame_number_buf = conn.recv(4, socket.MSG_WAITALL)
+    if len(frame_number_buf) != 4 or not read_eol(conn):
+        return None
+    frame_number = int.from_bytes(frame_number_buf, byteorder="big")
+    msg = read_fixed_message(conn)
+    if msg is None:
+        return None
+    return frame_number, msg
 
 
 def str_preview(s: ByteString, max_len=16):
@@ -192,14 +203,14 @@ class Main:
 
     def _loop_once(self, i, conn):
         t0 = time.time()
-        msg = read_fixed_message(conn)
+        msg = read_tensor_frame(conn)
         if msg is None:
             return False, None, None
+        frame_number, data = msg
 
         now = datetime.now()
 
         t1 = time.time()
-        data = msg
         data_tensor = decode_data(
             self.sess, self.model, data, dtype=self.dtype
         )
@@ -214,7 +225,7 @@ class Main:
             for name, desc, score in decoded_pred
         )
         msg = json_result(
-            frame_number=i,
+            frame_number=frame_number,
             read_time=int(1000 * (t1 - t0)),
             feed_time=int(1000 * (t2 - t1)),
             inference_time=int(1000 * (t3 - t2)),
