@@ -6,6 +6,8 @@ import java.io.DataOutputStream
 import java.io.InputStreamReader
 import java.net.Socket
 import java.nio.ByteBuffer
+import kotlinx.serialization.*
+import kotlinx.serialization.json.Json
 
 class NetworkAdapter {
     private val TAG = NetworkAdapter::class.qualifiedName
@@ -30,11 +32,10 @@ class NetworkAdapter {
         outputStream = null
     }
 
-    fun readData(): String? {
-        // TODO alternate format: frame number, then string? with length specifier rather than readLine?
-        val data = inputStream!!.readLine()
-        Log.i(TAG, "Received: $data")
-        return data
+    fun readData(): ResultResponse? {
+        val msg = inputStream!!.readLine() ?: return null
+        Log.i(TAG, "Received: $msg")
+        return Json.parse(ResultResponse.serializer(), msg)
     }
 
     fun writeData(msg: ByteArray) {
@@ -47,3 +48,15 @@ class NetworkAdapter {
         outputStream!!.write(eol)
     }
 }
+
+@Serializable
+data class Prediction(val name: String, val description: String, val score: Float)
+
+@Serializable
+data class ResultResponse(
+    val frameNumber: Int,
+    val readTime: Int,
+    val feedTime: Int,
+    val inferenceTime: Int,
+    val predictions: List<Prediction>
+)

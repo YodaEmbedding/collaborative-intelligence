@@ -146,38 +146,28 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun subscribeNetworkIo() {
-        // TODO WRONG! some of the samples might be lost in transmission...
-        // so you should explicitly have readData return sample number and item!
-        // Note: if server changes the frame number, the client can crash... HMMM
+        // TODO The frame numbers are wrong because we aren't sending them to the server!
 
         val networkReadSubscription = Flowable
             .fromIterable(Iterable {
                 iterator {
                     // TODO Wait until thread is alive using CountDownLatch?
                     // TODO thread.isAlive()? socket.isOpen? volatile boolean flag?
-                    var i = 0
-                    // TODO this code looks horrid...
                     while (true) {
-                        // TODO pointless argument t = null
-                        val item = timeWrapper(
-                            i, null, { x -> networkAdapter!!.readData() },
-                            statistics::setNetworkRead
-                        ) ?: break
-                        yield(Pair(i, item))
-                        ++i
+                        val (result, start, end) = timed { networkAdapter!!.readData() }
+                        if (result == null) break
+                        statistics.setNetworkRead(result.frameNumber, start, end)
+                        yield(result)
                     }
                 }
             })
-            // TODO note that server shouldn't guarantee in-order frame sends if not TCP...
-            // .zipWith(Flowable.range(0, Int.MAX_VALUE)) { item, i -> Pair(i, item) }
             .subscribeOn(IoScheduler())
             .observeOn(AndroidSchedulers.mainThread())
             .subscribeBy(
                 { it.printStackTrace() },
                 { },
-                { (i, message) ->
-                    Log.i(TAG, "Received message $i:\n$message")
-                    bottomSheetResults.text = message
+                { result ->
+                    bottomSheetResults.text = result.toString()
                     bottomSheetStatistics.text = statistics.display()
                 })
 
