@@ -9,7 +9,7 @@ import sys
 import time
 from contextlib import closing, suppress
 from datetime import datetime
-from typing import ByteString, Optional
+from typing import Any, ByteString, List, Optional
 
 import cv2
 from keras.applications import imagenet_utils
@@ -73,6 +73,27 @@ def decode_data(sess, model, data, dtype=tf.float32):
 def decode_predictions(predictions):
     decoded_pred = imagenet_utils.decode_predictions(predictions)[0][:3]
     return [(name, desc, float(score)) for name, desc, score in decoded_pred]
+
+
+def json_result(
+    frame_number: int,
+    read_time: int,
+    feed_time: int,
+    inference_time: int,
+    predictions: List[List[Any]],
+) -> str:
+    return json.dumps(
+        {
+            "frameNumber": frame_number,
+            "readTime": read_time,
+            "feedTime": feed_time,
+            "inferenceTime": inference_time,
+            "predictions": [
+                {"name": name, "description": desc, "score": score}
+                for name, desc, score in predictions
+            ],
+        }
+    )
 
 
 class SockMonkey:
@@ -192,14 +213,12 @@ class Main:
             f"{name:12} {desc:24} {score:0.3f}"
             for name, desc, score in decoded_pred
         )
-        msg = json.dumps(
-            {
-                "frame": i,
-                "read_time": int(1000 * (t1 - t0)),
-                "feed_time": int(1000 * (t2 - t1)),
-                "inference_time": int(1000 * (t3 - t2)),
-                "predictions": decoded_pred,
-            }
+        msg = json_result(
+            frame_number=i,
+            read_time=int(1000 * (t1 - t0)),
+            feed_time=int(1000 * (t2 - t1)),
+            inference_time=int(1000 * (t3 - t2)),
+            predictions=decoded_pred,
         )
         conn.send(f"{msg}\n".encode("utf8"))
 
