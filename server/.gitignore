@@ -1,0 +1,7 @@
+__pycache__/
+*.dat
+*.h5
+*.msg
+*.npy
+*.png
+*.txt
