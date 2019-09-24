@@ -4,24 +4,16 @@ import warnings
 from pprint import pprint
 from typing import Callable, Tuple
 
-warnings.filterwarnings("ignore", category=FutureWarning)
-
-# pylint: disable=wrong-import-position
-from classification_models.tfkeras import Classifiers
 import numpy as np
 import tensorflow as tf
+from classification_models.tfkeras import Classifiers
 from tensorflow import keras
-
-# pylint: disable-msg=E0611
 from tensorflow.python.framework.ops import Tensor
 from tensorflow.python.keras.applications import imagenet_utils
 from tensorflow.python.keras.preprocessing import image
 from tensorflow.python.keras.utils import plot_model
 
-# pylint: enable-msg=E0611
-from split import EncoderLayer, DecoderLayer, split_model
-
-# pylint: enable=wrong-import-position
+from split import DecoderLayer, EncoderLayer, split_model
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 

@@ -1,0 +1,10 @@
+[MESSAGES CONTROL]
+disable=bad-continuation,
+        bad-whitespace,
+        invalid-name,
+        missing-docstring,
+        no-name-in-module,
+        trailing-newlines,
+        ungrouped-imports,
+        unused-wildcard-import,
+        wildcard-import,

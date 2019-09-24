@@ -1,14 +1,10 @@
 from typing import Callable, Dict, Sequence, Tuple, Union
 
 import tensorflow as tf
+import tensorflow.keras.backend as K  # pylint: disable=import-error
 from tensorflow import keras
-
-# pylint: disable-msg=E0611
 from tensorflow.python.framework.ops import Tensor
 from tensorflow.python.keras.layers import Layer
-import tensorflow.keras.backend as K  # pylint: disable=import-error
-
-# pylint: enable-msg=E0611
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
