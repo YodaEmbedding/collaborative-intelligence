@@ -1,4 +1,4 @@
-from typing import Callable, Dict, List, Sequence, Tuple, Union
+from typing import Callable, Dict, Sequence, Tuple, Union
 
 import tensorflow as tf
 from tensorflow import keras
@@ -15,14 +15,15 @@ class EncoderLayer(Layer):
 
     def __init__(self, clip_range, **kwargs):
         self.clip_range = clip_range
+        self._scale = 255 / (self.clip_range[1] - self.clip_range[0])
         super(EncoderLayer, self).__init__(**kwargs)
 
-    def call(self, x, **kwargs):
+    def call(self, inputs, **kwargs):
+        x = inputs
         # x = K.log(x)
         # x = K.clip(x, -4, 1)
         # x = (x + 4) * (255 / 5)
-        scale = 255 / (self.clip_range[1] - self.clip_range[0])
-        x = (x - self.clip_range[0]) * scale
+        x = (x - self.clip_range[0]) * self._scale
         x = K.cast(x, 'uint8')
         return x
 
@@ -36,12 +37,13 @@ class DecoderLayer(Layer):
 
     def __init__(self, clip_range, **kwargs):
         self.clip_range = clip_range
+        self._scale = (self.clip_range[1] - self.clip_range[0]) / 255
         super(DecoderLayer, self).__init__(**kwargs)
 
-    def call(self, x, **kwargs):
-        scale = (self.clip_range[1] - self.clip_range[0]) / 255
+    def call(self, inputs, **kwargs):
+        x = inputs
         x = K.cast(x, 'float32')
-        x = x * scale + self.clip_range[0]
+        x = x * self._scale + self.clip_range[0]
         return x
 
     def get_config(self):
