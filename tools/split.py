@@ -1,4 +1,5 @@
 from typing import Callable, Dict, Sequence, Tuple, Union
+from dataclasses import dataclass
 
 import tensorflow as tf
 import tensorflow.keras.backend as K  # pylint: disable=import-error
@@ -7,6 +8,13 @@ from tensorflow.python.framework.ops import Tensor
 from tensorflow.python.keras.layers import Layer
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+
+
+@dataclass
+class SplitOptions:
+    layer: str
+    encoder: Callable[[Tensor], Tensor]
+    decoder: Callable[[Tensor], Tensor]
 
 
 class EncoderLayer(Layer):
@@ -53,28 +61,28 @@ class DecoderLayer(Layer):
 
 
 def split_model(
-    model: keras.Model,
-    split_layer_name: str,
-    encoder: Callable[[Tensor], Tensor],
-    decoder: Callable[[Tensor], Tensor],
+    model: keras.Model, split_options: SplitOptions
 ) -> Tuple[keras.Model, keras.Model]:
     """Split model by given layer index.
 
     Attaches encoder layer to end of client model. Attaches decoder
     layer to beginning of server model.
     """
-    split_idx = _get_layer_idx_by_name(model, split_layer_name)
+    split_idx = _get_layer_idx_by_name(model, split_options.layer)
     layers = model.layers
     first_layer = layers[0]
     split_layer = layers[split_idx]
 
     inputs1 = keras.Input(_input_shape(first_layer))
     outputs1 = _copy_graph(split_layer, {first_layer.name: inputs1})
-    outputs1 = encoder(outputs1)
+    if split_options.encoder is not None:
+        outputs1 = split_options.encoder(outputs1)
     model1 = keras.Model(inputs=inputs1, outputs=outputs1)
 
     inputs2 = keras.Input(_output_shape(split_layer), dtype=outputs1.dtype)
-    inputs2_ = decoder(inputs2)
+    inputs2_ = inputs2
+    if split_options.decoder is not None:
+        inputs2_ = split_options.decoder(inputs2_)
     outputs2 = _copy_graph(layers[-1], {split_layer.name: inputs2_})
     model2 = keras.Model(inputs=inputs2, outputs=outputs2)
 

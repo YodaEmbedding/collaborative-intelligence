@@ -1,8 +1,8 @@
 import errno
 import os
-import warnings
+from contextlib import suppress
 from pprint import pprint
-from typing import Callable, Tuple
+from typing import Callable, Iterable, Tuple
 
 import numpy as np
 import tensorflow as tf
@@ -13,7 +13,7 @@ from tensorflow.python.keras.applications import imagenet_utils
 from tensorflow.python.keras.preprocessing import image
 from tensorflow.python.keras.utils import plot_model
 
-from split import DecoderLayer, EncoderLayer, split_model
+from split import DecoderLayer, EncoderLayer, SplitOptions, split_model
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
@@ -46,11 +46,17 @@ def create_model(model_name: str) -> keras.Model:
     return model_creator(shape, weights="imagenet")
 
 
+def cross_entropy(predictions, targets, epsilon=1e-12):
+    predictions = np.clip(predictions, epsilon, 1.0 - epsilon)
+    return -np.sum(targets * np.log(predictions)) / predictions.shape[0]
+
+
 def get_preprocessor(model_name: str):
     """Get input preprocessor for model."""
     return Classifiers.get(model_name)[1]
 
 
+# TODO unused
 def get_encoder_decoder(
     model_name: str
 ) -> Tuple[Callable[[Tensor], Tensor], Callable[[Tensor], Tensor]]:
@@ -75,84 +81,159 @@ def write_summary_to_file(model: keras.Model, filename: str):
         model.summary(print_fn=lambda x: f.write(f"{x}\n"))
 
 
-def main():
-    model_name = "vgg19"
-    prefix = f"{model_name}/{model_name}"
-    split_layer_name = {
-        "resnet18": "add_5",  # (14, 14, 256)
-        # 'resnet18':  'add_7', # (7, 7, 512)
-        "resnet34": "add_8",  # (14, 14, 256)
-        "resnet50": "add_8",  # (14, 14, 1024)
-        "resnet101": "add_8",  # (14, 14, 1024)
-        "resnet152": "add_12",  # (14, 14, 1024)
-        "vgg19": "block4_pool",  # (14, 14, 512)
-    }[model_name]
-    prefix_split = f"{model_name}/{model_name}-{split_layer_name}"
+def run_split(
+    model: keras.Model,
+    model_name: str,
+    split_options: SplitOptions,
+    test_inputs,
+    targets,
+    clean: bool = False,
+):
+    print(f"run_split({model_name}, {split_options})")
+    prefix = f"{model_name}/{model_name}-{split_options.layer}"
 
-    preprocess_input = get_preprocessor(model_name)
-    test_images = preprocess_input(single_input_image("sample.jpg"))
-
-    # Load and save entire model
-    try:
-        model = keras.models.load_model(f"{prefix}-full.h5")
-    except OSError:
-        model = create_model(model_name)
-        create_directory(model_name)
-        plot_model(model, to_file=f"{prefix}-full.png")
-        model.save(f"{prefix}-full.h5")
-
-    # Force usage of tf.keras.Model, which appears to have Nodes linked correctly
-    model = keras.models.load_model(f"{prefix}-full.h5")
-
-    # Make predictions
-    predictions = model.predict(test_images)
-    predictions = imagenet_utils.decode_predictions(predictions)
-    write_summary_to_file(model, f"{prefix}-full.txt")
-    pprint(predictions)
+    if clean:
+        with suppress(FileNotFoundError):
+            os.remove(f"{prefix}-client.h5")
+            os.remove(f"{prefix}-client.png")
+            os.remove(f"{prefix}-client.tflite")
+            os.remove(f"{prefix}-server.h5")
+            os.remove(f"{prefix}-server.png")
 
     # Load and save split model
     try:
         # TODO Don't really need custom_objects for all models...
         model_client = keras.models.load_model(
-            f"{prefix_split}-client.h5",
+            f"{prefix}-client.h5",
             custom_objects={"EncoderLayer": EncoderLayer},
         )
         model_server = keras.models.load_model(
-            f"{prefix_split}-server.h5",
+            f"{prefix}-server.h5",
             custom_objects={"DecoderLayer": DecoderLayer},
         )
+        predictions = model_client.predict(test_inputs)
+        predictions = model_server.predict(predictions)
     except OSError:
-        encoder, decoder = get_encoder_decoder(model_name)
-        model_client, model_server = split_model(
-            model, split_layer_name, encoder, decoder
+        model_client, model_server = split_model(model, split_options)
+        plot_model(model_client, to_file=f"{prefix}-client.png")
+        plot_model(model_server, to_file=f"{prefix}-server.png")
+        write_summary_to_file(model, f"{prefix}-client.txt")
+        write_summary_to_file(model, f"{prefix}-server.txt")
+        model_client.save(f"{prefix}-client.h5")
+        model_server.save(f"{prefix}-server.h5")
+        predictions = model_client.predict(test_inputs)
+        predictions = model_server.predict(predictions)
+        convert_to_tflite_model(
+            f"{prefix}-client.h5",
+            f"{prefix}-client.tflite",
+            custom_objects={"EncoderLayer": EncoderLayer},
         )
-        model_client.save(f"{prefix_split}-client.h5")
-        model_server.save(f"{prefix_split}-server.h5")
-        plot_model(model_client, to_file=f"{prefix_split}-client.png")
-        plot_model(model_server, to_file=f"{prefix_split}-server.png")
 
-    # Make predictions
-    prev_predictions = predictions
-    predictions = model_client.predict(test_images)
-    predictions = model_server.predict(predictions)
-    predictions = imagenet_utils.decode_predictions(predictions)
-    write_summary_to_file(model, f"{prefix_split}-client.txt")
-    write_summary_to_file(model, f"{prefix_split}-server.txt")
-    pprint(predictions)
-    print(
-        "Same predictions with split model? "
-        f"{np.all(predictions == prev_predictions)}"
-    )
+    print(f"Prediction loss: {cross_entropy(predictions, targets)}")
+    pred_decoder = imagenet_utils.decode_predictions
+    decoded_predictions = pred_decoder(predictions)
+    decoded_targets = pred_decoder(targets)
+    print("Decoded predictions:")
+    pprint(decoded_predictions)
+    print("Decoded targets:")
+    pprint(decoded_targets)
 
-    # Save TFLite models
-    convert_to_tflite_model(f"{prefix}-full.h5", f"{prefix}-full.tflite")
+    print("")
 
-    convert_to_tflite_model(
-        f"{prefix_split}-client.h5",
-        f"{prefix_split}-client.tflite",
-        custom_objects={"EncoderLayer": EncoderLayer},
-    )
+
+def run_splits(
+    model_name: str,
+    split_options_list: Iterable[SplitOptions],
+    clean_model: bool = False,
+    clean_splits: bool = False,
+):
+    print(f"run_splits({model_name})\n")
+    prefix = f"{model_name}/{model_name}"
+
+    if clean_model:
+        with suppress(FileNotFoundError):
+            os.remove(f"{prefix}-full.h5")
+            os.remove(f"{prefix}-full.tflite")
+            os.remove(f"{prefix}-full.txt")
+
+    preprocess_input = get_preprocessor(model_name)
+    test_images = single_input_image("sample.jpg")
+    test_inputs = preprocess_input(test_images)
+
+    # Load and save entire model
+    try:
+        model = keras.models.load_model(f"{prefix}-full.h5")
+        targets = model.predict(test_inputs)
+    except OSError:
+        create_directory(model_name)
+        model = create_model(model_name)
+        plot_model(model, to_file=f"{prefix}-full.png")
+        write_summary_to_file(model, f"{prefix}-full.txt")
+        model.save(f"{prefix}-full.h5")
+        # Force usage of tf.keras.Model which has Nodes linked correctly
+        model = keras.models.load_model(f"{prefix}-full.h5")
+        targets = model.predict(test_inputs)
+        convert_to_tflite_model(f"{prefix}-full.h5", f"{prefix}-full.tflite")
+
+    for split_options in split_options_list:
+        # Force usage of tf.keras.Model which has Nodes linked correctly
+        model = keras.models.load_model(f"{prefix}-full.h5")
+
+        run_split(
+            model,
+            model_name,
+            split_options,
+            test_inputs,
+            targets,
+            clean=clean_splits,
+        )
+
+    print("\n----------\n")
+
+
+def main():
+    split_options_dict = {
+        "resnet18": [
+            SplitOptions(
+                "add_5", EncoderLayer((-2, 2)), DecoderLayer((-2, 2))
+            ),
+            SplitOptions(
+                "add_7", EncoderLayer((-2, 2)), DecoderLayer((-2, 2))
+            ),
+        ],
+        "resnet34": [
+            SplitOptions("add_8", EncoderLayer((-2, 2)), DecoderLayer((-2, 2)))
+        ],
+        "resnet50": [
+            SplitOptions("add_8", EncoderLayer((-2, 2)), DecoderLayer((-2, 2)))
+        ],
+        "resnet101": [
+            SplitOptions("add_8", EncoderLayer((-2, 2)), DecoderLayer((-2, 2)))
+        ],
+        "resnet152": [
+            SplitOptions(
+                "add_12", EncoderLayer((-2, 2)), DecoderLayer((-2, 2))
+            )
+        ],
+        "vgg19": [
+            SplitOptions("block4_pool", None, None),
+            SplitOptions("block5_pool", None, None),
+        ],
+    }
+
+    # Single test
+    model_name = "vgg19"
+    run_splits(model_name, split_options_dict[model_name])
+
+    for model_name, split_options_list in split_options_dict.items():
+        run_splits(model_name, split_options_list)
 
 
 if __name__ == "__main__":
     main()
+
+
+# TODO replace with... encoder? isn't that Callable? not an actual layer
+# TODO plot analysis (e.g. histogram, tensor data file save, n-bit compression accuracies, etc)
+# TODO release memory
+# TODO delete resnet-keras-split
