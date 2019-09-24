@@ -6,7 +6,7 @@ from tensorflow import keras
 # pylint: disable-msg=E0611
 from tensorflow.python.framework.ops import Tensor
 from tensorflow.python.keras.layers import Layer
-import tensorflow.python.keras.backend as K
+import tensorflow.keras.backend as K  # pylint: disable=import-error
 
 # pylint: enable-msg=E0611
 
