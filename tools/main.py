@@ -1,4 +1,5 @@
 import errno
+import gc
 import os
 from contextlib import suppress
 from pprint import pprint
@@ -6,6 +7,7 @@ from typing import Callable, Iterable, Tuple
 
 import numpy as np
 import tensorflow as tf
+import tensorflow.keras.backend as K  # pylint: disable=import-error
 from classification_models.tfkeras import Classifiers
 from tensorflow import keras
 from tensorflow.python.framework.ops import Tensor
@@ -128,6 +130,10 @@ def run_split(
             f"{prefix}-client.tflite",
             custom_objects={"EncoderLayer": EncoderLayer},
         )
+    finally:
+        del model_client
+        del model_server
+        gc.collect()
 
     print(f"Prediction loss: {cross_entropy(predictions, targets)}")
     pred_decoder = imagenet_utils.decode_predictions
@@ -188,6 +194,10 @@ def run_splits(
             clean=clean_splits,
         )
 
+        del model
+        gc.collect()
+        K.clear_session()
+
     print("\n----------\n")
 
 
@@ -235,5 +245,4 @@ if __name__ == "__main__":
 
 # TODO replace with... encoder? isn't that Callable? not an actual layer
 # TODO plot analysis (e.g. histogram, tensor data file save, n-bit compression accuracies, etc)
-# TODO release memory
 # TODO delete resnet-keras-split
