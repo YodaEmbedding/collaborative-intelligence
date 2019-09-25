@@ -212,6 +212,9 @@ def main():
         "resnet50": [SplitOptions("add_8", uniquant_e, uniquant_d)],
         "resnet101": [SplitOptions("add_8", uniquant_e, uniquant_d)],
         "resnet152": [SplitOptions("add_12", uniquant_e, uniquant_d)],
+        "vgg16": [
+            SplitOptions("block4_pool", None, None),
+            SplitOptions("block5_pool", None, None)],
         "vgg19": [
             SplitOptions("block4_pool", None, None),
             SplitOptions("block5_pool", None, None),
@@ -219,8 +222,9 @@ def main():
     }
 
     # Single test
-    model_name = "vgg19"
+    model_name = "vgg16"
     run_splits(model_name, split_options_dict[model_name])
+    return
 
     for model_name, split_options_list in split_options_dict.items():
         run_splits(model_name, split_options_list, clean_splits=True)
