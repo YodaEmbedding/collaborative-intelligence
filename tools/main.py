@@ -58,18 +58,6 @@ def get_preprocessor(model_name: str):
     return Classifiers.get(model_name)[1]
 
 
-# TODO unused
-def get_encoder_decoder(
-    model_name: str
-) -> Tuple[Callable[[Tensor], Tensor], Callable[[Tensor], Tensor]]:
-    """Get encoder/decoder for model."""
-    if model_name.startswith("resnet"):
-        clip_range = (-2, 2)
-        return EncoderLayer(clip_range), DecoderLayer(clip_range)
-    identity = lambda x: x
-    return identity, identity
-
-
 def single_input_image(filename: str):
     """Load single image for testing."""
     img = image.load_img(filename, target_size=(224, 224))
@@ -208,29 +196,19 @@ def run_splits(
 
 
 def main():
+    uniquant_e = EncoderLayer((-2, 2))
+    uniquant_d = DecoderLayer((-2, 2))
+
+    # TODO extract to JSON?
     split_options_dict = {
         "resnet18": [
-            SplitOptions(
-                "add_5", EncoderLayer((-2, 2)), DecoderLayer((-2, 2))
-            ),
-            SplitOptions(
-                "add_7", EncoderLayer((-2, 2)), DecoderLayer((-2, 2))
-            ),
+            SplitOptions("add_5", uniquant_e, uniquant_d),
+            SplitOptions("add_7", uniquant_e, uniquant_d),
         ],
-        "resnet34": [
-            SplitOptions("add_8", EncoderLayer((-2, 2)), DecoderLayer((-2, 2)))
-        ],
-        "resnet50": [
-            SplitOptions("add_8", EncoderLayer((-2, 2)), DecoderLayer((-2, 2)))
-        ],
-        "resnet101": [
-            SplitOptions("add_8", EncoderLayer((-2, 2)), DecoderLayer((-2, 2)))
-        ],
-        "resnet152": [
-            SplitOptions(
-                "add_12", EncoderLayer((-2, 2)), DecoderLayer((-2, 2))
-            )
-        ],
+        "resnet34": [SplitOptions("add_8", uniquant_e, uniquant_d)],
+        "resnet50": [SplitOptions("add_8", uniquant_e, uniquant_d)],
+        "resnet101": [SplitOptions("add_8", uniquant_e, uniquant_d)],
+        "resnet152": [SplitOptions("add_12", uniquant_e, uniquant_d)],
         "vgg19": [
             SplitOptions("block4_pool", None, None),
             SplitOptions("block5_pool", None, None),
