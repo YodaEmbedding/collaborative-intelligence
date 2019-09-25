@@ -1,5 +1,5 @@
-from typing import Callable, Dict, Sequence, Tuple, Union
 from dataclasses import dataclass
+from typing import Callable, Dict, Sequence, Tuple, Union
 
 import tensorflow as tf
 import tensorflow.keras.backend as K  # pylint: disable=import-error

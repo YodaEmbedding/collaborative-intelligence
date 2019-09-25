@@ -220,7 +220,7 @@ def main():
     run_splits(model_name, split_options_dict[model_name])
 
     for model_name, split_options_list in split_options_dict.items():
-        run_splits(model_name, split_options_list)
+        run_splits(model_name, split_options_list, clean_splits=True)
 
 
 if __name__ == "__main__":
