@@ -174,6 +174,9 @@ def run_splits(
         model = keras.models.load_model(f"{prefix}-full.h5")
         targets = model.predict(test_inputs)
         convert_to_tflite_model(f"{prefix}-full.h5", f"{prefix}-full.tflite")
+    finally:
+        del model
+        gc.collect()
 
     for split_options in split_options_list:
         # Force usage of tf.keras.Model which has Nodes linked correctly
