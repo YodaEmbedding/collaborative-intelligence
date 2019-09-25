@@ -102,16 +102,22 @@ def run_split(
             os.remove(f"{prefix}-server.h5")
             os.remove(f"{prefix}-server.png")
 
+    client_objects = {}
+    server_objects = {}
+    if split_options.encoder is not None:
+        enc = split_options.encoder.__class__
+        client_objects = {enc.__name__: enc}
+    if split_options.decoder is not None:
+        dec = split_options.decoder.__class__
+        server_objects = {dec.__name__: dec}
+
     # Load and save split model
     try:
-        # TODO Don't really need custom_objects for all models...
         model_client = keras.models.load_model(
-            f"{prefix}-client.h5",
-            custom_objects={"EncoderLayer": EncoderLayer},
+            f"{prefix}-client.h5", custom_objects=client_objects
         )
         model_server = keras.models.load_model(
-            f"{prefix}-server.h5",
-            custom_objects={"DecoderLayer": DecoderLayer},
+            f"{prefix}-server.h5", custom_objects=server_objects
         )
         predictions = model_client.predict(test_inputs)
         predictions = model_server.predict(predictions)
@@ -128,7 +134,7 @@ def run_split(
         convert_to_tflite_model(
             f"{prefix}-client.h5",
             f"{prefix}-client.tflite",
-            custom_objects={"EncoderLayer": EncoderLayer},
+            custom_objects=client_objects,
         )
     finally:
         del model_client
@@ -243,6 +249,5 @@ if __name__ == "__main__":
     main()
 
 
-# TODO replace with... encoder? isn't that Callable? not an actual layer
 # TODO plot analysis (e.g. histogram, tensor data file save, n-bit compression accuracies, etc)
 # TODO delete resnet-keras-split
