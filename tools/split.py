@@ -16,6 +16,9 @@ class SplitOptions:
     encoder: Callable[[Tensor], Tensor]
     decoder: Callable[[Tensor], Tensor]
 
+    def __str__(self):
+        return f"{self.layer}-{self.encoder}-{self.decoder}"
+
 
 class EncoderLayer(Layer):
     """Client-side encoding."""
@@ -24,6 +27,10 @@ class EncoderLayer(Layer):
         self.clip_range = clip_range
         self._scale = 255 / (self.clip_range[1] - self.clip_range[0])
         super(EncoderLayer, self).__init__(**kwargs)
+
+    # TODO make this inheritable?
+    def __str__(self):
+        return f"{type(self).__name__}(clip_range={self.clip_range})"
 
     def call(self, inputs, **kwargs):
         x = inputs
@@ -47,6 +54,10 @@ class DecoderLayer(Layer):
         self.clip_range = clip_range
         self._scale = (self.clip_range[1] - self.clip_range[0]) / 255
         super(DecoderLayer, self).__init__(**kwargs)
+
+    # TODO make this inheritable?
+    def __str__(self):
+        return f"{type(self).__name__}(clip_range={self.clip_range})"
 
     def call(self, inputs, **kwargs):
         x = inputs
