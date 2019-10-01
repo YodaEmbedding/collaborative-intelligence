@@ -5,12 +5,12 @@ from contextlib import suppress
 from pprint import pprint
 from typing import Callable, Iterable, Tuple
 
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras.backend as K  # pylint: disable=import-error
 from classification_models.tfkeras import Classifiers
 from tensorflow import keras
-from tensorflow.python.framework.ops import Tensor
 from tensorflow.python.keras.applications import imagenet_utils
 from tensorflow.python.keras.preprocessing import image
 from tensorflow.python.keras.utils import plot_model
@@ -50,7 +50,7 @@ def create_model(model_name: str) -> keras.Model:
 
 def cross_entropy(predictions, targets, epsilon=1e-12):
     predictions = np.clip(predictions, epsilon, 1.0 - epsilon)
-    return -np.sum(targets * np.log(predictions)) / predictions.shape[0]
+    return -(np.sum(targets * np.log(predictions))) / predictions.shape[0]
 
 
 def get_preprocessor(model_name: str):
@@ -71,6 +71,20 @@ def write_summary_to_file(model: keras.Model, filename: str):
         model.summary(print_fn=lambda x: f.write(f"{x}\n"))
 
 
+def save_histogram(prefix: str, arr: np.ndarray):
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+    ax.hist(arr, bins=np.linspace(np.min(arr), np.max(arr), 20))
+    ax.set_xlabel("Neuron value")
+    ax.set_ylabel("Frequency")
+    fig.savefig(f"{prefix}-histogram.png")
+
+
+def run_analysis(prefix: str, arr: np.ndarray):
+    np.save(f"{prefix}.npy", arr)
+    save_histogram(prefix, arr.reshape((-1,)))
+
+
 def run_split(
     model: keras.Model,
     model_name: str,
@@ -85,6 +99,7 @@ def run_split(
     if clean:
         with suppress(FileNotFoundError):
             os.remove(f"{prefix}-client.h5")
+            os.remove(f"{prefix}-client.npy")
             os.remove(f"{prefix}-client.png")
             os.remove(f"{prefix}-client.tflite")
             os.remove(f"{prefix}-server.h5")
@@ -108,6 +123,7 @@ def run_split(
             f"{prefix}-server.h5", custom_objects=server_objects
         )
         predictions = model_client.predict(test_inputs)
+        run_analysis(f"{prefix}-client", predictions)
         predictions = model_server.predict(predictions)
     except OSError:
         model_client, model_server = split_model(model, split_options)
@@ -118,6 +134,7 @@ def run_split(
         model_client.save(f"{prefix}-client.h5")
         model_server.save(f"{prefix}-server.h5")
         predictions = model_client.predict(test_inputs)
+        run_analysis(f"{prefix}-client", predictions)
         predictions = model_server.predict(predictions)
         convert_to_tflite_model(
             f"{prefix}-client.h5",
@@ -214,7 +231,8 @@ def main():
         "resnet152": [SplitOptions("add_12", uniquant_e, uniquant_d)],
         "vgg16": [
             SplitOptions("block4_pool", None, None),
-            SplitOptions("block5_pool", None, None)],
+            SplitOptions("block5_pool", None, None),
+        ],
         "vgg19": [
             SplitOptions("block4_pool", None, None),
             SplitOptions("block5_pool", None, None),
