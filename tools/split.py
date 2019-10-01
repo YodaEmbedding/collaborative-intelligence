@@ -20,13 +20,13 @@ class SplitOptions:
         return f"{self.layer}-{self.encoder}-{self.decoder}"
 
 
-class EncoderLayer(Layer):
+class UniformQuantizationU8Encoder(Layer):
     """Client-side encoding."""
 
     def __init__(self, clip_range, **kwargs):
         self.clip_range = clip_range
         self._scale = 255 / (self.clip_range[1] - self.clip_range[0])
-        super(EncoderLayer, self).__init__(**kwargs)
+        super(UniformQuantizationU8Encoder, self).__init__(**kwargs)
 
     # TODO make this inheritable?
     def __str__(self):
@@ -43,17 +43,17 @@ class EncoderLayer(Layer):
 
     def get_config(self):
         config = {"clip_range": self.clip_range}
-        config.update(super(EncoderLayer, self).get_config())
+        config.update(super(UniformQuantizationU8Encoder, self).get_config())
         return config
 
 
-class DecoderLayer(Layer):
+class UniformQuantizationU8Decoder(Layer):
     """Server-side decoding."""
 
     def __init__(self, clip_range, **kwargs):
         self.clip_range = clip_range
         self._scale = (self.clip_range[1] - self.clip_range[0]) / 255
-        super(DecoderLayer, self).__init__(**kwargs)
+        super(UniformQuantizationU8Decoder, self).__init__(**kwargs)
 
     # TODO make this inheritable?
     def __str__(self):
@@ -67,7 +67,7 @@ class DecoderLayer(Layer):
 
     def get_config(self):
         config = {"clip_range": self.clip_range}
-        config.update(super(DecoderLayer, self).get_config())
+        config.update(super(UniformQuantizationU8Decoder, self).get_config())
         return config
 
 

@@ -15,7 +15,12 @@ from tensorflow.python.keras.applications import imagenet_utils
 from tensorflow.python.keras.preprocessing import image
 from tensorflow.python.keras.utils import plot_model
 
-from split import DecoderLayer, EncoderLayer, SplitOptions, split_model
+from split import (
+    UniformQuantizationU8Decoder,
+    UniformQuantizationU8Encoder,
+    SplitOptions,
+    split_model,
+)
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
@@ -214,8 +219,8 @@ def run_splits(
 
 
 def main():
-    uniquant_e = EncoderLayer((-2, 2))
-    uniquant_d = DecoderLayer((-2, 2))
+    uniquant_e = UniformQuantizationU8Encoder((-2, 2))
+    uniquant_d = UniformQuantizationU8Decoder((-2, 2))
 
     # TODO extract to JSON?
     split_options_dict = {
