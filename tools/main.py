@@ -1,5 +1,6 @@
 import errno
 import gc
+import json
 import os
 from contextlib import suppress
 from pprint import pprint
@@ -16,9 +17,9 @@ from tensorflow.python.keras.preprocessing import image
 from tensorflow.python.keras.utils import plot_model
 
 from split import (
+    SplitOptions,
     UniformQuantizationU8Decoder,
     UniformQuantizationU8Encoder,
-    SplitOptions,
     split_model,
 )
 
@@ -219,49 +220,32 @@ def run_splits(
 
 
 def main():
-    uniquant_e = UniformQuantizationU8Encoder((-2, 2))
-    uniquant_d = UniformQuantizationU8Decoder((-2, 2))
+    with open("models.json") as f:
+        models = json.load(f)
 
-    # TODO extract to JSON?
-    split_options_dict = {
-        "resnet18": [
-            SplitOptions("add_5", None, None),
-            SplitOptions("add_5", uniquant_e, uniquant_d),
-            SplitOptions("add_7", None, None),
-            SplitOptions("add_7", uniquant_e, uniquant_d),
-        ],
-        "resnet34": [
-            SplitOptions("add_8", None, None),
-            SplitOptions("add_8", uniquant_e, uniquant_d),
-        ],
-        "resnet50": [
-            SplitOptions("add_8", None, None),
-            SplitOptions("add_8", uniquant_e, uniquant_d),
-        ],
-        "resnet101": [
-            SplitOptions("add_8", None, None),
-            SplitOptions("add_8", uniquant_e, uniquant_d),
-        ],
-        "resnet152": [
-            SplitOptions("add_12", None, None),
-            SplitOptions("add_12", uniquant_e, uniquant_d),
-        ],
-        "vgg16": [
-            SplitOptions("block4_pool", None, None),
-            SplitOptions("block5_pool", None, None),
-        ],
-        "vgg19": [
-            SplitOptions("block4_pool", None, None),
-            SplitOptions("block5_pool", None, None),
-        ],
+    refs = [UniformQuantizationU8Encoder, UniformQuantizationU8Decoder]
+    refs = {x.__name__: x for x in refs}
+    refs["None"] = lambda: None
+    print(refs)
+
+    models = {
+        model: [
+            SplitOptions(
+                x["layer"],
+                refs[x["encoder"]](**x.get("encoder_args", {})),
+                refs[x["decoder"]](**x.get("decoder_args", {})),
+            )
+            for x in opt_list
+        ]
+        for model, opt_list in models.items()
     }
 
     # Single test
     model_name = "vgg16"
-    run_splits(model_name, split_options_dict[model_name])
+    run_splits(model_name, models[model_name])
     # return
 
-    for model_name, split_options_list in split_options_dict.items():
+    for model_name, split_options_list in models.items():
         run_splits(model_name, split_options_list, clean_splits=True)
 
 
