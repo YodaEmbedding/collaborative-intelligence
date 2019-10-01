@@ -122,29 +122,27 @@ def run_split(
         model_server = keras.models.load_model(
             f"{prefix}-server.h5", custom_objects=server_objects
         )
-        predictions = model_client.predict(test_inputs)
-        run_analysis(f"{prefix}-client", predictions)
-        predictions = model_server.predict(predictions)
     except OSError:
         model_client, model_server = split_model(model, split_options)
-        plot_model(model_client, to_file=f"{prefix}-client.png")
-        plot_model(model_server, to_file=f"{prefix}-server.png")
-        write_summary_to_file(model, f"{prefix}-client.txt")
-        write_summary_to_file(model, f"{prefix}-server.txt")
         model_client.save(f"{prefix}-client.h5")
         model_server.save(f"{prefix}-server.h5")
-        predictions = model_client.predict(test_inputs)
-        run_analysis(f"{prefix}-client", predictions)
-        predictions = model_server.predict(predictions)
+
+    plot_model(model_client, to_file=f"{prefix}-client.png")
+    plot_model(model_server, to_file=f"{prefix}-server.png")
+    write_summary_to_file(model, f"{prefix}-client.txt")
+    write_summary_to_file(model, f"{prefix}-server.txt")
+    predictions = model_client.predict(test_inputs)
+    run_analysis(f"{prefix}-client", predictions)
+    predictions = model_server.predict(predictions)
+    if not os.path.exists(f"{prefix}-client.tflite"):
         convert_to_tflite_model(
             f"{prefix}-client.h5",
             f"{prefix}-client.tflite",
             custom_objects=client_objects,
         )
-    finally:
-        del model_client
-        del model_server
-        gc.collect()
+    del model_client
+    del model_server
+    gc.collect()
 
     print(f"Prediction loss: {cross_entropy(predictions, targets)}")
     pred_decoder = imagenet_utils.decode_predictions
@@ -180,20 +178,20 @@ def run_splits(
     # Load and save entire model
     try:
         model = keras.models.load_model(f"{prefix}-full.h5")
-        targets = model.predict(test_inputs)
     except OSError:
         create_directory(model_name)
         model = create_model(model_name)
-        plot_model(model, to_file=f"{prefix}-full.png")
-        write_summary_to_file(model, f"{prefix}-full.txt")
         model.save(f"{prefix}-full.h5")
         # Force usage of tf.keras.Model which has Nodes linked correctly
         model = keras.models.load_model(f"{prefix}-full.h5")
-        targets = model.predict(test_inputs)
+
+    plot_model(model, to_file=f"{prefix}-full.png")
+    write_summary_to_file(model, f"{prefix}-full.txt")
+    targets = model.predict(test_inputs)
+    if not os.path.exists(f"{prefix}-client.tflite"):
         convert_to_tflite_model(f"{prefix}-full.h5", f"{prefix}-full.tflite")
-    finally:
-        del model
-        gc.collect()
+    del model
+    gc.collect()
 
     for split_options in split_options_list:
         # Force usage of tf.keras.Model which has Nodes linked correctly
