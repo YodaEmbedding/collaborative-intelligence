@@ -241,8 +241,8 @@ def main():
     }
 
     # Single test
-    model_name = "vgg16"
-    run_splits(model_name, models[model_name])
+    # model_name = "vgg16"
+    # run_splits(model_name, models[model_name])
     # return
 
     for model_name, split_options_list in models.items():

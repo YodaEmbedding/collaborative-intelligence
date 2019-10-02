@@ -28,9 +28,8 @@ class UniformQuantizationU8Encoder(Layer):
         self._scale = 255 / (self.clip_range[1] - self.clip_range[0])
         super(UniformQuantizationU8Encoder, self).__init__(**kwargs)
 
-    # TODO make this inheritable?
     def __str__(self):
-        return f"{type(self).__name__}(clip_range={self.clip_range})"
+        return f"{type(self).__name__}(clip_range={tuple(self.clip_range)})"
 
     def call(self, inputs, **kwargs):
         x = inputs
@@ -55,9 +54,8 @@ class UniformQuantizationU8Decoder(Layer):
         self._scale = (self.clip_range[1] - self.clip_range[0]) / 255
         super(UniformQuantizationU8Decoder, self).__init__(**kwargs)
 
-    # TODO make this inheritable?
     def __str__(self):
-        return f"{type(self).__name__}(clip_range={self.clip_range})"
+        return f"{type(self).__name__}(clip_range={tuple(self.clip_range)})"
 
     def call(self, inputs, **kwargs):
         x = inputs
