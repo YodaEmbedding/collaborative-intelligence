@@ -123,7 +123,7 @@ class SockMonkey:
 class ConnMonkey:
     """Simulate a connection using given file data cyclically."""
 
-    FPS = 0.2
+    FPS = 0.0
 
     def __init__(self, filename):
         self._pos = 0
@@ -249,8 +249,8 @@ class Main:
 
 
 def main():
-    DEBUG = False
-    DTYPE = tf.uint8
+    DEBUG = True
+    DTYPE = tf.float32
     MODEL_NAME = "resnet34"
     # MODEL_NAME = "vgg19-block4_pool"
     # MODEL_NAME = "mobilenet_v1_1.0_224"
@@ -271,6 +271,15 @@ if __name__ == "__main__":
     main()
 
 # TODO
+# HTTP binary data
+# How do we want to design this? One model, multithread? Model manager? Etc?
+# RxPy?
+# Switch models by JSON (client tells us what model to serve)
+# { "model": "resnet34", "splitLayer": "add_8", "encoder": "uniquant", "decoder": "uniquant", "encoderArgs": [-2, 2], "decoderArgs": [-2, 2] }
+# For now, single requests/model...
+
+# print statements...? or update a TUI?
+
 # Multiple clients, scarce resources (GPU)
 # Deal with overload of requests from clients (skip outdated requests)
 # More resources: load multiple instances of model
