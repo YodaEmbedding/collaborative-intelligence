@@ -2,6 +2,7 @@ import errno
 import gc
 import json
 import os
+import textwrap
 from contextlib import suppress
 from pprint import pprint
 from typing import Callable, Iterable, Tuple
@@ -80,10 +81,13 @@ def write_summary_to_file(model: keras.Model, filename: str):
 def save_histogram(prefix: str, arr: np.ndarray):
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
+    print(f"Min neuron: {np.min(arr)}")
+    print(f"Max neuron: {np.max(arr)}")
     ax.hist(arr, bins=np.linspace(np.min(arr), np.max(arr), 20))
     ax.set_xlabel("Neuron value")
     ax.set_ylabel("Frequency")
-    fig.savefig(f"{prefix}-histogram.png")
+    ax.set_title(textwrap.fill(prefix, 70), fontsize='xx-small')
+    fig.savefig(f"{prefix}-histogram.png", dpi=200)
 
 
 def run_analysis(prefix: str, arr: np.ndarray):
@@ -149,6 +153,7 @@ def run_split(
     del model_client
     del model_server
     gc.collect()
+    K.clear_session()
 
     print(f"Prediction loss: {cross_entropy(predictions, targets)}")
     pred_decoder = imagenet_utils.decode_predictions

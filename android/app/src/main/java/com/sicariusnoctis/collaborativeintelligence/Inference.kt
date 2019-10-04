@@ -21,7 +21,8 @@ class Inference : Closeable {
 
     constructor(context: Context) {
         tfliteModel = loadModel(context, "resnet34-client.tflite")
-        // tfliteModel = loadModel(context, "vgg19-block4_pool-client.tflite")
+        // tfliteModel = loadModel(context, "vgg16-block5_pool-client.tflite")
+        // tfliteModel = loadModel(context, "vgg19-block5_pool-client.tflite")
 
         // TODO First 65 operations will run on the GPU, and the remaining 3 on the CPU.TfLiteGpuDelegate
         // Invoke: Delegate should run on the same thread where it was initialized.Node number 68
@@ -42,6 +43,8 @@ class Inference : Closeable {
             .order(nativeOrder())
         // outputBuffer = ByteBuffer.allocateDirect(14 * 14 * 512 * 4)
         outputBuffer = ByteBuffer.allocateDirect(14 * 14 * 256 * 1)
+
+        // outputBuffer = ByteBuffer.allocateDirect(7 * 7 * 512 * 4)
         // TODO byte order of outputBuffer? shouldn't this be set to ensure consistency across network?
         // outputBuffer.order(nativeOrder())
         // .order(LITTLE_ENDIAN)
