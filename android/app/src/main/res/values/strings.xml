@@ -1,3 +1,20 @@
 <resources>
     <string name="app_name">Collaborative Intelligence</string>
+    <string-array name="model_choices">
+        <item>Resnet34</item>
+        <item>Other models</item>
+        <item>Uniform Quantizer</item>
+    </string-array>
+    <string-array name="compression_choices">
+        <item>Uniform Quantizer</item>
+        <item>Other methods</item>
+    </string-array>
+    <string-array name="layer_choices">
+        <item>server</item>
+        <item>add_4</item>
+        <item>add_8</item>
+        <item>add_14</item>
+<!--        <item>pool1</item>-->
+        <item>client</item>
+    </string-array>
 </resources>
