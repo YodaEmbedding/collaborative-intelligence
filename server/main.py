@@ -31,6 +31,7 @@ from tensorflow import keras
 spec = importlib.util.spec_from_file_location("layers", "../tools/layers.py")
 layers = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(layers)
+decoders = layers.decoders
 
 spec = importlib.util.spec_from_file_location("modelconfig", "../tools/modelconfig.py")
 modelconfig = importlib.util.module_from_spec(spec)
@@ -127,13 +128,13 @@ class ModelManager:
         return [(name, desc, float(score)) for name, desc, score in pred]
 
     def _load_model(self, model_config: ModelConfig) -> keras.Model:
-        decoder_name = model_config.decoder
-        decoders = {
-            "UniformQuantizationU8Decoder": layers.UniformQuantizationU8Decoder
-        }
+        decoder = model_config.decoder
+        custom_objects = {}
+        if decoder != "None":
+            custom_objects[decoder] = decoders[decoder]
         return keras.models.load_model(
             filepath=f"{model_config.to_path()}-server.h5",
-            custom_objects={decoder_name: decoders[decoder_name]},
+            custom_objects=custom_objects,
         )
 
 
