@@ -162,14 +162,15 @@ class Main:
     def __init__(self, debug, dtype, model_name):
         self.dtype = dtype
 
-        opt_suffix = "-float" if dtype == tf.float32 else ""
-        model_filename = f"{model_name}-server{opt_suffix}.h5"
+        model_filename = f"../tools/resnet34/resnet34-add_8-UniformQuantizationU8Encoder(clip_range=(-1.0, 1.0))-UniformQuantizationU8Decoder(clip_range=(-1.0, 1.0))-server.h5"
 
         print("Loading model...")
         self.sess = tf.Session()
         self.model = keras.models.load_model(
             model_filename,
-            custom_objects={"DecoderLayer": model_def.DecoderLayer},
+            custom_objects={
+                "UniformQuantizationU8Decoder": model_def.UniformQuantizationU8Decoder
+            },
         )
 
         if not debug:
@@ -249,8 +250,8 @@ class Main:
 
 
 def main():
-    DEBUG = True
-    DTYPE = tf.float32
+    DEBUG = False
+    DTYPE = tf.uint8
     MODEL_NAME = "resnet34"
     # MODEL_NAME = "vgg19-block4_pool"
     # MODEL_NAME = "mobilenet_v1_1.0_224"
