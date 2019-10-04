@@ -17,8 +17,9 @@ from tensorflow.python.keras.applications import imagenet_utils
 from tensorflow.python.keras.preprocessing import image
 from tensorflow.python.keras.utils import plot_model
 
-from layers import all_layers
-from split import SplitOptions, split_model
+from layers import decoders, encoders
+from modelconfig import ModelConfig
+from split import split_model
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
@@ -94,13 +95,13 @@ def run_analysis(prefix: str, arr: np.ndarray):
 def run_split(
     model: keras.Model,
     model_name: str,
-    split_options: SplitOptions,
+    model_config: ModelConfig,
     test_inputs,
     targets,
     clean: bool = False,
 ):
-    print(f"run_split({model_name}, {split_options})")
-    prefix = f"{model_name}/{model_name}-{split_options}"
+    print(f"run_split({model_config})")
+    prefix = model_config.to_path()
 
     if clean:
         with suppress(FileNotFoundError):
@@ -113,12 +114,10 @@ def run_split(
 
     client_objects = {}
     server_objects = {}
-    if split_options.encoder is not None:
-        enc = split_options.encoder.__class__
-        client_objects = {enc.__name__: enc}
-    if split_options.decoder is not None:
-        dec = split_options.decoder.__class__
-        server_objects = {dec.__name__: dec}
+    if model_config.encoder != "None":
+        client_objects[model_config.encoder] = encoders[model_config.encoder]
+    if model_config.decoder != "None":
+        server_objects[model_config.decoder] = decoders[model_config.decoder]
 
     # Load and save split model
     try:
@@ -129,7 +128,7 @@ def run_split(
             f"{prefix}-server.h5", custom_objects=server_objects
         )
     except OSError:
-        model_client, model_server = split_model(model, split_options)
+        model_client, model_server = split_model(model, model_config)
         model_client.save(f"{prefix}-client.h5")
         model_server.save(f"{prefix}-server.h5")
 
@@ -165,7 +164,7 @@ def run_split(
 
 def run_splits(
     model_name: str,
-    split_options_list: Iterable[SplitOptions],
+    model_configs: Iterable[ModelConfig],
     clean_model: bool = False,
     clean_splits: bool = False,
 ):
@@ -200,14 +199,14 @@ def run_splits(
     del model
     gc.collect()
 
-    for split_options in split_options_list:
+    for model_config in model_configs:
         # Force usage of tf.keras.Model which has Nodes linked correctly
         model = keras.models.load_model(f"{prefix}-full.h5")
 
         run_split(
             model,
             model_name,
-            split_options,
+            model_config,
             test_inputs,
             targets,
             clean=clean_splits,
@@ -224,19 +223,8 @@ def main():
     with open("models.json") as f:
         models = json.load(f)
 
-    refs = {x.__name__: x for x in all_layers}
-    refs["None"] = lambda: None
-    print(refs)
-
     models = {
-        model: [
-            SplitOptions(
-                x["layer"],
-                refs[x["encoder"]](**x.get("encoder_args", {})),
-                refs[x["decoder"]](**x.get("decoder_args", {})),
-            )
-            for x in opt_list
-        ]
+        model: [ModelConfig(model=model, **x) for x in opt_list]
         for model, opt_list in models.items()
     }
 
@@ -245,8 +233,8 @@ def main():
     # run_splits(model_name, models[model_name])
     # return
 
-    for model_name, split_options_list in models.items():
-        run_splits(model_name, split_options_list, clean_splits=True)
+    for model_name, model_configs in models.items():
+        run_splits(model_name, model_configs, clean_splits=True)
 
 
 if __name__ == "__main__":

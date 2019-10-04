@@ -1,47 +1,42 @@
 from dataclasses import dataclass
-from typing import Callable, Dict, Sequence, Tuple, Union
+from typing import Dict, Sequence, Tuple, Union
 
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.python.framework.ops import Tensor
 from tensorflow.python.keras.layers import Layer
 
+from layers import decoders, encoders
+from modelconfig import ModelConfig
+
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 
-@dataclass
-class SplitOptions:
-    layer: str
-    encoder: Callable[[Tensor], Tensor]
-    decoder: Callable[[Tensor], Tensor]
-
-    def __str__(self):
-        return f"{self.layer}-{self.encoder}-{self.decoder}"
-
-
 def split_model(
-    model: keras.Model, split_options: SplitOptions
+    model: keras.Model, model_config: ModelConfig
 ) -> Tuple[keras.Model, keras.Model]:
     """Split model by given layer index.
 
     Attaches encoder layer to end of client model. Attaches decoder
     layer to beginning of server model.
     """
-    split_idx = _get_layer_idx_by_name(model, split_options.layer)
+    split_idx = _get_layer_idx_by_name(model, model_config.layer)
     layers = model.layers
     first_layer = layers[0]
     split_layer = layers[split_idx]
 
     inputs1 = keras.Input(_input_shape(first_layer))
     outputs1 = _copy_graph(split_layer, {first_layer.name: inputs1})
-    if split_options.encoder is not None:
-        outputs1 = split_options.encoder(outputs1)
+    if model_config.encoder != "None":
+        encoder = encoders[model_config.encoder](**model_config.encoder_args)
+        outputs1 = encoder(outputs1)
     model1 = keras.Model(inputs=inputs1, outputs=outputs1)
 
     inputs2 = keras.Input(_output_shape(split_layer), dtype=outputs1.dtype)
     inputs2_ = inputs2
-    if split_options.decoder is not None:
-        inputs2_ = split_options.decoder(inputs2_)
+    if model_config.decoder != "None":
+        decoder = decoders[model_config.decoder](**model_config.decoder_args)
+        inputs2_ = decoder(inputs2_)
     outputs2 = _copy_graph(layers[-1], {split_layer.name: inputs2_})
     model2 = keras.Model(inputs=inputs2, outputs=outputs2)
 
