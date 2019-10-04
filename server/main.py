@@ -135,7 +135,7 @@ class ModelManager:
         if decoder != "None":
             custom_objects[decoder] = decoders[decoder]
         return keras.models.load_model(
-            filepath=f"{model_config.to_path()}-server.h5",
+            filepath=f"../tools/{model_config.to_path()}-server.h5",
             custom_objects=custom_objects,
         )
 
