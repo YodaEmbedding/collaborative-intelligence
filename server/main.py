@@ -28,9 +28,9 @@ import tensorflow as tf
 from keras.applications import imagenet_utils
 from tensorflow import keras
 
-spec = importlib.util.spec_from_file_location("model_def", "../tools/split.py")
-model_def = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(model_def)
+spec = importlib.util.spec_from_file_location("layers", "../tools/layers.py")
+layers = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(layers)
 
 IP = "0.0.0.0"
 PORT = 5678
@@ -152,7 +152,7 @@ class ModelManager:
     def _load_model(self, model_config: ModelConfig) -> keras.Model:
         decoder_name = model_config.decoder
         decoders = {
-            "UniformQuantizationU8Decoder": model_def.UniformQuantizationU8Decoder
+            "UniformQuantizationU8Decoder": layers.UniformQuantizationU8Decoder
         }
         return keras.models.load_model(
             filepath=f"{model_config.to_path()}-server.h5",

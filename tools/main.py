@@ -17,12 +17,8 @@ from tensorflow.python.keras.applications import imagenet_utils
 from tensorflow.python.keras.preprocessing import image
 from tensorflow.python.keras.utils import plot_model
 
-from split import (
-    SplitOptions,
-    UniformQuantizationU8Decoder,
-    UniformQuantizationU8Encoder,
-    split_model,
-)
+from layers import all_layers
+from split import SplitOptions, split_model
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
@@ -228,8 +224,7 @@ def main():
     with open("models.json") as f:
         models = json.load(f)
 
-    refs = [UniformQuantizationU8Encoder, UniformQuantizationU8Decoder]
-    refs = {x.__name__: x for x in refs}
+    refs = {x.__name__: x for x in all_layers}
     refs["None"] = lambda: None
     print(refs)
 
