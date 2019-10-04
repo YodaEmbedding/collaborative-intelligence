@@ -42,12 +42,14 @@ class NetworkAdapter {
         Log.i(TAG, "Tensor message size: ${data.size}")
 
         with(outputStream!!) {
+            writeBytes("frame\n")
+            // write(eol)
             writeInt(frameNumber)
-            write(eol)
+            // write(eol)
             writeInt(data.size)
-            write(eol)
+            // write(eol)
             write(data)
-            write(eol)
+            // write(eol)
         }
     }
 }
@@ -58,8 +60,8 @@ data class Prediction(val name: String, val description: String, val score: Floa
 @Serializable
 data class ResultResponse(
     val frameNumber: Int,
-    val readTime: Int,
-    val feedTime: Int,
+    // val readTime: Int,
+    // val feedTime: Int,
     val inferenceTime: Int,
     val predictions: List<Prediction>
 )

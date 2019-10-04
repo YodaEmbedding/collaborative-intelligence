@@ -1,66 +1,39 @@
 #!/usr/bin/env python3
 
+from __future__ import annotations
+
+import asyncio
 import importlib.util
-import itertools
 import json
 import os
-import socket
-import sys
 import time
-from contextlib import closing, suppress
+import traceback
+from asyncio import StreamReader, StreamWriter
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, ByteString, List, Optional, Tuple
+from typing import (
+    Any,
+    Awaitable,
+    ByteString,
+    Dict,
+    Generic,
+    List,
+    Tuple,
+    TypeVar,
+)
 
-import cv2
-from keras.applications import imagenet_utils
+import janus
 import numpy as np
 import tensorflow as tf
+from keras.applications import imagenet_utils
 from tensorflow import keras
 
-spec = importlib.util.spec_from_file_location(
-    "model_def",
-    "../tools/split.py",
-)
+spec = importlib.util.spec_from_file_location("model_def", "../tools/split.py")
 model_def = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(model_def)
 
 IP = "0.0.0.0"
 PORT = 5678
-
-
-def read_eol(conn):
-    return conn.recv(1, socket.MSG_WAITALL) == b"\x00"
-
-
-def read_fixed_message(conn) -> Optional[ByteString]:
-    msg_len_buf = conn.recv(4, socket.MSG_WAITALL)
-    if len(msg_len_buf) != 4 or not read_eol(conn):
-        return None
-    msg_len = int.from_bytes(msg_len_buf, byteorder="big")
-    buf = conn.recv(msg_len, socket.MSG_WAITALL)
-    if len(buf) < msg_len or not read_eol(conn):
-        return None
-    return buf
-
-
-def read_image(conn):
-    buf = read_fixed_message(conn)
-    if buf is None:
-        return None
-    buf = np.frombuffer(buf, dtype=np.uint8)
-    img = cv2.imdecode(buf, cv2.IMREAD_UNCHANGED)
-    return img
-
-
-def read_tensor_frame(conn) -> Optional[Tuple[int, ByteString]]:
-    frame_number_buf = conn.recv(4, socket.MSG_WAITALL)
-    if len(frame_number_buf) != 4 or not read_eol(conn):
-        return None
-    frame_number = int.from_bytes(frame_number_buf, byteorder="big")
-    msg = read_fixed_message(conn)
-    if msg is None:
-        return None
-    return frame_number, msg
 
 
 def str_preview(s: ByteString, max_len=16):
@@ -69,35 +42,36 @@ def str_preview(s: ByteString, max_len=16):
     return f"{s[:max_len - 6].hex()}...{s[-3:].hex()}"
 
 
-def tf_to_np_dtype(tf_dtype):
-    return {tf.uint8: np.uint8, tf.float32: np.float32}[tf_dtype]
+def to_np_dtype(dtype):
+    return {
+        "float32": np.float32,
+        "uint8": np.uint8,
+        tf.float32: np.float32,
+        tf.uint8: np.uint8,
+    }[dtype]
 
 
-def decode_data(model, data, dtype=tf.float32):
+def decode_data(model: keras.Model, data: ByteString) -> np.ndarray:
     input_shape = model.layers[1].input_shape[1:]
-    t = np.frombuffer(data, dtype=tf_to_np_dtype(dtype)).reshape(
+    input_type = model.layers[0].dtype  # TODO verify
+    t = np.frombuffer(data, dtype=to_np_dtype(input_type)).reshape(
         (-1, *input_shape)
     )
     return t
 
 
-def decode_predictions(predictions):
-    decoded_pred = imagenet_utils.decode_predictions(predictions)[0][:3]
-    return [(name, desc, float(score)) for name, desc, score in decoded_pred]
-
-
 def json_result(
     frame_number: int,
-    read_time: int,
-    feed_time: int,
+    # read_time: int,
+    # feed_time: int,
     inference_time: int,
-    predictions: List[List[Any]],
+    predictions: List[Tuple[str, str, float]],
 ) -> str:
     return json.dumps(
         {
             "frameNumber": frame_number,
-            "readTime": read_time,
-            "feedTime": feed_time,
+            # "readTime": read_time,  # TODO?
+            # "feedTime": feed_time,
             "inferenceTime": inference_time,
             "predictions": [
                 {"name": name, "description": desc, "score": score}
@@ -107,169 +81,277 @@ def json_result(
     )
 
 
-class SockMonkey:
-    """Simulate a socket that generates connections."""
-
-    def __init__(self, filename):
-        self._filename = filename
-
-    def close(self):
-        pass
-
-    def accept(self):
-        return ConnMonkey(self._filename), ("Virtual Address", -1)
+def dict_to_str(d: dict) -> str:
+    return ", ".join(f"{k}={v}" for k, v in sorted(d.items()))
 
 
-class ConnMonkey:
-    """Simulate a connection using given file data cyclically."""
+@dataclass(eq=True, frozen=True)
+class ModelConfig:
+    model: str
+    layer: str
+    encoder: str
+    decoder: str
+    encoder_args: str
+    decoder_args: str
 
-    FPS = 0.0
+    def to_path(self) -> str:
+        enc = ModelConfig._encdec_str(self.encoder, self.encoder_args)
+        dec = ModelConfig._encdec_str(self.decoder, self.decoder_args)
+        return f"../tools/{self.model}/{self.model}-{self.layer}-{enc}-{dec}"
 
-    def __init__(self, filename):
-        self._pos = 0
-        with open(filename, "rb") as f:
-            self._data = f.read()
-        self._data = (
-            len(self._data).to_bytes(4, byteorder="big")
-            + b"\x00"
-            + self._data
-            + b"\x00"
-        )
-
-    def close(self):
-        pass
-
-    def recv(self, num_bytes, flags):
-        if flags != socket.MSG_WAITALL:
-            raise ValueError("Unsupported flags")
-        xs = []
-        remaining = num_bytes
-        while remaining > 0:
-            x = self._data[self._pos : self._pos + remaining]
-            self._pos += len(x)
-            time.sleep(self._pos // len(self._data) * ConnMonkey.FPS)
-            self._pos %= len(self._data)
-            remaining -= len(x)
-            xs.append(x)
-        result = b"".join(xs)
-        return result
-
-    def send(self, s: ByteString):
-        print(s.decode("utf8"))
+    @staticmethod
+    def _encdec_str(name, args):
+        if len(args) == 0:
+            return name
+        # return f"{name}({dict_to_str(args)})"
+        return f"{name}({args})"
 
 
-class Main:
-    def __init__(self, debug, dtype, model_name):
-        self.dtype = dtype
+@dataclass
+class ModelReference:
+    ref_count: int
+    model: keras.Model
 
-        model_filename = f"../tools/resnet34/resnet34-add_8-UniformQuantizationU8Encoder(clip_range=(-1.0, 1.0))-UniformQuantizationU8Decoder(clip_range=(-1.0, 1.0))-server.h5"
 
-        print("Loading model...")
+class ModelManager:
+    def __init__(self):
         self.sess = tf.Session()
-        self.model = keras.models.load_model(
-            model_filename,
-            custom_objects={
-                "UniformQuantizationU8Decoder": model_def.UniformQuantizationU8Decoder
-            },
+        self.models: Dict[ModelConfig, ModelReference] = {}
+
+    def acquire(self, model_config: ModelConfig):
+        if model_config not in self.models:
+            print(f"Loaded model {model_config}")
+            model = self._load_model(model_config)
+            self.models[model_config] = ModelReference(0, model)
+        self.models[model_config].ref_count += 1
+
+    def release(self, model_config: ModelConfig):
+        self.models[model_config].ref_count -= 1
+        if self.models[model_config].ref_count == 0:
+            print(f"Released model {model_config}")
+            del self.models[model_config].model
+            del self.models[model_config]
+
+    # @synchronized
+    def predict(
+        self, model_config: ModelConfig, data: ByteString
+    ) -> List[Tuple[str, str, float]]:
+        model = self.models[model_config].model
+        data_tensor = decode_data(model, data)
+        predictions = model.predict(data_tensor)
+        return self._decode_predictions(predictions)
+
+    def _decode_predictions(
+        self, predictions: np.ndarray, num_preds: int = 3
+    ) -> List[Tuple[str, str, float]]:
+        pred = imagenet_utils.decode_predictions(predictions)[0][:num_preds]
+        return [(name, desc, float(score)) for name, desc, score in pred]
+
+    def _load_model(self, model_config: ModelConfig) -> keras.Model:
+        decoder_name = model_config.decoder
+        decoders = {
+            "UniformQuantizationU8Decoder": model_def.UniformQuantizationU8Decoder
+        }
+        return keras.models.load_model(
+            filepath=f"{model_config.to_path()}-server.h5",
+            custom_objects={decoder_name: decoders[decoder_name]},
         )
 
-        if not debug:
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.sock.bind((IP, PORT))
-            self.sock.listen(1)
-        else:
-            self.sock = SockMonkey("resnet34-float-add_8-monitor.dat")
 
-    def start_connection(self):
-        print("Waiting for connection...")
-        conn, addr = self.sock.accept()
-        print(f"Established connection on\n{conn}\n{addr}")
-
-        data, data_tensor = None, None
-        for i in itertools.count():
-            result = self._loop_once(i, conn)
-            if result is None:
-                break
-            data, data_tensor = result
-
-        print("Closing connection...")
-        conn.close()
-
-        if data is None or data_tensor is None:
-            return
-
-        with suppress(NameError):
-            with open("last_run_final_frame.dat", "wb") as f:
-                f.write(data)
-            np.save("last_run_final_frame.npy", data_tensor)
-
-    def _loop_once(self, i, conn):
-        t0 = time.time()
-        msg = read_tensor_frame(conn)
-        if msg is None:
-            return None
-        frame_number, data = msg
-
-        now = datetime.now()
-
-        t1 = time.time()
-        data_tensor = decode_data(self.model, data, dtype=self.dtype)
-
-        t2 = time.time()
-        predictions = self.model.predict(data_tensor)
-
-        t3 = time.time()
-        decoded_pred = decode_predictions(predictions)
-        decoded_pred_str = "\n".join(
-            f"{name:12} {desc:24} {score:0.3f}"
-            for name, desc, score in decoded_pred
-        )
-        msg = json_result(
-            frame_number=frame_number,
-            read_time=int(1000 * (t1 - t0)),
-            feed_time=int(1000 * (t2 - t1)),
-            inference_time=int(1000 * (t3 - t2)),
-            predictions=decoded_pred,
-        )
-        conn.send(f"{msg}\n".encode("utf8"))
-
-        t4 = time.time()
-
-        print(now.isoformat(sep=" ", timespec="milliseconds"))
-        print(i, len(data), str_preview(data))
-        print(decoded_pred_str)
-        print(f"Read:       {1000 * (t1 - t0):4.0f} ms")
-        print(f"Feed input: {1000 * (t2 - t1):4.0f} ms")
-        print(f"Inference:  {1000 * (t3 - t2):4.0f} ms")
-        print(f"Send:       {1000 * (t4 - t3):4.0f} ms")
-        print(f"Total:      {1000 * (t4 - t0):4.0f} ms")
-        print("")
-
-        return data, data_tensor
+R = TypeVar("R")
+T = TypeVar("T")
 
 
-def main():
-    DEBUG = False
-    DTYPE = tf.uint8
-    MODEL_NAME = "resnet34"
-    # MODEL_NAME = "vgg19-block4_pool"
-    # MODEL_NAME = "mobilenet_v1_1.0_224"
+class WorkDistributor(Generic[T, R]):
+    """Process async items synchronously."""
 
-    main = Main(DEBUG, DTYPE, MODEL_NAME)
+    _queue: janus.Queue
+    _results: Dict[int, janus.Queue]
 
-    with closing(main.sock):
+    def __init__(self):
+        self._guid = 0
+        self._queue = janus.Queue()
+        self._results = {}
+
+    def register(self):
+        """Register client for processing.
+
+        Returns:
+            request_callback: Asynchronously push request.
+            result_callback: Asynchronously receive result.
+        """
+        guid = self._guid
+        self._guid += 1
+        self._results[guid] = janus.Queue()
+
+        async def put_request(item: T):
+            await self._queue.async_q.put((guid, item))
+
+        async def get_result() -> Awaitable[R]:
+            return await self._results[guid].async_q.get()
+
+        return put_request, get_result
+
+    def get(self) -> Tuple[int, T]:
+        """Synchronously retrieve item for processing."""
+        return self._queue.sync_q.get()
+
+    def empty(self) -> bool:
+        """Check if process queue is empty."""
+        return self._queue.sync_q.empty()
+
+    def put(self, guid: int, item: R):
+        """Synchronously push processed result."""
+        self._results[guid].sync_q.put(item)
+
+
+# TODO Propogate exceptions back to client?
+def processor(work_distributor: WorkDistributor):
+    model_manager = ModelManager()
+
+    while True:
+        try:
+            guid, item = work_distributor.get()
+            model_config, request_type, item = item
+
+            if request_type == "terminate":
+                work_distributor.put(guid, None)
+            elif request_type == "acquire":
+                model_manager.acquire(model_config)
+            elif request_type == "release":
+                model_manager.release(model_config)
+            elif request_type == "predict":
+                frame_number, data = item
+                t0 = time.time()
+                preds = model_manager.predict(model_config, data)
+                t1 = time.time()
+                result = json_result(
+                    frame_number=frame_number,
+                    inference_time=int(1000 * (t1 - t0)),
+                    predictions=preds,
+                )
+                result = f"{result}\n".encode("utf8")
+                work_distributor.put(guid, result)
+        except Exception:
+            traceback.print_exc()
+
+
+# TODO honestly, the "eol"s are a bit pointless...
+async def read_eol(reader: StreamReader) -> Awaitable[bool]:
+    return await reader.readexactly(1) == b"\x00"
+
+
+async def read_int(reader: StreamReader) -> Awaitable[int]:
+    return int.from_bytes(await reader.readexactly(4), byteorder="big")
+
+
+async def read_tensor_frame(
+    reader: StreamReader,
+) -> Awaitable[Tuple[int, ByteString]]:
+    frame_number = await read_int(reader)
+    print(frame_number)
+    # await read_eol(reader)
+    data_len = await read_int(reader)
+    print(data_len)
+    # await read_eol(reader)
+    data = await reader.readexactly(data_len)
+    print(str_preview(data))
+    # await read_eol(reader)
+    return frame_number, data
+
+
+async def read_json(reader: StreamReader) -> Awaitable[dict]:
+    return json.loads(await reader.readline())
+
+
+# TODO form protocol on json and binary data
+async def read_item(reader: StreamReader) -> Awaitable[Tuple[str, Any]]:
+    input_type = (await reader.readline()).decode("utf8").rstrip("\n")
+    print(input_type)
+    if len(input_type) == 0:
+        return "terminate", None
+    reader_func = {"frame": read_tensor_frame, "json": read_json}[input_type]
+    return input_type, await reader_func(reader)
+
+
+async def produce(reader: StreamReader, putter):
+    model_config: ModelConfig = None
+
+    # TODO DEBUG
+    model_config = ModelConfig(
+        "resnet34",
+        "add_8",
+        "UniformQuantizationU8Encoder",
+        "UniformQuantizationU8Decoder",
+        dict_to_str(
+            {"clip_range": (-1.0, 1.0)}
+        ),  # TODO how to format floats/tuples?
+        dict_to_str({"clip_range": (-1.0, 1.0)}),
+    )
+    await putter((model_config, "acquire", None))
+
+    try:
         while True:
-            try:
-                main.start_connection()
-            except ConnectionResetError as e:
-                print(e)
-            except BrokenPipeError as e:
-                print(e)
+            input_type, item = await read_item(reader)
+            print(
+                f"Produce: {input_type}, {str_preview(str(item).encode('utf8'))}"
+            )
+            if input_type == "terminate":
+                break
+            # TODO instead of always passing model_config, why not make class?
+            # TODO merge with processor()?
+            elif input_type == "frame":
+                await putter((model_config, "predict", item))
+            elif input_type == "json":
+                if model_config is not None:
+                    await putter((model_config, "release", None))
+                model_config = ModelConfig(**item)
+                await putter((model_config, "acquire", None))
+    finally:
+        if model_config is not None:
+            await putter((model_config, "release", None))
+        await putter((None, "terminate", None))
+
+
+async def consume(writer: StreamWriter, getter):
+    try:
+        while True:
+            item = await getter()
+            if item is None:
+                break
+            print("Consume:")
+            print(json.dumps(json.loads(item.decode("utf8")), indent=4))
+            writer.write(item)
+            await writer.drain()
+    # TODO what does close even do? do we need the finally?
+    finally:
+        print("Closing client...")
+        writer.close()
+
+
+def handle_client(work_distributor: WorkDistributor):
+    async def client_handler(reader, writer):
+        print("New client...")
+        putter, getter = work_distributor.register()
+        coros = [produce(reader, putter), consume(writer, getter)]
+        tasks = map(asyncio.create_task, coros)
+        await asyncio.wait(tasks)
+
+    return client_handler
+
+
+async def main():
+    work_distributor = WorkDistributor()
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, processor, work_distributor)
+    client_handler = handle_client(work_distributor)
+    server = await asyncio.start_server(client_handler, IP, PORT)
+    await server.serve_forever()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
+
 
 # TODO
 # HTTP binary data
@@ -278,12 +360,20 @@ if __name__ == "__main__":
 # Switch models by JSON (client tells us what model to serve)
 # { "model": "resnet34", "splitLayer": "add_8", "encoder": "uniquant", "decoder": "uniquant", "encoderArgs": [-2, 2], "decoderArgs": [-2, 2] }
 # For now, single requests/model...
-
 # print statements...? or update a TUI?
-
 # Multiple clients, scarce resources (GPU)
 # Deal with overload of requests from clients (skip outdated requests)
 # More resources: load multiple instances of model
 # Handle client reconnection attempts gracefully
 # Signal loss from client -> timeout on recv
 # Exception handling: https://docs.python.org/3/library/socket.html#example
+
+
+# TODO how to deal with reconfigure_request received at same time as inference_request? or is that a problem only if using more than one thread... but how to deal with starvation then? HMMMM or backpressure/buffers
+# TODO try with time.sleep()
+# TODO read, inference, write in parallel, no? (multiprocess.executorpool)
+# TODO switch to asyncio based server? Or with StreamReader/StreamWriter
+# TODO finally on drop connection: release()
+# NOTE single threaded inference is probably better to prevent starvation anyways...!
+# TODO batch scheduling?
+# TODO Tensorflow Serving? run on localhost if want additional functionality (like stats)
