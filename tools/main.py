@@ -83,7 +83,7 @@ def save_histogram(prefix: str, arr: np.ndarray):
     ax.hist(arr, bins=np.linspace(np.min(arr), np.max(arr), 20))
     ax.set_xlabel("Neuron value")
     ax.set_ylabel("Frequency")
-    ax.set_title(textwrap.fill(prefix, 70), fontsize='xx-small')
+    ax.set_title(textwrap.fill(prefix, 70), fontsize="xx-small")
     fig.savefig(f"{prefix}-histogram.png", dpi=200)
 
 

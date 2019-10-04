@@ -33,7 +33,9 @@ layers = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(layers)
 decoders = layers.decoders
 
-spec = importlib.util.spec_from_file_location("modelconfig", "../tools/modelconfig.py")
+spec = importlib.util.spec_from_file_location(
+    "modelconfig", "../tools/modelconfig.py"
+)
 modelconfig = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(modelconfig)
 ModelConfig = modelconfig.ModelConfig
@@ -264,8 +266,8 @@ async def produce(reader: StreamReader, putter):
         "add_8",
         "UniformQuantizationU8Encoder",
         "UniformQuantizationU8Decoder",
-        {"clip_range": (-1.0, 1.0)},
-        {"clip_range": (-1.0, 1.0)},
+        {"clip_range": [-1.0, 1.0]},
+        {"clip_range": [-1.0, 1.0]},
     )
     await putter((model_config, "acquire", None))
 

@@ -52,6 +52,7 @@ class UniformQuantizationU8Decoder(Layer):
         config.update(super(UniformQuantizationU8Decoder, self).get_config())
         return config
 
+
 _encoders = [UniformQuantizationU8Encoder]
 _decoders = [UniformQuantizationU8Decoder]
 encoders = {x.__name__: x for x in _encoders}
