@@ -99,6 +99,7 @@ def run_split(
     test_inputs,
     targets,
     clean: bool = False,
+    disk_load: bool = False,
 ):
     print(f"run_split({model_config})")
     prefix = model_config.to_path()
@@ -120,16 +121,22 @@ def run_split(
         server_objects[model_config.decoder] = decoders[model_config.decoder]
 
     # Load and save split model
-    try:
-        model_client = keras.models.load_model(
-            f"{prefix}-client.h5", custom_objects=client_objects
-        )
-        model_server = keras.models.load_model(
-            f"{prefix}-server.h5", custom_objects=server_objects
-        )
-    except OSError:
+    if disk_load:
+        try:
+            model_client = keras.models.load_model(
+                f"{prefix}-client.h5", custom_objects=client_objects
+            )
+            model_server = keras.models.load_model(
+                f"{prefix}-server.h5", custom_objects=server_objects
+            )
+        except OSError:
+            model_client, model_server = split_model(model, model_config)
+    else:
         model_client, model_server = split_model(model, model_config)
+
+    if not os.path.exists(f"{prefix}-client.h5"):
         model_client.save(f"{prefix}-client.h5")
+    if not os.path.exists(f"{prefix}-server.h5"):
         model_server.save(f"{prefix}-server.h5")
 
     plot_model(model_client, to_file=f"{prefix}-client.png")
@@ -210,6 +217,7 @@ def run_splits(
             test_inputs,
             targets,
             clean=clean_splits,
+            disk_load=False,
         )
 
         del model
