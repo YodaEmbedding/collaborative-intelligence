@@ -87,9 +87,29 @@ def save_histogram(prefix: str, arr: np.ndarray):
     fig.savefig(f"{prefix}-histogram.png", dpi=200)
 
 
-def run_analysis(prefix: str, arr: np.ndarray):
-    np.save(f"{prefix}.npy", arr)
-    save_histogram(prefix, arr.reshape((-1,)))
+def run_analysis(
+    prefix: str,
+    model_client: keras.Model,
+    model_server: keras.Model,
+    test_inputs,
+    targets,
+):
+    pred_client = model_client.predict(test_inputs)
+    pred_server = model_server.predict(pred_client)
+
+    np.save(f"{prefix}.npy", pred_client)
+    save_histogram(prefix, pred_client.reshape((-1,)))
+
+    print(f"Prediction loss: {cross_entropy(pred_server, targets)}")
+    prediction_decoder = imagenet_utils.decode_predictions
+    print("Decoded predictions:")
+    pprint(prediction_decoder(pred_server))
+    print("Decoded targets:")
+    pprint(prediction_decoder(targets))
+
+    # TODO reconstruction error from encoder/decoder
+    # TODO sensitivity analysis (perturb input, see how client tensor changes)
+    # TODO top-k accuracy on data set
 
 
 def run_split(
@@ -143,9 +163,9 @@ def run_split(
     plot_model(model_server, to_file=f"{prefix}-server.png")
     write_summary_to_file(model, f"{prefix}-client.txt")
     write_summary_to_file(model, f"{prefix}-server.txt")
-    predictions = model_client.predict(test_inputs)
-    run_analysis(f"{prefix}-client", predictions)
-    predictions = model_server.predict(predictions)
+    run_analysis(
+        f"{prefix}-client", model_client, model_server, test_inputs, targets
+    )
     if not os.path.exists(f"{prefix}-client.tflite"):
         convert_to_tflite_model(
             f"{prefix}-client.h5",
@@ -156,15 +176,6 @@ def run_split(
     del model_server
     gc.collect()
     K.clear_session()
-
-    print(f"Prediction loss: {cross_entropy(predictions, targets)}")
-    pred_decoder = imagenet_utils.decode_predictions
-    decoded_predictions = pred_decoder(predictions)
-    decoded_targets = pred_decoder(targets)
-    print("Decoded predictions:")
-    pprint(decoded_predictions)
-    print("Decoded targets:")
-    pprint(decoded_targets)
 
     print("")
 
@@ -207,6 +218,7 @@ def run_splits(
     gc.collect()
 
     for model_config in model_configs:
+        # TODO If this can be avoided, it would speed things up considerably...
         # Force usage of tf.keras.Model which has Nodes linked correctly
         model = keras.models.load_model(f"{prefix}-full.h5")
 
@@ -220,11 +232,13 @@ def run_splits(
             disk_load=False,
         )
 
+        print("----------\n")
+
         del model
         gc.collect()
         K.clear_session()
 
-    print("\n----------\n")
+    print("\n==========\n")
 
 
 def main():
