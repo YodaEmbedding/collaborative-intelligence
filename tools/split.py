@@ -19,28 +19,47 @@ def split_model(
 
     Attaches encoder layer to end of client model. Attaches decoder
     layer to beginning of server model.
+
+    Returns:
+        - model_client
+        - model_server
+        - model_analysis
     """
     split_idx = _get_layer_idx_by_name(model, model_config.layer)
     layers = model.layers
     first_layer = layers[0]
     split_layer = layers[split_idx]
 
+    outputs3 = []
+
+    # Client-side (with encoder)
     inputs1 = keras.Input(_input_shape(first_layer))
+    inputs3 = inputs1
     outputs1 = _copy_graph(split_layer, {first_layer.name: inputs1})
+    outputs3.append(outputs1)
     if model_config.encoder != "None":
         encoder = encoders[model_config.encoder](**model_config.encoder_args)
         outputs1 = encoder(outputs1)
-    model1 = keras.Model(inputs=inputs1, outputs=outputs1)
+        outputs3.append(outputs1)
+    x = outputs1
 
+    # Server-side (with decoder)
     inputs2 = keras.Input(_output_shape(split_layer), dtype=outputs1.dtype)
     inputs2_ = inputs2
     if model_config.decoder != "None":
         decoder = decoders[model_config.decoder](**model_config.decoder_args)
         inputs2_ = decoder(inputs2_)
+        x = decoder(x)
+        outputs3.append(x)
     outputs2 = _copy_graph(layers[-1], {split_layer.name: inputs2_})
-    model2 = keras.Model(inputs=inputs2, outputs=outputs2)
+    x = _copy_graph(layers[-1], {split_layer.name: x})
+    outputs3.append(x)
 
-    return model1, model2
+    model1 = keras.Model(inputs=inputs1, outputs=outputs1)
+    model2 = keras.Model(inputs=inputs2, outputs=outputs2)
+    model3 = keras.Model(inputs=inputs3, outputs=outputs3)
+
+    return model1, model2, model3
 
 
 def _copy_graph(layer: Layer, layer_lut: Dict[str, Tensor]) -> Tensor:
