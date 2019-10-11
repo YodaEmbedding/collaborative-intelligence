@@ -18,16 +18,15 @@
                 android:layout_height="wrap_content"
                 android:layout_marginVertical="12dp">
 
-            <ImageView
-                    android:id="@+id/mockupCamera"
-                    android:layout_width="180dp"
-                    android:layout_height="120dp"
-                    android:src="@drawable/mockup_camera" />
+            <io.fotoapparat.view.CameraView
+                android:id="@+id/cameraView"
+                android:layout_width="180dp"
+                android:layout_height="120dp" />
 
             <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_toRightOf="@+id/mockupCamera"
+                    android:layout_toRightOf="@+id/cameraView"
                     android:layout_marginLeft="24dp"
                     android:layout_centerVertical="true"
                     android:lineSpacingExtra="12dp"
