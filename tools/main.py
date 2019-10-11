@@ -75,11 +75,13 @@ def write_summary_to_file(model: keras.Model, filename: str):
         model.summary(print_fn=lambda x: f.write(f"{x}\n"))
 
 
-def save_histogram(prefix: str, arr: np.ndarray):
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)
+def plot_histogram(prefix: str, arr: np.ndarray):
+    arr = arr.reshape((-1,))
     print(f"Min neuron: {np.min(arr)}")
     print(f"Max neuron: {np.max(arr)}")
+
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
     ax.hist(arr, bins=np.linspace(np.min(arr), np.max(arr), 20))
     ax.set_xlabel("Neuron value")
     ax.set_ylabel("Frequency")
@@ -87,25 +89,58 @@ def save_histogram(prefix: str, arr: np.ndarray):
     fig.savefig(f"{prefix}-histogram.png", dpi=200)
 
 
+def plot_featuremap(prefix: str, arr: np.ndarray):
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+    # ax.matshow(arr[0, :, :, 0], cmap='viridis')
+    ax.matshow(arr, cmap='viridis')
+    # TODO plot [..., 0:255] in tiled grid?
+    ax.set_title(textwrap.fill(prefix, 70), fontsize="xx-small")
+    fig.savefig(f"{prefix}-featuremap.png", dpi=200)
+
+
 def run_analysis(
-    prefix: str,
-    model_client: keras.Model,
-    model_server: keras.Model,
-    test_inputs,
-    targets,
+    prefix: str, model_analysis: keras.Model, test_inputs, targets
 ):
-    pred_client = model_client.predict(test_inputs)
-    pred_server = model_server.predict(pred_client)
+    pred_analysis = model_analysis.predict(test_inputs)
+    pred_split = pred_analysis[0]
+    pred_server = pred_analysis[-1]
 
-    np.save(f"{prefix}.npy", pred_client)
-    save_histogram(prefix, pred_client.reshape((-1,)))
-
-    print(f"Prediction loss: {cross_entropy(pred_server, targets)}")
     prediction_decoder = imagenet_utils.decode_predictions
+    print(f"Prediction loss: {cross_entropy(pred_server, targets)}")
     print("Decoded predictions:")
     pprint(prediction_decoder(pred_server))
     print("Decoded targets:")
     pprint(prediction_decoder(targets))
+
+    if len(pred_analysis) == 2:
+        np.save(f"{prefix}-split.npy", pred_split)
+        np.save(f"{prefix}-server.npy", pred_server)
+        plot_histogram(f"{prefix}-split", pred_split)
+        plot_featuremap(f"{prefix}-split", pred_split)
+        return
+
+    if len(pred_analysis) != 4:
+        raise
+
+    pred_encoder = pred_analysis[1]
+    pred_decoder = pred_analysis[2]
+
+    np.save(f"{prefix}-encoder.npy", pred_encoder)
+    np.save(f"{prefix}-decoder.npy", pred_decoder)
+    plot_histogram(f"{prefix}-encoder", pred_encoder)
+    plot_histogram(f"{prefix}-decoder", pred_decoder)
+    plot_featuremap(f"{prefix}-encoder", pred_encoder)
+    plot_featuremap(f"{prefix}-decoder", pred_decoder)
+
+    # TODO extract to "analysis.py" or similar
+
+    # TODO plot "feature map"?  reshape?
+    # TODO video of feature maps
+    # TODO static component + dynamic component... try to separate?
+    # TODO take mean + std of various random images in data set, and see how feature map responds (neuron by neuron)
+    # TODO see if turning on/off neurons has effect
+    # TODO see how rotation affects things
 
     # TODO reconstruction error from encoder/decoder
     # TODO sensitivity analysis (perturb input, see how client tensor changes)
@@ -119,6 +154,7 @@ def run_split(
     test_inputs,
     targets,
     clean: bool = False,
+    graph_plot: bool = False,
 ):
     print(f"run_split({model_config})")
     prefix = model_config.to_path()
@@ -149,13 +185,12 @@ def run_split(
     if not os.path.exists(f"{prefix}-server.h5"):
         model_server.save(f"{prefix}-server.h5")
 
-    plot_model(model_client, to_file=f"{prefix}-client.png")
-    plot_model(model_server, to_file=f"{prefix}-server.png")
+    if graph_plot:
+        plot_model(model_client, to_file=f"{prefix}-client.png")
+        plot_model(model_server, to_file=f"{prefix}-server.png")
     write_summary_to_file(model, f"{prefix}-client.txt")
     write_summary_to_file(model, f"{prefix}-server.txt")
-    run_analysis(
-        f"{prefix}-client", model_client, model_server, test_inputs, targets
-    )
+    run_analysis(prefix, model_analysis, test_inputs, targets)
     if not os.path.exists(f"{prefix}-client.tflite"):
         convert_to_tflite_model(
             f"{prefix}-client.h5",
@@ -164,6 +199,7 @@ def run_split(
         )
     del model_client
     del model_server
+    del model_analysis
     gc.collect()
     K.clear_session()
 
@@ -175,6 +211,7 @@ def run_splits(
     model_configs: Iterable[ModelConfig],
     clean_model: bool = False,
     clean_splits: bool = False,
+    graph_plot: bool = False,
 ):
     print(f"run_splits({model_name})\n")
     prefix = f"{model_name}/{model_name}"
@@ -199,7 +236,8 @@ def run_splits(
         # Force usage of tf.keras.Model which has Nodes linked correctly
         model = keras.models.load_model(f"{prefix}-full.h5")
 
-    plot_model(model, to_file=f"{prefix}-full.png")
+    if graph_plot:
+        plot_model(model, to_file=f"{prefix}-full.png")
     write_summary_to_file(model, f"{prefix}-full.txt")
     targets = model.predict(test_inputs)
     if not os.path.exists(f"{prefix}-client.tflite"):
@@ -219,6 +257,7 @@ def run_splits(
             test_inputs,
             targets,
             clean=clean_splits,
+            graph_plot=graph_plot,
         )
 
         print("----------\n")
@@ -240,12 +279,14 @@ def main():
     }
 
     # Single test
-    # model_name = "vgg16"
-    # run_splits(model_name, models[model_name])
-    # return
+    model_name = "resnet34"
+    run_splits(model_name, models[model_name])
+    return
 
     for model_name, model_configs in models.items():
-        run_splits(model_name, model_configs, clean_splits=True)
+        run_splits(
+            model_name, model_configs, clean_splits=True, graph_plot=False
+        )
 
 
 if __name__ == "__main__":
