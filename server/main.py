@@ -284,9 +284,14 @@ async def produce(reader: StreamReader, putter):
             elif input_type == "frame":
                 await putter((model_config, "predict", item))
             elif input_type == "json":
-                if model_config is not None:
+                next_model_config = ModelConfig(**item)
+                valid = model_config is not None
+                same = valid and model_config == next_model_config
+                if same:
+                    continue
+                if valid:
                     await putter((model_config, "release", None))
-                model_config = ModelConfig(**item)
+                model_config = next_model_config
                 await putter((model_config, "acquire", None))
     finally:
         if model_config is not None:
