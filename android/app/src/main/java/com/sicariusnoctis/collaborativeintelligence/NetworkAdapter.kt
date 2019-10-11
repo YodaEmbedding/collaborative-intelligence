@@ -3,10 +3,14 @@ package com.sicariusnoctis.collaborativeintelligence
 import android.util.Log
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import org.json.JSONStringer
 import java.io.BufferedReader
 import java.io.DataOutputStream
 import java.io.InputStreamReader
 import java.net.Socket
+import java.util.*
 
 class NetworkAdapter {
     private val TAG = NetworkAdapter::class.qualifiedName
@@ -52,6 +56,22 @@ class NetworkAdapter {
             // write(eol)
         }
     }
+
+    fun writeModelConfig(modelConfig: ModelConfig) {
+        val jsonString = Json.stringify(ModelConfig.serializer(), modelConfig)
+        with(outputStream!!) {
+            writeBytes("json\n")
+            writeBytes("$jsonString\n")
+        }
+    }
+
+    // fun writeJson(jsonObject: JsonObject) {
+    //     // val x = jsonObject["idk"]?.jsonObject?.get("e")
+    //     with(outputStream!!) {
+    //         // TODO is this... secure? What about quoted strings?
+    //         writeBytes("$jsonObject\n")
+    //     }
+    // }
 }
 
 @Serializable
@@ -64,4 +84,14 @@ data class ResultResponse(
     // val feedTime: Int,
     val inferenceTime: Int,
     val predictions: List<Prediction>
+)
+
+@Serializable
+data class ModelConfig(
+    val model: String,
+    val layer: String,
+    val encoder: String,
+    val decoder: String,
+    val encoder_args: JsonObject,
+    val decoder_args: JsonObject
 )

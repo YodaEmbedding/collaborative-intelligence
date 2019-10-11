@@ -27,7 +27,11 @@ import io.reactivex.rxkotlin.zipWith
 import io.reactivex.schedulers.Schedulers
 import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.android.synthetic.main.bottom_sheet.*
+import kotlinx.serialization.ImplicitReflectionSerializer
+import kotlinx.serialization.json.*
+import kotlinx.serialization.stringify
 import java.time.Instant
+import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -145,6 +149,7 @@ class MainActivity : AppCompatActivity() {
             )
     }
 
+    @UseExperimental(ImplicitReflectionSerializer::class)
     private fun subscribeNetworkIo() {
         // TODO The frame numbers are wrong because we aren't sending them to the server!
 
@@ -190,7 +195,23 @@ class MainActivity : AppCompatActivity() {
             .mapTimed(statistics::setInference) { inference.run(it) }
             .doOnNext { (i, x) -> statistics.appendSampleString(i, "\n${x.toPreviewString()}") }
             .observeOn(IoScheduler())
-            .doOnNextFrameTimed(statistics::setNetworkWrite, networkAdapter!!::writeData)
+            .doOnNextFrameTimed(statistics::setNetworkWrite) { frameNumber, data ->
+                // TODO yes, I know this is stupid
+                val encoderArgs =
+                    mapOf("clip_range" to JsonArray(listOf(-1.0, 1.0).map(::JsonPrimitive)))
+                val encoderArgsJson = Json.parse(JsonObjectSerializer, Json.stringify(encoderArgs))
+                val decoderArgsJson = encoderArgsJson
+                val modelConfig = ModelConfig(
+                    "resnet34",
+                    "add_8",
+                    "UniformQuantizationU8Encoder",
+                    "UniformQuantizationU8Decoder",
+                    encoderArgsJson,
+                    decoderArgsJson
+                )
+                networkAdapter!!.writeModelConfig(modelConfig)
+                networkAdapter!!.writeData(frameNumber, data)
+            }
             .subscribeBy(
                 { it.printStackTrace() },
                 { },
