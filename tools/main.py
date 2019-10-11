@@ -7,6 +7,7 @@ from contextlib import suppress
 from pprint import pprint
 from typing import Callable, Iterable, Tuple
 
+import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
@@ -62,9 +63,9 @@ def get_preprocessor(model_name: str):
     return Classifiers.get(model_name)[1]
 
 
-def single_input_image(filename: str):
+def single_input_image(filename: str, target_size=(224, 224)) -> np.ndarray:
     """Load single image for testing."""
-    img = image.load_img(filename, target_size=(224, 224))
+    img = image.load_img(filename, target_size=target_size)
     imgs = image.img_to_array(img)
     imgs = np.expand_dims(imgs, axis=0)
     return imgs
@@ -90,18 +91,116 @@ def plot_histogram(prefix: str, arr: np.ndarray):
 
 
 def plot_featuremap(prefix: str, arr: np.ndarray):
+    return
+
+    # TODO
+
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
     # ax.matshow(arr[0, :, :, 0], cmap='viridis')
-    ax.matshow(arr, cmap='viridis')
+    ax.matshow(arr, cmap="viridis")
     # TODO plot [..., 0:255] in tiled grid?
     ax.set_title(textwrap.fill(prefix, 70), fontsize="xx-small")
     fig.savefig(f"{prefix}-featuremap.png", dpi=200)
 
 
+def tile_arr(pred):
+    n, h, w, c = pred.shape
+    assert n == 1
+    num_tiles = int(np.ceil(np.sqrt(c)))
+    width = w * num_tiles
+    height = h * num_tiles
+    frame = np.empty(width * height, dtype=np.uint8).reshape(-1)
+    frame[: h * w * c] = np.moveaxis(pred[0], (0, 1, 2), (1, 2, 0)).reshape(-1)
+    frame[h * w * c :] = 0
+    frame = frame.reshape((height, width))
+    return frame
+
+
+def untile_arr(frame, shape):
+    n, h, w, c = shape
+    # assert n == 1
+    # num_tiles = int(np.ceil(np.sqrt(c)))
+    frame = frame.reshape(-1)[: h * w * c].reshape((c, h, w))
+    frame = np.moveaxis(frame, (1, 2, 0), (0, 1, 2))
+    frame = frame.reshape(shape)  # TODO err.. n = 1? idk what you're tryna do
+    return frame
+
+
+def write_video(filename: str, frames, width, height):
+    if filename.endswith(".mp4"):
+        fourcc = cv2.VideoWriter_fourcc(*"MP4V")
+    elif filename.endswith(".avi"):
+        fourcc = cv2.VideoWriter_fourcc(*"MJPG")
+    else:
+        raise ValueError
+
+    writer = cv2.VideoWriter(
+        filename, fourcc, fps=30, frameSize=(width, height), isColor=False
+    )
+
+    for frame in frames:
+        gray = frame
+        # gray_3c = cv2.merge([gray, gray, gray])
+        writer.write(gray)
+
+    writer.release()
+
+
+def write_tensor_video(model_config: ModelConfig, model: keras.Model):
+    prefix = model_config.to_path()
+
+    preprocess_input = get_preprocessor(model_config.model)
+    test_images = single_input_image("imgvideo.jpg", target_size=None)
+    test_inputs = preprocess_input(test_images)
+
+    def frame_gen():
+        # TODO batches?
+        prediction_decoder = imagenet_utils.decode_predictions
+        _, _, w, _ = model.input_shape
+
+        for x in range(100):
+            inputs = test_inputs[..., :, x : x + w, :]
+            preds = model.predict(inputs)
+            pred = preds[1]
+            frame = tile_arr(pred)
+            height, width = frame.shape
+            if x == 0:
+                yield width, height
+            yield frame
+            print(x, prediction_decoder(preds[-1]))
+
+    frames = frame_gen()
+    width, height = next(frames)
+    write_video(f"{prefix}-encoder.mp4", frames, width, height)
+
+
+def read_tensor_video(model_config: ModelConfig, model: keras.Model):
+    prefix = model_config.to_path()
+    prediction_decoder = imagenet_utils.decode_predictions
+
+    cap = cv2.VideoCapture(f"{prefix}-encoder.mp4")
+
+    # while cap.isOpened():
+    for i in range(100):
+        ret, frame = cap.read()
+        frame = frame[:, :, 0]
+        frame = untile_arr(frame, (1, *model.input_shape[1:]))
+        pred = model.predict(frame)
+        print(i, prediction_decoder(pred))
+
+    cap.release()
+
+
 def run_analysis(
-    prefix: str, model_analysis: keras.Model, test_inputs, targets
+    model_config: ModelConfig,
+    model_analysis: keras.Model,
+    model_server: keras.Model,
+    test_inputs,
+    targets,
 ):
+    prefix = model_config.to_path()
+
     pred_analysis = model_analysis.predict(test_inputs)
     pred_split = pred_analysis[0]
     pred_server = pred_analysis[-1]
@@ -121,7 +220,7 @@ def run_analysis(
         return
 
     if len(pred_analysis) != 4:
-        raise
+        raise ValueError("Incorrect number of model outputs")
 
     pred_encoder = pred_analysis[1]
     pred_decoder = pred_analysis[2]
@@ -133,10 +232,14 @@ def run_analysis(
     plot_featuremap(f"{prefix}-encoder", pred_encoder)
     plot_featuremap(f"{prefix}-decoder", pred_decoder)
 
+    write_tensor_video(model_config, model_analysis)
+    read_tensor_video(model_config, model_server)
+
     # TODO extract to "analysis.py" or similar
 
     # TODO plot "feature map"?  reshape?
     # TODO video of feature maps
+    # TODO YUV video tiling
     # TODO static component + dynamic component... try to separate?
     # TODO take mean + std of various random images in data set, and see how feature map responds (neuron by neuron)
     # TODO see if turning on/off neurons has effect
@@ -157,6 +260,7 @@ def run_split(
     graph_plot: bool = False,
 ):
     print(f"run_split({model_config})")
+    assert model_name == model_config.model
     prefix = model_config.to_path()
 
     if clean:
@@ -190,7 +294,9 @@ def run_split(
         plot_model(model_server, to_file=f"{prefix}-server.png")
     write_summary_to_file(model, f"{prefix}-client.txt")
     write_summary_to_file(model, f"{prefix}-server.txt")
-    run_analysis(prefix, model_analysis, test_inputs, targets)
+    run_analysis(
+        model_config, model_analysis, model_server, test_inputs, targets
+    )
     if not os.path.exists(f"{prefix}-client.tflite"):
         convert_to_tflite_model(
             f"{prefix}-client.h5",
