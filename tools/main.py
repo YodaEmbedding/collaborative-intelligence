@@ -72,6 +72,7 @@ def write_summary_to_file(model: keras.Model, filename: str):
 
 
 def plot_histogram(prefix: str, arr: np.ndarray):
+    title = textwrap.fill(prefix.replace("&", " "), 70)
     arr = arr.reshape((-1,))
     print(f"Min neuron: {np.min(arr)}")
     print(f"Max neuron: {np.max(arr)}")
@@ -81,7 +82,7 @@ def plot_histogram(prefix: str, arr: np.ndarray):
     ax.hist(arr, bins=np.linspace(np.min(arr), np.max(arr), 20))
     ax.set_xlabel("Neuron value")
     ax.set_ylabel("Frequency")
-    ax.set_title(textwrap.fill(prefix, 70), fontsize="xx-small")
+    ax.set_title(title, fontsize="xx-small")
     fig.savefig(f"{prefix}-histogram.png", dpi=200)
 
 
@@ -90,12 +91,13 @@ def plot_featuremap(prefix: str, arr: np.ndarray):
 
     # TODO
 
+    title = textwrap.fill(prefix.replace("&", " "), 70)
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
     # ax.matshow(arr[0, :, :, 0], cmap='viridis')
     ax.matshow(arr, cmap="viridis")
     # TODO plot [..., 0:255] in tiled grid?
-    ax.set_title(textwrap.fill(prefix, 70), fontsize="xx-small")
+    ax.set_title(title, fontsize="xx-small")
     fig.savefig(f"{prefix}-featuremap.png", dpi=200)
 
 

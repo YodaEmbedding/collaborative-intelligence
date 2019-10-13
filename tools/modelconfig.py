@@ -18,10 +18,10 @@ class ModelConfig:
     def to_path(self) -> str:
         enc = ModelConfig._encdec_str(self.encoder, self.encoder_args)
         dec = ModelConfig._encdec_str(self.decoder, self.decoder_args)
-        return f"{self.model}/{self.model}-{self.layer}-{enc}-{dec}"
+        return "&".join((f"{self.model}/{self.model}", self.layer, enc, dec))
 
     @staticmethod
-    def _encdec_str(name, args):
+    def _encdec_str(name, args) -> str:
         if len(args) == 0:
             return name
         return f"{name}({_dict_to_str(args)})"
