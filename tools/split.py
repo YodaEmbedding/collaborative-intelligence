@@ -3,8 +3,8 @@ from typing import Dict, Sequence, Tuple, Union
 
 import tensorflow as tf
 from tensorflow import keras
+from tensorflow.keras.layers import Layer
 from tensorflow.python.framework.ops import Tensor
-from tensorflow.python.keras.layers import Layer
 
 from layers import decoders, encoders
 from modelconfig import ModelConfig

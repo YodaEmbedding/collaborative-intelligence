@@ -14,24 +14,19 @@ import tensorflow as tf
 import tensorflow.keras.backend as K  # pylint: disable=import-error
 from classification_models.tfkeras import Classifiers
 from tensorflow import keras
-from tensorflow.python.keras.applications import imagenet_utils
-from tensorflow.python.keras.preprocessing import image
-from tensorflow.python.keras.utils import plot_model
+from tensorflow.keras.applications import imagenet_utils
+from tensorflow.keras.preprocessing import image
+from tensorflow.keras.utils import plot_model
 
-from layers import decoders, encoders
 from modelconfig import ModelConfig
 from split import split_model
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 
-def convert_to_tflite_model(
-    keras_model_filename: str, tflite_filename: str, **kwargs
-):
+def convert_to_tflite_model(model: keras.Model, tflite_filename: str):
     """Convert keras model file to tflite model."""
-    converter = tf.lite.TFLiteConverter.from_keras_model_file(
-        keras_model_filename, **kwargs
-    )
+    converter = tf.lite.TFLiteConverter.from_keras_model(model)
     tflite_model = converter.convert()
     with open(tflite_filename, "wb") as f:
         f.write(tflite_model)
@@ -272,13 +267,6 @@ def run_split(
             os.remove(f"{prefix}-server.h5")
             os.remove(f"{prefix}-server.png")
 
-    client_objects = {}
-    server_objects = {}
-    if model_config.encoder != "None":
-        client_objects[model_config.encoder] = encoders[model_config.encoder]
-    if model_config.decoder != "None":
-        server_objects[model_config.decoder] = decoders[model_config.decoder]
-
     # Load and save split model
     model_client, model_server, model_analysis = split_model(
         model, model_config
@@ -298,11 +286,7 @@ def run_split(
         model_config, model_analysis, model_server, test_inputs, targets
     )
     if not os.path.exists(f"{prefix}-client.tflite"):
-        convert_to_tflite_model(
-            f"{prefix}-client.h5",
-            f"{prefix}-client.tflite",
-            custom_objects=client_objects,
-        )
+        convert_to_tflite_model(model_client, f"{prefix}-client.tflite")
     del model_client
     del model_server
     del model_analysis
@@ -347,7 +331,8 @@ def run_splits(
     write_summary_to_file(model, f"{prefix}-full.txt")
     targets = model.predict(test_inputs)
     if not os.path.exists(f"{prefix}-client.tflite"):
-        convert_to_tflite_model(f"{prefix}-full.h5", f"{prefix}-full.tflite")
+        # TODO is this really needed? (just have a None config)
+        convert_to_tflite_model(model, f"{prefix}-full.tflite")
     del model
     gc.collect()
 

@@ -1,7 +1,7 @@
 import tensorflow as tf
 import tensorflow.keras.backend as K  # pylint: disable=import-error
 from tensorflow import keras
-from tensorflow.python.keras.layers import Layer
+from tensorflow.keras.layers import Layer
 
 
 class UniformQuantizationU8Encoder(Layer):
