@@ -8,3 +8,6 @@ disable=bad-continuation,
         ungrouped-imports,
         unused-wildcard-import,
         wildcard-import,
+
+[TYPECHECK]
+ignored-modules=tensorflow.keras

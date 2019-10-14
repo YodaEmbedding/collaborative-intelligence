@@ -25,8 +25,8 @@ from typing import (
 import janus
 import numpy as np
 import tensorflow as tf
-from keras.applications import imagenet_utils
 from tensorflow import keras
+from tensorflow.keras.applications import imagenet_utils
 
 spec = importlib.util.spec_from_file_location("layers", "../tools/layers.py")
 layers = importlib.util.module_from_spec(spec)
@@ -97,7 +97,6 @@ class ModelReference:
 
 class ModelManager:
     def __init__(self):
-        self.sess = tf.Session()
         self.models: Dict[ModelConfig, ModelReference] = {}
 
     def acquire(self, model_config: ModelConfig):
