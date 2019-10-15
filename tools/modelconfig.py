@@ -24,8 +24,14 @@ class ModelConfig:
     def _encdec_str(name, args) -> str:
         if len(args) == 0:
             return name
-        return f"{name}({_dict_to_str(args)})"
+        return f"{name}({ModelConfig._dict_to_str(args)})"
 
+    @staticmethod
+    def _dict_to_str(d: dict, sep: str = ",") -> str:
+        return sep.join(
+            f"{k}={ModelConfig._stringify(v)}" for k, v in sorted(d.items())
+        )
 
-def _dict_to_str(d: dict, sep: str = ", ") -> str:
-    return sep.join(f"{k}={v}" for k, v in sorted(d.items()))
+    @staticmethod
+    def _stringify(x):
+        return json.dumps(x, separators=(",", "="))
