@@ -15,6 +15,7 @@ class NetworkAdapter {
     private var inputStream: BufferedReader? = null
     private var outputStream: DataOutputStream? = null
     private var socket: Socket? = null
+    private var prevModelConfig: ModelConfig? = null
 
     fun connect() {
         socket = Socket(HOSTNAME, 5678)
@@ -52,6 +53,14 @@ class NetworkAdapter {
             write(data)
             // write(eol)
         }
+    }
+
+    fun writeFrameRequest(frameRequest: FrameRequest<ByteArray>) {
+        if (prevModelConfig != frameRequest.modelConfig) {
+            writeModelConfig(frameRequest.modelConfig)
+            prevModelConfig = frameRequest.modelConfig
+        }
+        writeData(frameRequest.frameNumber, frameRequest.obj)
     }
 
     fun writeModelConfig(modelConfig: ModelConfig) {

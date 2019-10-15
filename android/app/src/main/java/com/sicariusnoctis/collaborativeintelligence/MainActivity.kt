@@ -28,11 +28,6 @@ import io.reactivex.schedulers.Schedulers
 import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.android.synthetic.main.bottom_sheet.*
 import kotlinx.serialization.ImplicitReflectionSerializer
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObjectSerializer
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.stringify
 import java.time.Instant
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -178,46 +173,38 @@ class MainActivity : AppCompatActivity() {
                     bottomSheetStatistics.text = statistics.display()
                 })
 
+        // TODO Triple(i, frame, modelConfig)?  ... or actually Pair(Pair(i, modelConfig), frame)?
+
         // TODO Prevent duplicate subscriptions! (e.g. if onStart called multiple times); unsubscribe?
         // TODO .onTerminateDetach()
         val networkWriteSubscription = frameProcessor
             // TODO use IndexedValue<Frame>
-            .zipWith(Flowable.range(0, Int.MAX_VALUE)) { frame, i -> Pair(i, frame) }
+            .zipWith(Flowable.range(0, Int.MAX_VALUE)) { frame, i ->
+                FrameRequest(frame, i, inference.nextModelConfig)
+            }
             // .subscribeOn(inferenceScheduler)
             // .subscribeOn(IoScheduler(), false)
             // .subscribeOn(IoScheduler(), true)
             .subscribeOn(IoScheduler())
             // .onBackpressureLatest()
             .onBackpressureDrop { statistics.frameDropped() }
-            .doOnNext { Log.i(TAG, "Starting processing frame ${it.first}") }
-            .mapTimed(statistics::setPreprocess) { postprocessor.process(it) }
-            .doOnNext { statistics.appendSampleString(it.first, it.second.toPreviewString()) }
+            .doOnNext { Log.i(TAG, "Starting processing frame ${it.frameNumber}") }
+            .mapTimed(statistics::setPreprocess) { it.map(postprocessor::process) }
+            .doOnNext { statistics.appendSampleString(it.frameNumber, it.obj.toPreviewString()) }
             // .observeOn(inferenceScheduler)
             .observeOn(inferenceScheduler, false, 1)
-            .mapTimed(statistics::setInference) { inference.run(it) }
-            .doOnNext { (i, x) -> statistics.appendSampleString(i, "\n${x.toPreviewString()}") }
+            .mapTimed(statistics::setInference) { inference.run(this, it) }
+            .doOnNext { x ->
+                statistics.appendSampleString(x.frameNumber, "\n${x.obj.toPreviewString()}")
+            }
             .observeOn(IoScheduler())
-            .doOnNextFrameTimed(statistics::setNetworkWrite) { frameNumber, data ->
-                // TODO yes, I know this is stupid
-                val encoderArgs =
-                    mapOf("clip_range" to JsonArray(listOf(-1.0, 1.0).map(::JsonPrimitive)))
-                val encoderArgsJson = Json.parse(JsonObjectSerializer, Json.stringify(encoderArgs))
-                val decoderArgsJson = encoderArgsJson
-                val modelConfig = ModelConfig(
-                    "resnet34",
-                    "add_8",
-                    "UniformQuantizationU8Encoder",
-                    "UniformQuantizationU8Decoder",
-                    encoderArgsJson,
-                    decoderArgsJson
-                )
-                networkAdapter!!.writeModelConfig(modelConfig)
-                networkAdapter!!.writeData(frameNumber, data)
+            .doOnNextFrameTimed(statistics::setNetworkWrite) { x ->
+                networkAdapter!!.writeFrameRequest(x)
             }
             .subscribeBy(
                 { it.printStackTrace() },
                 { },
-                { Log.i(TAG, "Finished processing frame ${it.first}") }
+                { Log.i(TAG, "Finished processing frame ${it.frameNumber}") }
             )
 
         subscriptions = listOf(networkReadSubscription, networkWriteSubscription)
@@ -232,24 +219,24 @@ class MainActivity : AppCompatActivity() {
         return Triple(result, start, end)
     }
 
-    private fun <T> Flowable<Pair<Int, T>>.doOnNextFrameTimed(
+    private fun <T> Flowable<FrameRequest<T>>.doOnNextFrameTimed(
         timeFunc: (Int, Instant, Instant) -> Unit,
-        onNext: (Int, T) -> Unit
-    ): Flowable<Pair<Int, T>> {
-        return this.doOnNext { (frameNumber, x) ->
-            val (_, start, end) = timed { onNext(frameNumber, x) }
-            timeFunc(frameNumber, start, end)
+        onNext: (FrameRequest<T>) -> Unit
+    ): Flowable<FrameRequest<T>> {
+        return this.doOnNext { x ->
+            val (_, start, end) = timed { onNext(x) }
+            timeFunc(x.frameNumber, start, end)
         }
     }
 
-    private fun <R, T> Flowable<Pair<Int, T>>.mapTimed(
+    private fun <R, T> Flowable<FrameRequest<T>>.mapTimed(
         timeFunc: (Int, Instant, Instant) -> Unit,
-        mapper: (T) -> R
-    ): Flowable<Pair<Int, R>> {
-        return this.map { (frameNumber, x) ->
+        mapper: (FrameRequest<T>) -> FrameRequest<R>
+    ): Flowable<FrameRequest<R>> {
+        return this.map { x ->
             val (result, start, end) = timed { mapper(x) }
-            timeFunc(frameNumber, start, end)
-            Pair(frameNumber, result)
+            timeFunc(result.frameNumber, start, end)
+            result
         }
     }
 
