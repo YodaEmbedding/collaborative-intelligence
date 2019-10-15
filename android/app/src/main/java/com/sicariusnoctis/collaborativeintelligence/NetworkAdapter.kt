@@ -3,14 +3,11 @@ package com.sicariusnoctis.collaborativeintelligence
 import android.util.Log
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import org.json.JSONStringer
 import java.io.BufferedReader
 import java.io.DataOutputStream
 import java.io.InputStreamReader
 import java.net.Socket
-import java.util.*
 
 class NetworkAdapter {
     private val TAG = NetworkAdapter::class.qualifiedName
@@ -92,6 +89,21 @@ data class ModelConfig(
     val layer: String,
     val encoder: String,
     val decoder: String,
-    val encoder_args: JsonObject,
-    val decoder_args: JsonObject
-)
+    val encoder_args: JsonObject?,
+    val decoder_args: JsonObject?
+) {
+    fun toPath(): String = listOf(
+        model,
+        layer,
+        dictString(encoder, encoder_args),
+        dictString(decoder, encoder_args)
+    ).joinToString("&")
+
+    // TODO shouldn't args be ", " separated... not "," separated? Hmmm...
+    private fun dictString(name: String, args: JsonObject?): String =
+        if (args == null) {
+            name
+        } else {
+            "$name(${args.jsonObject.map { (k, v) -> "$k=$v" }.joinToString(", ")})"
+        }
+}

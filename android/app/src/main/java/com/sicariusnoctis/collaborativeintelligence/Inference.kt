@@ -1,6 +1,11 @@
 package com.sicariusnoctis.collaborativeintelligence
 
 import android.content.Context
+import kotlinx.serialization.UnstableDefault
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonObjectSerializer
+import kotlinx.serialization.json.content
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.GpuDelegate
 import java.io.Closeable
@@ -18,11 +23,22 @@ class Inference : Closeable {
     private val tflite: Interpreter
     private val tfliteModel: MappedByteBuffer
     private val tfliteOptions = Interpreter.Options()
+    private val modelConfigMap: Map<String, List<ModelConfig>>
+    private val modelConfig: ModelConfig
 
     constructor(context: Context) {
-        tfliteModel = loadModel(context, "resnet34-client.tflite")
-        // tfliteModel = loadModel(context, "vgg16-block5_pool-client.tflite")
-        // tfliteModel = loadModel(context, "vgg19-block5_pool-client.tflite")
+        modelConfigMap = loadConfig(context, "models.json").map { (k, v) ->
+            k to v.jsonArray.map { x ->
+                jsonToModelConfig(x.jsonObject, k)
+            }
+        }.toMap()
+
+        modelConfig = modelConfigMap["resnet34"]!!.first {
+            it.encoder == "UniformQuantizationU8Encoder"
+        }
+
+        // TODO this kind of stuff can be made into a test...!
+        tfliteModel = loadModel(context, "${modelConfig.toPath()}-client.tflite")
 
         // TODO First 65 operations will run on the GPU, and the remaining 3 on the CPU.TfLiteGpuDelegate
         // Invoke: Delegate should run on the same thread where it was initialized.Node number 68
@@ -38,16 +54,15 @@ class Inference : Closeable {
 
         // TODO gpuDelegate.bindGlBufferToTensor(outputTensor, outputSsboId);
 
-        inputBuffer = ByteBuffer
-            .allocateDirect(224 * 224 * 3 * 4)
-            .order(nativeOrder())
-        // outputBuffer = ByteBuffer.allocateDirect(14 * 14 * 512 * 4)
-        outputBuffer = ByteBuffer.allocateDirect(14 * 14 * 256 * 1)
+        val inputCapacity = tflite.getInputTensor(0).numBytes()
+        val outputCapacity = tflite.getOutputTensor(0).numBytes()
 
-        // outputBuffer = ByteBuffer.allocateDirect(7 * 7 * 512 * 4)
+        inputBuffer = ByteBuffer.allocateDirect(inputCapacity).order(nativeOrder())
+        outputBuffer = ByteBuffer.allocateDirect(outputCapacity)
+
         // TODO byte order of outputBuffer? shouldn't this be set to ensure consistency across network?
-        // outputBuffer.order(nativeOrder())
-        // .order(LITTLE_ENDIAN)
+        // outputBuffer = outputBuffer.order(nativeOrder())
+        // outputBuffer = outputBuffer.order(LITTLE_ENDIAN)
     }
 
     // TODO Could possibly eliminate copying by exposing buffers? But not "thread-safe"...
@@ -70,6 +85,23 @@ class Inference : Closeable {
     override fun close() {
         tflite.close()
         gpuDelegate.close()
+    }
+
+    // TODO Move to separate class?
+    private fun jsonToModelConfig(jsonObject: JsonObject, model: String? = null) = ModelConfig(
+        model = model ?: jsonObject["model"]!!.content,
+        layer = jsonObject["layer"]!!.content,
+        encoder = jsonObject["encoder"]!!.content,
+        decoder = jsonObject["decoder"]!!.content,
+        encoder_args = jsonObject["encoder_args"]?.jsonObject,
+        decoder_args = jsonObject["decoder_args"]?.jsonObject
+    )
+
+    @UseExperimental(UnstableDefault::class)
+    private fun loadConfig(context: Context, filename: String): JsonObject {
+        val inputStream = context.assets.open(filename)
+        val jsonString = inputStream.bufferedReader().use { it.readText() }
+        return Json.parse(JsonObjectSerializer, jsonString)
     }
 
     @Throws(IOException::class)
