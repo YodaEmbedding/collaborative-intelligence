@@ -1,11 +1,6 @@
 package com.sicariusnoctis.collaborativeintelligence
 
 import android.content.Context
-import kotlinx.serialization.UnstableDefault
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonObjectSerializer
-import kotlinx.serialization.json.content
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.GpuDelegate
 import java.io.Closeable
@@ -17,26 +12,18 @@ import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel.MapMode.READ_ONLY
 
 class Inference : Closeable {
-    private val gpuDelegate: GpuDelegate
+    private val gpuDelegate: GpuDelegate = GpuDelegate()
     private lateinit var inputBuffer: ByteBuffer
     private lateinit var outputBuffer: ByteBuffer
     private lateinit var tflite: Interpreter
     private lateinit var tfliteModel: MappedByteBuffer
     private lateinit var modelConfig: ModelConfig
     private val tfliteOptions = Interpreter.Options()
-    private val modelConfigMap: Map<String, List<ModelConfig>>
 
-    constructor(context: Context) {
-        modelConfigMap = loadConfig(context, "models.json").map { (k, v) ->
-            k to v.jsonArray.map { x ->
-                jsonToModelConfig(x.jsonObject, k)
-            }
-        }.toMap()
-
-        // TODO NNAPI faster is only better than GPU/CPU on some devices/processors with some models.
-        gpuDelegate = GpuDelegate()
+    init {
+        // TODO NNAPI only faster than GPU/CPU on some devices/processors with certain models. Add UI switch?
         tfliteOptions
-            .setNumThreads(1)  // TODO 1 thread?
+            .setNumThreads(1)
             // .setUseNNAPI(true)
             .addDelegate(gpuDelegate)
     }
@@ -90,23 +77,6 @@ class Inference : Closeable {
         // TODO byte order of outputBuffer? shouldn't this be set to ensure consistency across network?
         // outputBuffer = outputBuffer.order(nativeOrder())
         // outputBuffer = outputBuffer.order(LITTLE_ENDIAN)
-    }
-
-    // TODO Move to separate class?
-    private fun jsonToModelConfig(jsonObject: JsonObject, model: String? = null) = ModelConfig(
-        model = model ?: jsonObject["model"]!!.content,
-        layer = jsonObject["layer"]!!.content,
-        encoder = jsonObject["encoder"]!!.content,
-        decoder = jsonObject["decoder"]!!.content,
-        encoder_args = jsonObject["encoder_args"]?.jsonObject,
-        decoder_args = jsonObject["decoder_args"]?.jsonObject
-    )
-
-    @UseExperimental(UnstableDefault::class)
-    private fun loadConfig(context: Context, filename: String): JsonObject {
-        val inputStream = context.assets.open(filename)
-        val jsonString = inputStream.bufferedReader().use { it.readText() }
-        return Json.parse(JsonObjectSerializer, jsonString)
     }
 
     @Throws(IOException::class)

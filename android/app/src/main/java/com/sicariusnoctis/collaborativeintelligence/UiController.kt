@@ -137,7 +137,6 @@ class UiController(
     }
 
     companion object {
-        // TODO Move to separate class?
         private fun jsonToModelConfig(jsonObject: JsonObject, model: String? = null) = ModelConfig(
             model = model ?: jsonObject["model"]!!.content,
             layer = jsonObject["layer"]!!.content,

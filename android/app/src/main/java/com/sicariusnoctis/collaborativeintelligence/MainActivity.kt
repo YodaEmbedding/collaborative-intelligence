@@ -61,7 +61,7 @@ class MainActivity : AppCompatActivity() {
         fotoapparat.getCurrentParameters().whenAvailable(this::onCameraParametersAvailable)
         inferenceExecutor = Executors.newSingleThreadExecutor()
         inferenceScheduler = Schedulers.from(inferenceExecutor)
-        inferenceExecutor.submit { inference = Inference(this) }
+        inferenceExecutor.submit { inference = Inference() }
         networkAdapter = NetworkAdapter()
         connectNetworkAdapter()
     }
