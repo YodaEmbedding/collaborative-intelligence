@@ -182,7 +182,7 @@ class MainActivity : AppCompatActivity() {
         val networkWriteSubscription = frameProcessor
             // TODO use IndexedValue<Frame>
             .zipWith(Flowable.range(0, Int.MAX_VALUE)) { frame, i ->
-                FrameRequest(frame, i, inference.nextModelConfig)
+                FrameRequest(frame, i, uiController.modelConfig)
             }
             // .subscribeOn(inferenceScheduler)
             // .subscribeOn(IoScheduler(), false)

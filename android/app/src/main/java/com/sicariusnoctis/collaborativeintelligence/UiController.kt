@@ -24,8 +24,11 @@ class UiController(
 ) {
     private val TAG = UiController::class.qualifiedName
 
+    val modelConfig: ModelConfig
+        @Synchronized get() = _modelConfig
+
+    private lateinit var _modelConfig: ModelConfig
     private val modelConfigMap: Map<String, List<ModelConfig>>
-    private var modelConfig: ModelConfig? = null
     private val model
         get() = modelSpinner.getItemAtPosition(modelSpinner.selectedItemPosition).toString()
     private val layer
@@ -53,6 +56,7 @@ class UiController(
 
     private fun initUiChoices() {
         updateChoices(updateModel = true, updateLayer = true, updateCompression = true)
+        updateModelConfig()
     }
 
     private fun initUiHandlers() {
@@ -97,7 +101,11 @@ class UiController(
         }
     }
 
-    private fun updateChoices(updateModel: Boolean, updateLayer: Boolean, updateCompression: Boolean) {
+    private fun updateChoices(
+        updateModel: Boolean,
+        updateLayer: Boolean,
+        updateCompression: Boolean
+    ) {
         // TODO keep hold onto position/options...? maybe for each model? but also when changing layers/etc...? idk? sure! TWO/nested saved states!
 
         if (updateModel) {
@@ -124,7 +132,7 @@ class UiController(
     }
 
     private fun updateModelConfig() {
-        modelConfig = modelConfigMap.filter { it.key == model }.flatMap { it.value }
+        _modelConfig = modelConfigMap.filter { it.key == model }.flatMap { it.value }
             .first { it.layer == layer && it.encoder == compression }
     }
 

@@ -25,12 +25,6 @@ class Inference : Closeable {
     private lateinit var modelConfig: ModelConfig
     private val tfliteOptions = Interpreter.Options()
     private val modelConfigMap: Map<String, List<ModelConfig>>
-    private var nextModelConfigField: ModelConfig? = null
-    var nextModelConfig: ModelConfig
-        @Synchronized get() = nextModelConfigField ?: modelConfig
-        @Synchronized set(value) {
-            nextModelConfigField = value
-        }
 
     constructor(context: Context) {
         modelConfigMap = loadConfig(context, "models.json").map { (k, v) ->
@@ -45,11 +39,6 @@ class Inference : Closeable {
             .setNumThreads(1)  // TODO 1 thread?
             // .setUseNNAPI(true)
             .addDelegate(gpuDelegate)
-
-        // TODO DEBUG
-        nextModelConfig = modelConfigMap["resnet34"]!!.first {
-            it.encoder == "UniformQuantizationU8Encoder"
-        }
     }
 
     // TODO Could possibly eliminate copying by exposing buffers? But not "thread-safe"...
