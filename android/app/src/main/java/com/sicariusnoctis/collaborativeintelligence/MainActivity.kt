@@ -41,6 +41,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var inferenceScheduler: Scheduler
     private lateinit var postprocessor: CameraPreviewPostprocessor
     private lateinit var rs: RenderScript
+    private lateinit var uiController: UiController
     private val frameProcessor: PublishProcessor<Frame> = PublishProcessor.create()
     private var networkAdapter: NetworkAdapter? = null
     private var statistics = Statistics()
@@ -51,6 +52,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         rs = RenderScript.create(this)
         initFotoapparat()
+        uiController = UiController(this, modelSpinner, layerSeekBar, compressionSpinner)
     }
 
     override fun onStart() {
