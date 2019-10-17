@@ -258,18 +258,6 @@ async def read_item(reader: StreamReader) -> Awaitable[Tuple[str, Any]]:
 async def produce(reader: StreamReader, putter):
     model_config: ModelConfig = None
 
-    # TODO DEBUG
-    # TODO how to format floats/tuples?
-    model_config = ModelConfig(
-        "resnet34",
-        "add_8",
-        "UniformQuantizationU8Encoder",
-        "UniformQuantizationU8Decoder",
-        {"clip_range": [-1.0, 1.0]},
-        {"clip_range": [-1.0, 1.0]},
-    )
-    await putter((model_config, "acquire", None))
-
     try:
         while True:
             input_type, item = await read_item(reader)
@@ -283,6 +271,7 @@ async def produce(reader: StreamReader, putter):
             elif input_type == "frame":
                 await putter((model_config, "predict", item))
             elif input_type == "json":
+                item = {k: v for k, v in item.items() if v is not None}
                 next_model_config = ModelConfig(**item)
                 valid = model_config is not None
                 same = valid and model_config == next_model_config
