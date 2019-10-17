@@ -28,28 +28,23 @@ class UiController(
         @Synchronized get() = _modelConfig
 
     private lateinit var _modelConfig: ModelConfig
-    private val modelConfigMap: Map<String, List<ModelConfig>>
+    private val modelConfigMap = loadModelConfigs(context, "models.json")
     private val model
         get() = modelSpinner.getItemAtPosition(modelSpinner.selectedItemPosition).toString()
     private val layer
-        get() = if (layerChoices.size == 1) {
-            layerChoices.first()
-        } else {
-            layerChoices[(layerSeekBar.progressFloat / (layerSeekBar.max - layerSeekBar.min)).roundToInt()]
+        get() = when (layerChoices.size) {
+            1 -> layerChoices.first()
+            else -> layerChoices[(layerSeekBar.progressFloat / (layerSeekBar.max - layerSeekBar.min)).roundToInt()]
         }
     private val compression
         get() = compressionSpinner.getItemAtPosition(compressionSpinner.selectedItemPosition).toString()
 
     private val modelConfigs get() = modelConfigMap.filter { it.key == model }.flatMap { it.value }
-    private val modelChoices get() = modelConfigMap.keys.sortedWith(naturalOrder())
+    private val modelChoices get() = modelConfigMap.keys.toList()
     private val layerChoices get() = LinkedHashSet<String>(modelConfigs.map { it.layer }).toList()
     private val compressionChoices get() = modelConfigs.filter { it.layer == layer }.map { it.encoder }
 
     init {
-        modelConfigMap = loadConfig(context, "models.json").map { (k, v) ->
-            k to v.jsonArray.map { x -> jsonToModelConfig(x.jsonObject, k) }
-        }.toMap()
-
         initUiChoices()
         initUiHandlers()
     }
@@ -151,6 +146,15 @@ class UiController(
             val inputStream = context.assets.open(filename)
             val jsonString = inputStream.bufferedReader().use { it.readText() }
             return Json.parse(JsonObjectSerializer, jsonString)
+        }
+
+        private fun loadModelConfigs(
+            context: Context,
+            filename: String
+        ): LinkedHashMap<String, List<ModelConfig>> {
+            return loadConfig(context, filename).map { (k, v) ->
+                k to v.jsonArray.map { x -> jsonToModelConfig(x.jsonObject, k) }
+            }.toMap() as LinkedHashMap
         }
     }
 }
