@@ -25,13 +25,14 @@
                 android:layout_height="120dp" />
 
             <TextView
+                android:id="@+id/predictionsText"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_centerVertical="true"
                 android:layout_marginLeft="24dp"
                 android:layout_toRightOf="@+id/cameraView"
                 android:lineSpacingExtra="12dp"
-                android:text="monitor: 42%\nscreen: 30%\ndesktop_computer: 4%\nlaptop: 3%" />
+                android:text="prediction_1: %\nprediction_2: %\nprediction_3: %\nprediction_4: %" />
         </RelativeLayout>
 
         <View
@@ -48,58 +49,81 @@
             <TableRow>
 
                 <TextView
+                    android:id="@+id/fpsText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginVertical="6dp"
-                    android:text="FPS: 19" />
+                    android:text="FPS: " />
 
                 <TextView
+                    android:id="@+id/framesProcessedText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginVertical="6dp"
-                    android:text="Upload: 90 KB/s" />
+                    android:text="Processed: " />
+
+                <!--
+                <TextView
+                    android:id="@+id/framesDroppedText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginVertical="6dp"
+                    android:text="Dropped: " />
+                -->
 
             </TableRow>
 
             <TableRow>
 
                 <TextView
+                    android:id="@+id/preprocessText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginVertical="6dp"
-                    android:text="Preprocess: 2 ms" />
+                    android:text="Preprocess: ms" />
 
                 <TextView
+                    android:id="@+id/clientInferenceText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginVertical="6dp"
-                    android:text="Client inference: 41 ms" />
+                    android:text="Client inference: ms" />
 
             </TableRow>
 
             <TableRow>
 
                 <TextView
+                    android:id="@+id/encodingText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginVertical="6dp"
-                    android:text="Encoding: 12 ms" />
+                    android:text="Encoding: ms" />
 
                 <TextView
+                    android:id="@+id/networkWaitText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginVertical="6dp"
-                    android:text="Network wait: 59 ms" />
+                    android:text="Network wait: ms" />
 
             </TableRow>
 
             <TableRow>
 
                 <TextView
+                    android:id="@+id/totalText"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginVertical="6dp"
-                    android:text="Total: 114 ms" />
+                    android:text="Total: ms" />
+
+                <TextView
+                    android:id="@+id/uploadText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginVertical="6dp"
+                    android:text="Upload: KB/s" />
 
             </TableRow>
 
@@ -123,7 +147,6 @@
             android:orientation="horizontal">
 
             <TextView
-                android:id="@+id/modelText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_centerVertical="true"
@@ -167,7 +190,6 @@
             android:orientation="horizontal">
 
             <TextView
-                android:id="@+id/compressionText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_centerVertical="true"

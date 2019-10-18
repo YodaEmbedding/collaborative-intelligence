@@ -26,7 +26,6 @@ import io.reactivex.rxkotlin.subscribeBy
 import io.reactivex.rxkotlin.zipWith
 import io.reactivex.schedulers.Schedulers
 import kotlinx.android.synthetic.main.activity_main.*
-import kotlinx.android.synthetic.main.bottom_sheet.*
 import kotlinx.serialization.ImplicitReflectionSerializer
 import java.time.Instant
 import java.util.concurrent.ExecutorService
@@ -42,9 +41,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var postprocessor: CameraPreviewPostprocessor
     private lateinit var rs: RenderScript
     private lateinit var modelUiController: ModelUiController
+    private lateinit var statisticsUiController: StatisticsUiController
     private val frameProcessor: PublishProcessor<Frame> = PublishProcessor.create()
     private var networkAdapter: NetworkAdapter? = null
-    private var statistics = Statistics()
+    private val statistics = Statistics()
     private var subscriptions = listOf<Disposable>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -53,6 +53,19 @@ class MainActivity : AppCompatActivity() {
         rs = RenderScript.create(this)
         initFotoapparat()
         modelUiController = ModelUiController(this, modelSpinner, layerSeekBar, compressionSpinner)
+        statisticsUiController = StatisticsUiController(
+            statistics,
+            predictionsText,
+            fpsText,
+            uploadText,
+            preprocessText,
+            clientInferenceText,
+            encodingText,
+            networkWaitText,
+            totalText,
+            framesProcessedText
+            // framesDroppedText
+        )
     }
 
     override fun onStart() {
@@ -170,10 +183,7 @@ class MainActivity : AppCompatActivity() {
             .subscribeBy(
                 { it.printStackTrace() },
                 { },
-                { result ->
-                    bottomSheetResults.text = result.toString()
-                    bottomSheetStatistics.text = statistics.display()
-                })
+                { result -> statisticsUiController.addResponse(result) })
 
         // TODO Triple(i, frame, modelConfig)?  ... or actually Pair(Pair(i, modelConfig), frame)?
 
@@ -200,9 +210,8 @@ class MainActivity : AppCompatActivity() {
                 statistics.appendSampleString(x.frameNumber, "\n${x.obj.toPreviewString()}")
             }
             .observeOn(IoScheduler())
-            .doOnNextFrameTimed(statistics::setNetworkWrite) { x ->
-                networkAdapter!!.writeFrameRequest(x)
-            }
+            .doOnNextFrameTimed(statistics::setNetworkWrite) { networkAdapter!!.writeFrameRequest(it) }
+            .doOnNext { statistics.setUpload(it.frameNumber, it.obj.size) }
             .subscribeBy(
                 { it.printStackTrace() },
                 { },
