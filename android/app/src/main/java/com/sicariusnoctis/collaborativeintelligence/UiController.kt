@@ -14,7 +14,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectSerializer
 import kotlinx.serialization.json.content
-import kotlin.math.roundToInt
 
 class UiController(
     context: Context,
@@ -33,8 +32,8 @@ class UiController(
         get() = modelSpinner.getItemAtPosition(modelSpinner.selectedItemPosition).toString()
     private val layer
         get() = when (layerChoices.size) {
-            1 -> layerChoices.first()
-            else -> layerChoices[(layerSeekBar.progressFloat / (layerSeekBar.max - layerSeekBar.min)).roundToInt()]
+            1 -> layerChoices[0]
+            else -> layerChoices[layerSeekBar.progress]
         }
     private val compression
         get() = compressionSpinner.getItemAtPosition(compressionSpinner.selectedItemPosition).toString()
@@ -43,6 +42,7 @@ class UiController(
     private val modelChoices get() = modelConfigMap.keys.toList()
     private val layerChoices get() = LinkedHashSet<String>(modelConfigs.map { it.layer }).toList()
     private val compressionChoices get() = modelConfigs.filter { it.layer == layer }.map { it.encoder }
+    private val choiceHistory = ChoiceHistory()
 
     init {
         initUiChoices()
@@ -62,6 +62,7 @@ class UiController(
                 position: Int,
                 id: Long
             ) {
+                choiceHistory.set(model)
                 updateChoices(updateModel = false, updateLayer = true, updateCompression = true)
                 updateModelConfig()
             }
@@ -75,8 +76,7 @@ class UiController(
             override fun onStartTrackingTouch(seekBar: IndicatorSeekBar) {}
 
             override fun onStopTrackingTouch(seekBar: IndicatorSeekBar) {
-                Log.i(TAG, layer)
-                Log.i(TAG, seekBar.indicator.toString())
+                choiceHistory.set(model, layer)
                 updateChoices(updateModel = false, updateLayer = false, updateCompression = true)
                 updateModelConfig()
             }
@@ -89,6 +89,7 @@ class UiController(
                 position: Int,
                 id: Long
             ) {
+                choiceHistory.set(model, layer, compression)
                 updateModelConfig()
             }
 
@@ -101,28 +102,42 @@ class UiController(
         updateLayer: Boolean,
         updateCompression: Boolean
     ) {
-        // TODO keep hold onto position/options...? maybe for each model? but also when changing layers/etc...? idk? sure! TWO/nested saved states!
-
         if (updateModel) {
+            val choices = modelChoices
             modelSpinner.adapter = ArrayAdapter<String>(
                 modelSpinner.context,
                 android.R.layout.simple_spinner_dropdown_item,
-                modelChoices
+                choices
             )
+
+            val default = choiceHistory.get()
+            Log.i(TAG, "updateModel: $default")
+            modelSpinner.setSelection(choicePosition(choices, default))
         }
 
         if (updateLayer) {
-            val layerChoicesCurrent = layerChoices
-            layerSeekBar.tickCount = layerChoicesCurrent.count()
-            layerSeekBar.customTickTexts(layerChoicesCurrent.toTypedArray())
+            val choices = layerChoices
+            layerSeekBar.tickCount = choices.count()
+            layerSeekBar.customTickTexts(choices.toTypedArray())
+            layerSeekBar.min = 0f
+            layerSeekBar.max = choices.count() - 1f
+
+            val default = choiceHistory.get(model)
+            Log.i(TAG, "updateLayer: $default")
+            layerSeekBar.setProgress(choicePosition(choices, default).toFloat())
         }
 
         if (updateCompression) {
+            val choices = compressionChoices
             compressionSpinner.adapter = ArrayAdapter<String>(
                 compressionSpinner.context,
                 android.R.layout.simple_spinner_dropdown_item,
-                compressionChoices
+                choices
             )
+
+            val default = choiceHistory.get(model, layer)
+            Log.i(TAG, "updateCompression: $default")
+            compressionSpinner.setSelection(choicePosition(choices, default))
         }
     }
 
@@ -132,6 +147,9 @@ class UiController(
     }
 
     companion object {
+        private fun <T> choicePosition(choices: List<T>, value: T?) =
+            if (value == null) 0 else maxOf(choices.indexOf(value), 0)
+
         private fun jsonToModelConfig(jsonObject: JsonObject, model: String? = null) = ModelConfig(
             model = model ?: jsonObject["model"]!!.content,
             layer = jsonObject["layer"]!!.content,
@@ -156,5 +174,45 @@ class UiController(
                 k to v.jsonArray.map { x -> jsonToModelConfig(x.jsonObject, k) }
             }.toMap() as LinkedHashMap
         }
+    }
+}
+
+class ChoiceHistory {
+    private val TAG = ChoiceHistory::class.qualifiedName
+
+    private val choiceHistory = lruMap<LinkedHashMap<String, String?>>()
+
+    // TODO why is it lastOrNull rather than firstOrNull? o_0
+    fun get() = choiceHistory.entries.lastOrNull()?.key
+
+    fun get(model: String) = choiceHistory[model]?.entries?.lastOrNull()?.key
+
+    fun get(model: String, layer: String) = choiceHistory[model]?.get(layer)
+
+    fun set(model: String) {
+        Log.i(TAG, "set $model")
+        Log.i(TAG, "$choiceHistory")
+        if (!choiceHistory.containsKey(model))
+            choiceHistory[model] = lruMap()
+    }
+
+    fun set(model: String, layer: String) {
+        set(model)
+        Log.i(TAG, "set $model $layer")
+        Log.i(TAG, "$choiceHistory")
+        if (!choiceHistory[model]!!.containsKey(layer))
+            choiceHistory[model]!![layer] = null
+    }
+
+    fun set(model: String, layer: String, compression: String) {
+        set(model, layer)
+        Log.i(TAG, "set $model $layer $compression")
+        Log.i(TAG, "$choiceHistory")
+        choiceHistory[model]!![layer] = compression
+    }
+
+    companion object {
+        private fun <T> lruMap() =
+            LinkedHashMap<String, T>(0, 0.75f, true)
     }
 }
