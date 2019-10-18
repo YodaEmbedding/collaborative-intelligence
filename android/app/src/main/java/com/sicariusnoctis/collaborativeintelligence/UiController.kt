@@ -1,7 +1,6 @@
 package com.sicariusnoctis.collaborativeintelligence
 
 import android.content.Context
-import android.util.Log
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
@@ -21,8 +20,6 @@ class UiController(
     private val layerSeekBar: IndicatorSeekBar,
     private val compressionSpinner: Spinner
 ) {
-    private val TAG = UiController::class.qualifiedName
-
     val modelConfig: ModelConfig
         @Synchronized get() = _modelConfig
 
@@ -111,7 +108,6 @@ class UiController(
             )
 
             val default = choiceHistory.get()
-            Log.i(TAG, "updateModel: $default")
             modelSpinner.setSelection(choicePosition(choices, default))
         }
 
@@ -123,7 +119,6 @@ class UiController(
             layerSeekBar.max = choices.count() - 1f
 
             val default = choiceHistory.get(model)
-            Log.i(TAG, "updateLayer: $default")
             layerSeekBar.setProgress(choicePosition(choices, default).toFloat())
         }
 
@@ -136,7 +131,6 @@ class UiController(
             )
 
             val default = choiceHistory.get(model, layer)
-            Log.i(TAG, "updateCompression: $default")
             compressionSpinner.setSelection(choicePosition(choices, default))
         }
     }
@@ -178,8 +172,6 @@ class UiController(
 }
 
 class ChoiceHistory {
-    private val TAG = ChoiceHistory::class.qualifiedName
-
     private val choiceHistory = lruMap<LinkedHashMap<String, String?>>()
 
     // TODO why is it lastOrNull rather than firstOrNull? o_0
@@ -190,24 +182,18 @@ class ChoiceHistory {
     fun get(model: String, layer: String) = choiceHistory[model]?.get(layer)
 
     fun set(model: String) {
-        Log.i(TAG, "set $model")
-        Log.i(TAG, "$choiceHistory")
         if (!choiceHistory.containsKey(model))
             choiceHistory[model] = lruMap()
     }
 
     fun set(model: String, layer: String) {
         set(model)
-        Log.i(TAG, "set $model $layer")
-        Log.i(TAG, "$choiceHistory")
         if (!choiceHistory[model]!!.containsKey(layer))
             choiceHistory[model]!![layer] = null
     }
 
     fun set(model: String, layer: String, compression: String) {
         set(model, layer)
-        Log.i(TAG, "set $model $layer $compression")
-        Log.i(TAG, "$choiceHistory")
         choiceHistory[model]!![layer] = compression
     }
 
