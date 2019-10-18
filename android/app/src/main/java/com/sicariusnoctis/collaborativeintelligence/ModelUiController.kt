@@ -14,7 +14,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectSerializer
 import kotlinx.serialization.json.content
 
-class UiController(
+class ModelUiController(
     context: Context,
     private val modelSpinner: Spinner,
     private val layerSeekBar: IndicatorSeekBar,

@@ -41,7 +41,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var inferenceScheduler: Scheduler
     private lateinit var postprocessor: CameraPreviewPostprocessor
     private lateinit var rs: RenderScript
-    private lateinit var uiController: UiController
+    private lateinit var modelUiController: ModelUiController
     private val frameProcessor: PublishProcessor<Frame> = PublishProcessor.create()
     private var networkAdapter: NetworkAdapter? = null
     private var statistics = Statistics()
@@ -52,7 +52,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         rs = RenderScript.create(this)
         initFotoapparat()
-        uiController = UiController(this, modelSpinner, layerSeekBar, compressionSpinner)
+        modelUiController = ModelUiController(this, modelSpinner, layerSeekBar, compressionSpinner)
     }
 
     override fun onStart() {
@@ -182,7 +182,7 @@ class MainActivity : AppCompatActivity() {
         val networkWriteSubscription = frameProcessor
             // TODO use IndexedValue<Frame>
             .zipWith(Flowable.range(0, Int.MAX_VALUE)) { frame, i ->
-                FrameRequest(frame, i, uiController.modelConfig)
+                FrameRequest(frame, i, modelUiController.modelConfig)
             }
             // .subscribeOn(inferenceScheduler)
             // .subscribeOn(IoScheduler(), false)
