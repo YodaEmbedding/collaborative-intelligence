@@ -2,9 +2,11 @@ package com.sicariusnoctis.collaborativeintelligence
 
 import android.content.Context
 import android.view.View
+import android.view.View.TEXT_ALIGNMENT_TEXT_END
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Spinner
+import android.widget.SpinnerAdapter
 import com.warkiz.widget.IndicatorSeekBar
 import com.warkiz.widget.OnSeekChangeListener
 import com.warkiz.widget.SeekParams
@@ -13,6 +15,11 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectSerializer
 import kotlinx.serialization.json.content
+import android.view.Gravity
+import android.view.View.TEXT_ALIGNMENT_CENTER
+import android.widget.TextView
+import android.view.ViewGroup
+
 
 class ModelUiController(
     context: Context,
@@ -101,11 +108,7 @@ class ModelUiController(
     ) {
         if (updateModel) {
             val choices = modelChoices
-            modelSpinner.adapter = ArrayAdapter<String>(
-                modelSpinner.context,
-                android.R.layout.simple_spinner_dropdown_item,
-                choices
-            )
+            updateSpinner(modelSpinner, choices)
 
             val default = choiceHistory.get()
             modelSpinner.setSelection(choicePosition(choices, default))
@@ -124,11 +127,7 @@ class ModelUiController(
 
         if (updateCompression) {
             val choices = compressionChoices
-            compressionSpinner.adapter = ArrayAdapter<String>(
-                compressionSpinner.context,
-                android.R.layout.simple_spinner_dropdown_item,
-                choices
-            )
+            updateSpinner(compressionSpinner, choices)
 
             val default = choiceHistory.get(model, layer)
             compressionSpinner.setSelection(choicePosition(choices, default))
@@ -167,6 +166,15 @@ class ModelUiController(
             return loadConfig(context, filename).map { (k, v) ->
                 k to v.jsonArray.map { x -> jsonToModelConfig(x.jsonObject, k) }
             }.toMap() as LinkedHashMap
+        }
+
+        private fun updateSpinner(spinner: Spinner, choices: List<String>) {
+            spinner.textAlignment = TEXT_ALIGNMENT_TEXT_END
+            val adapter = ArrayAdapter<String>(
+                spinner.context, android.R.layout.simple_spinner_item, choices
+            )
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            spinner.adapter = adapter
         }
     }
 }
