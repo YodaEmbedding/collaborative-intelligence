@@ -129,11 +129,10 @@
 
         </TableLayout>
 
-        <ImageView
-            android:id="@+id/mockupPlot"
+        <com.github.mikephil.charting.charts.LineChart
+            android:id="@+id/lineChart"
             android:layout_width="match_parent"
-            android:layout_height="272dp"
-            android:src="@drawable/mockup_plot" />
+            android:layout_height="180dp" />
 
         <View
             android:layout_width="match_parent"

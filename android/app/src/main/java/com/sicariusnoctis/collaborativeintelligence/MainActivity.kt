@@ -63,8 +63,9 @@ class MainActivity : AppCompatActivity() {
             encodingText,
             networkWaitText,
             totalText,
-            framesProcessedText
-            // framesDroppedText
+            framesProcessedText,
+            // framesDroppedText,
+            lineChart
         )
     }
 
@@ -174,7 +175,7 @@ class MainActivity : AppCompatActivity() {
                         val (result, start, end) = timed { networkAdapter!!.readData() }
                         if (result == null) break
                         statistics.setNetworkRead(result.frameNumber, start, end)
-                        yield(result!!)
+                        yield(Pair(result!!, statistics.sample))
                     }
                 }
             })
@@ -183,7 +184,7 @@ class MainActivity : AppCompatActivity() {
             .subscribeBy(
                 { it.printStackTrace() },
                 { },
-                { result -> statisticsUiController.addResponse(result) })
+                { (result, sample) -> statisticsUiController.addResponse(result, sample) })
 
         // TODO Triple(i, frame, modelConfig)?  ... or actually Pair(Pair(i, modelConfig), frame)?
 
