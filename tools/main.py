@@ -268,6 +268,9 @@ def run_split(
     assert model_name == model_config.model
     prefix = model_config.to_path()
 
+    if model_config.layer == "server":
+        return
+
     if clean:
         delete_file(f"{prefix}-client.h5")
         delete_file(f"{prefix}-client.npy")
@@ -275,9 +278,6 @@ def run_split(
         delete_file(f"{prefix}-client.tflite")
         delete_file(f"{prefix}-server.h5")
         delete_file(f"{prefix}-server.png")
-
-    if model_config.layer == "server":
-        return
 
     if model_config.layer == "client":
         model_client = copy_model(model)

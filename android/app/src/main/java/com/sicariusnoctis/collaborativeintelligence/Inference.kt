@@ -12,13 +12,13 @@ import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel.MapMode.READ_ONLY
 
 class Inference : Closeable {
-    private val gpuDelegate: GpuDelegate = GpuDelegate()
     private lateinit var inputBuffer: ByteBuffer
     private lateinit var outputBuffer: ByteBuffer
-    private lateinit var tflite: Interpreter
-    private lateinit var tfliteModel: MappedByteBuffer
     private lateinit var modelConfig: ModelConfig
+    private val gpuDelegate: GpuDelegate = GpuDelegate()
     private val tfliteOptions = Interpreter.Options()
+    private var tflite: Interpreter? = null
+    private var tfliteModel: MappedByteBuffer? = null
 
     init {
         // TODO NNAPI only faster than GPU/CPU on some devices/processors with certain models. Add UI switch?
@@ -28,15 +28,27 @@ class Inference : Closeable {
             .addDelegate(gpuDelegate)
     }
 
+    fun run(context: Context, frameRequest: FrameRequest<ByteArray>): FrameRequest<ByteArray> {
+        if (!::modelConfig.isInitialized || modelConfig != frameRequest.modelConfig) {
+            modelConfig = frameRequest.modelConfig
+            setTfliteModel(context)
+        }
+
+        return frameRequest.map { run(frameRequest.obj) }
+    }
+
     // TODO Could possibly eliminate copying by exposing buffers? But not "thread-safe"...
     fun run(inputArray: ByteArray): ByteArray {
+        if (modelConfig.layer == "server")
+            return inputArray.clone()
+
         inputBuffer.rewind()
         inputBuffer.put(inputArray)
 
         // TODO flip? read/write buffer modes...
         // inputBuffer.rewind() // TODO needed?
         outputBuffer.rewind()
-        tflite.run(inputBuffer, outputBuffer)
+        tflite!!.run(inputBuffer, outputBuffer)
 
         val outputArray = ByteArray(outputBuffer.limit())
         outputBuffer.rewind()
@@ -44,19 +56,8 @@ class Inference : Closeable {
         return outputArray
     }
 
-    fun run(context: Context, frameRequest: FrameRequest<ByteArray>): FrameRequest<ByteArray> {
-        if (!::modelConfig.isInitialized || modelConfig != frameRequest.modelConfig) {
-            modelConfig = frameRequest.modelConfig
-            if (::tflite.isInitialized)
-                tflite.close()
-            setTfliteModel(context)
-        }
-
-        return frameRequest.map { run(frameRequest.obj) }
-    }
-
     override fun close() {
-        tflite.close()
+        tflite?.close()
         gpuDelegate.close()
     }
 
@@ -66,11 +67,21 @@ class Inference : Closeable {
         // (TfLiteGpuDelegate) failed to invoke.
         // TODO gpuDelegate.bindGlBufferToTensor(outputTensor, outputSsboId);
 
-        tfliteModel = loadModel(context, "${modelConfig.toPath()}-client.tflite")
-        tflite = Interpreter(tfliteModel, tfliteOptions)
+        tflite?.close()
 
-        val inputCapacity = tflite.getInputTensor(0).numBytes()
-        val outputCapacity = tflite.getOutputTensor(0).numBytes()
+        if (modelConfig.layer == "server") {
+            tfliteModel = null
+            tflite = null
+            inputBuffer = ByteBuffer.allocateDirect(0).order(nativeOrder())
+            outputBuffer = ByteBuffer.allocateDirect(0)
+            return
+        }
+
+        tfliteModel = loadModel(context, "${modelConfig.toPath()}-client.tflite")
+        tflite = Interpreter(tfliteModel!!, tfliteOptions)
+
+        val inputCapacity = tflite!!.getInputTensor(0).numBytes()
+        val outputCapacity = tflite!!.getOutputTensor(0).numBytes()
         inputBuffer = ByteBuffer.allocateDirect(inputCapacity).order(nativeOrder())
         outputBuffer = ByteBuffer.allocateDirect(outputCapacity)
 
