@@ -29,6 +29,7 @@ def split_model(
     layers = model.layers
     first_layer = layers[0]
     split_layer = layers[split_idx]
+    last_layer = layers[-1]
 
     outputs3 = []
 
@@ -51,8 +52,8 @@ def split_model(
         inputs2_ = decoder(inputs2_)
         x = decoder(x)
         outputs3.append(x)
-    outputs2 = _copy_graph(layers[-1], {split_layer.name: inputs2_})
-    x = _copy_graph(layers[-1], {split_layer.name: x})
+    outputs2 = _copy_graph(last_layer, {split_layer.name: inputs2_})
+    x = _copy_graph(last_layer, {split_layer.name: x})
     outputs3.append(x)
 
     model1 = keras.Model(inputs=inputs1, outputs=outputs1)
@@ -60,6 +61,16 @@ def split_model(
     model3 = keras.Model(inputs=inputs3, outputs=outputs3)
 
     return model1, model2, model3
+
+
+def copy_model(model: keras.Model) -> Tuple[keras.Model, keras.Model]:
+    # return keras.models.clone_model(model)
+    layers = model.layers
+    first_layer = layers[0]
+    last_layer = layers[-1]
+    inputs = keras.Input(_input_shape(first_layer))
+    outputs = _copy_graph(last_layer, {first_layer.name: inputs})
+    return keras.Model(inputs=inputs, outputs=outputs)
 
 
 def _copy_graph(layer: Layer, layer_lut: Dict[str, Tensor]) -> Tensor:

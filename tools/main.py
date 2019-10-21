@@ -19,7 +19,7 @@ from tensorflow.keras.preprocessing import image
 from tensorflow.keras.utils import plot_model
 
 from modelconfig import ModelConfig
-from split import split_model
+from split import split_model, copy_model
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
@@ -125,12 +125,15 @@ def untile_arr(frame, shape):
 
 
 def write_video(filename: str, frames, width, height):
-    if filename.endswith(".mp4"):
-        fourcc = cv2.VideoWriter_fourcc(*"MP4V")
-    elif filename.endswith(".avi"):
-        fourcc = cv2.VideoWriter_fourcc(*"MJPG")
-    else:
-        raise ValueError
+    fourcc_code = (
+        "mp4v"
+        if filename.endswith(".mp4")
+        else "MJPG"
+        if filename.endswith(".avi")
+        else ""
+    )
+
+    fourcc = cv2.VideoWriter_fourcc(*fourcc_code)
 
     writer = cv2.VideoWriter(
         filename, fourcc, fps=30, frameSize=(width, height), isColor=False
@@ -165,7 +168,7 @@ def write_tensor_video(model_config: ModelConfig, model: keras.Model):
             if x == 0:
                 yield width, height
             yield frame
-            print(x, prediction_decoder(preds[-1]))
+            # print(x, prediction_decoder(preds[-1]))
 
     frames = frame_gen()
     width, height = next(frames)
@@ -230,7 +233,7 @@ def run_analysis(
     plot_featuremap(f"{prefix}-decoder", pred_decoder)
 
     write_tensor_video(model_config, model_analysis)
-    read_tensor_video(model_config, model_server)
+    # read_tensor_video(model_config, model_server)
 
     # TODO extract to "analysis.py" or similar
 
@@ -247,6 +250,11 @@ def run_analysis(
     # TODO top-k accuracy on data set
 
 
+def delete_file(filename: str):
+    with suppress(FileNotFoundError):
+        os.remove(filename)
+
+
 def run_split(
     model: keras.Model,
     model_name: str,
@@ -261,13 +269,23 @@ def run_split(
     prefix = model_config.to_path()
 
     if clean:
-        with suppress(FileNotFoundError):
-            os.remove(f"{prefix}-client.h5")
-            os.remove(f"{prefix}-client.npy")
-            os.remove(f"{prefix}-client.png")
-            os.remove(f"{prefix}-client.tflite")
-            os.remove(f"{prefix}-server.h5")
-            os.remove(f"{prefix}-server.png")
+        delete_file(f"{prefix}-client.h5")
+        delete_file(f"{prefix}-client.npy")
+        delete_file(f"{prefix}-client.png")
+        delete_file(f"{prefix}-client.tflite")
+        delete_file(f"{prefix}-server.h5")
+        delete_file(f"{prefix}-server.png")
+
+    if model_config.layer == "server":
+        return
+
+    if model_config.layer == "client":
+        model_client = copy_model(model)
+        if not os.path.exists(f"{prefix}-client.tflite"):
+            convert_to_tflite_model(model_client, f"{prefix}-client.tflite")
+        del model_client
+        gc.collect()
+        return
 
     # Load and save split model
     model_client, model_server, model_analysis = split_model(
@@ -293,7 +311,6 @@ def run_split(
     del model_server
     del model_analysis
     gc.collect()
-    K.clear_session()
 
     print("")
 
@@ -309,10 +326,8 @@ def run_splits(
     prefix = f"{model_name}/{model_name}"
 
     if clean_model:
-        with suppress(FileNotFoundError):
-            os.remove(f"{prefix}-full.h5")
-            os.remove(f"{prefix}-full.tflite")
-            os.remove(f"{prefix}-full.txt")
+        delete_file(f"{prefix}-full.h5")
+        delete_file(f"{prefix}-full.txt")
 
     preprocess_input = get_preprocessor(model_name)
     test_images = single_input_image("sample.jpg")
@@ -332,13 +347,13 @@ def run_splits(
         plot_model(model, to_file=f"{prefix}-full.png")
     write_summary_to_file(model, f"{prefix}-full.txt")
     targets = model.predict(test_inputs)
-    if not os.path.exists(f"{prefix}-client.tflite"):
-        # TODO is this really needed? (just have a None config)
-        convert_to_tflite_model(model, f"{prefix}-full.tflite")
     del model
     gc.collect()
 
     for model_config in model_configs:
+        if model_config.layer == "server":
+            continue
+
         # TODO If this can be avoided, it would speed things up considerably...
         # Force usage of tf.keras.Model which has Nodes linked correctly
         model = keras.models.load_model(f"{prefix}-full.h5")
@@ -372,9 +387,9 @@ def main():
     }
 
     # Single test
-    model_name = "resnet34"
-    run_splits(model_name, models[model_name])
-    return
+    # model_name = "resnet34"
+    # run_splits(model_name, models[model_name])
+    # return
 
     for model_name, model_configs in models.items():
         run_splits(
