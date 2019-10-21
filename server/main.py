@@ -129,6 +129,11 @@ class ModelManager:
         return [(name, desc, float(score)) for name, desc, score in pred]
 
     def _load_model(self, model_config: ModelConfig) -> keras.Model:
+        model_name = model_config.model
+        if model_config.layer == "server":
+            return keras.models.load_model(
+                filepath=f"../tools/{model_name}/{model_name}-full.h5",
+            )
         decoder = model_config.decoder
         custom_objects = {}
         if decoder != "None":
