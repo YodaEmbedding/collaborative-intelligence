@@ -44,7 +44,7 @@ class StatisticsUiController(
     }
 
     private fun initChart() {
-        uploadLineDataset = LineDataSet(RealtimeSortedEntryList(), "Upload (KB)")
+        uploadLineDataset = LineDataSet(RealtimeSortedEntryList(), "Upload (KB/frame)")
         uploadLineDataset.setDrawCircles(false)
         uploadLineDataset.setDrawValues(false)
         uploadLineDataset.color = Color.rgb(0, 255, 255)
@@ -72,12 +72,12 @@ class StatisticsUiController(
         predictionsText.text =
             response.predictions.joinToString("\n") { "${it.description} ${(it.score * 100).toInt()}%" }
         fpsText.text = "FPS: ${String.format("%.1f", statistics.fps)}"
-        uploadText.text = "Upload: ${statistics.uploadBytes / 1024} KB"
-        preprocessText.text = "Preprocess: ${statistics.preprocess.toMillis()} ms"
-        clientInferenceText.text = "Client inference: ${statistics.clientInference.toMillis()} ms"
-        encodingText.text = "Encoding: N/A"
-        // encodingText.text = "Encoding: ${statistics.encoding.toMillis()} ms" // TODO
-        networkWaitText.text = "Network wait: ${statistics.networkWait.toMillis()} ms"
+        uploadText.text = "Upload: ${statistics.uploadBytes / 1024} KB/frame"
+        preprocessText.text = "1. Preprocess: ${statistics.preprocess.toMillis()} ms"
+        clientInferenceText.text = "2. Client inference: ${statistics.clientInference.toMillis()} ms"
+        encodingText.text = "3. Encoding: N/A"
+        // encodingText.text = "3. Encoding: ${statistics.encoding.toMillis()} ms" // TODO
+        networkWaitText.text = "4. Network wait: ${statistics.networkWait.toMillis()} ms"
         totalText.text = "Total: ${statistics.total.toMillis()} ms"
         framesProcessedText.text = "Processed: ${statistics.framesProcessed}" // TODO
         // framesDroppedText.text = "Dropped: ${statistics.framesDropped}"
