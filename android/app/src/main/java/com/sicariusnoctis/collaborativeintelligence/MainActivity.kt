@@ -255,9 +255,10 @@ class MainActivity : AppCompatActivity() {
                     return@filter false
                 }
 
-                // TODO is this the right way?
+                // TODO rate limit upload in a smarter way... maybe subtract ping and check upload? idk
                 val sample = statistics.sample
-                val rateLimit = maxOf(sample.networkWrite, sample.serverInference)
+                val networkLimit = minOf(sample.networkWrite, Duration.ofMillis(50))
+                val rateLimit = maxOf(networkLimit, sample.serverInference)
 
                 if (Duration.between(prevFrameTime, Instant.now()) < rateLimit) {
                     onDrop(it)
