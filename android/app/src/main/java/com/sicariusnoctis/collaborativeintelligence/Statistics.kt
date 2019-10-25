@@ -119,6 +119,10 @@ data class Sample(
         get() = Duration.between(inferenceStart, inferenceEnd)
     // val encoding: Duration
     //     get() = Duration.between(encodingStart, encodingEnd)
+    val networkWrite: Duration
+        get() = Duration.between(networkWriteStart, networkWriteEnd)
+    val networkRead: Duration
+        get() = Duration.between(networkReadStart, networkReadEnd)
     val networkWait: Duration
         get() = Duration.between(networkWriteStart, networkReadEnd)
     val total: Duration

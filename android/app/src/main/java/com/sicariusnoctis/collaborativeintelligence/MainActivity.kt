@@ -27,6 +27,7 @@ import io.reactivex.rxkotlin.zipWith
 import io.reactivex.schedulers.Schedulers
 import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.serialization.ImplicitReflectionSerializer
+import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -46,6 +47,7 @@ class MainActivity : AppCompatActivity() {
     private var networkAdapter: NetworkAdapter? = null
     private val statistics = Statistics()
     private var subscriptions = listOf<Disposable>()
+    private var prevFrameTime: Instant? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -164,8 +166,6 @@ class MainActivity : AppCompatActivity() {
 
     @UseExperimental(ImplicitReflectionSerializer::class)
     private fun subscribeNetworkIo() {
-        // TODO The frame numbers are wrong because we aren't sending them to the server!
-
         val networkReadSubscription = Flowable
             .fromIterable(Iterable {
                 iterator {
@@ -186,12 +186,14 @@ class MainActivity : AppCompatActivity() {
                 { },
                 { (result, sample) -> statisticsUiController.addResponse(result, sample) })
 
-        // TODO Triple(i, frame, modelConfig)?  ... or actually Pair(Pair(i, modelConfig), frame)?
+        // TODO Reduce requests if server is slow to respond (or rather, use server inference time to calculate how fast we should send frames -- always err on side of slower)
+
+        // TODO Reduce requests if connection speed is not fast enough? (Backpressure here too!!!!!)
 
         // TODO Prevent duplicate subscriptions! (e.g. if onStart called multiple times); unsubscribe?
         // TODO .onTerminateDetach()
         val networkWriteSubscription = frameProcessor
-            // TODO use IndexedValue<Frame>
+            .onBackpressureLimitRate()
             .zipWith(Flowable.range(0, Int.MAX_VALUE)) { frame, i ->
                 FrameRequest(frame, i, modelUiController.modelConfig)
             }
@@ -200,8 +202,9 @@ class MainActivity : AppCompatActivity() {
             // .subscribeOn(IoScheduler(), true)
             .subscribeOn(IoScheduler())
             // .onBackpressureLatest()
-            .onBackpressureDrop { statistics.frameDropped() }
             .doOnNext { Log.i(TAG, "Starting processing frame ${it.frameNumber}") }
+            // .onBackpressureDrop { statistics.frameDropped() }
+            // .onBackpressureDrop { }
             .mapTimed(statistics::setPreprocess) { it.map(postprocessor::process) }
             .doOnNext { statistics.appendSampleString(it.frameNumber, it.obj.toPreviewString()) }
             // .observeOn(inferenceScheduler)
@@ -210,7 +213,9 @@ class MainActivity : AppCompatActivity() {
             .doOnNext { x ->
                 statistics.appendSampleString(x.frameNumber, "\n${x.obj.toPreviewString()}")
             }
+            // .onBackpressureDrop { statistics.frameDropped() }  // TODO really hacky... we're needlessly processing frames that are never sent
             .observeOn(IoScheduler())
+            // .observeOn(IoScheduler(), false, 1)  // TODO: this is a bit hacky
             .doOnNextFrameTimed(statistics::setNetworkWrite) { networkAdapter!!.writeFrameRequest(it) }
             .doOnNext { statistics.setUpload(it.frameNumber, it.obj.size) }
             .subscribeBy(
@@ -229,6 +234,25 @@ class MainActivity : AppCompatActivity() {
         val result = func()
         val end = Instant.now()
         return Triple(result, start, end)
+    }
+
+    private fun <T> Flowable<T>.onBackpressureLimitRate(): Flowable<T> {
+        return this
+            .onBackpressureBuffer()
+            .filter {
+                if (prevFrameTime == null)
+                    return@filter true
+
+                // TODO somewhat convoluted logic...
+                if (statistics.samples.isEmpty())
+                    return@filter false
+
+                val rateLimit = statistics.sample.networkWrite
+
+                Duration.between(prevFrameTime, Instant.now()) >= rateLimit
+            }.doOnNext {
+                prevFrameTime = Instant.now()
+            }
     }
 
     private fun <T> Flowable<FrameRequest<T>>.doOnNextFrameTimed(
