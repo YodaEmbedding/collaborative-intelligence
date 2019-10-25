@@ -52,6 +52,7 @@ class NetworkAdapter {
             // write(eol)
             write(data)
             // write(eol)
+            flush()
         }
     }
 
@@ -68,6 +69,7 @@ class NetworkAdapter {
         with(outputStream!!) {
             writeBytes("json\n")
             writeBytes("$jsonString\n")
+            flush()
         }
     }
 
@@ -86,9 +88,9 @@ data class Prediction(val name: String, val description: String, val score: Floa
 @Serializable
 data class ResultResponse(
     val frameNumber: Int,
-    // val readTime: Int,
-    // val feedTime: Int,
-    val inferenceTime: Int,
+    // val readTime: Long,
+    // val feedTime: Long,
+    val inferenceTime: Long,
     val predictions: List<Prediction>
 )
 

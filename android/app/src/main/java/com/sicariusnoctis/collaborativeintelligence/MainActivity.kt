@@ -63,7 +63,9 @@ class MainActivity : AppCompatActivity() {
             preprocessText,
             clientInferenceText,
             encodingText,
-            networkWaitText,
+            networkReadText,
+            serverInferenceText,
+            networkWriteText,
             totalText,
             framesProcessedText,
             // framesDroppedText,
@@ -175,7 +177,8 @@ class MainActivity : AppCompatActivity() {
                         val (result, start, end) = timed { networkAdapter!!.readData() }
                         if (result == null) break
                         statistics.setNetworkRead(result.frameNumber, start, end)
-                        yield(Pair(result!!, statistics.sample))
+                        statistics.setResultResponse(result.frameNumber, result)
+                        yield(statistics.sample)
                     }
                 }
             })
@@ -184,7 +187,7 @@ class MainActivity : AppCompatActivity() {
             .subscribeBy(
                 { it.printStackTrace() },
                 { },
-                { (result, sample) -> statisticsUiController.addResponse(result, sample) })
+                { sample -> statisticsUiController.addSample(sample) })
 
         // TODO Reduce requests if server is slow to respond (or rather, use server inference time to calculate how fast we should send frames -- always err on side of slower)
 
@@ -193,7 +196,7 @@ class MainActivity : AppCompatActivity() {
         // TODO Prevent duplicate subscriptions! (e.g. if onStart called multiple times); unsubscribe?
         // TODO .onTerminateDetach()
         val networkWriteSubscription = frameProcessor
-            .onBackpressureLimitRate()
+            .onBackpressureLimitRate { statistics.frameDropped() }
             .zipWith(Flowable.range(0, Int.MAX_VALUE)) { frame, i ->
                 FrameRequest(frame, i, modelUiController.modelConfig)
             }
@@ -236,20 +239,32 @@ class MainActivity : AppCompatActivity() {
         return Triple(result, start, end)
     }
 
-    private fun <T> Flowable<T>.onBackpressureLimitRate(): Flowable<T> {
+    // TODO nullify prevFrameTime onModelConfigChanged? (for smoother transition)
+    // TODO immediately send onModelConfigChanged request to server, instead of waiting for response?
+    // no, because server doesn't cancel inferences... yet
+    private fun <T> Flowable<T>.onBackpressureLimitRate(onDrop: (T) -> Unit): Flowable<T> {
         return this
             .onBackpressureBuffer()
             .filter {
                 if (prevFrameTime == null)
                     return@filter true
 
-                // TODO somewhat convoluted logic...
-                if (statistics.samples.isEmpty())
+                // If first server response is not yet received, drop frame
+                if (statistics.samples.isEmpty()) {
+                    onDrop(it)
                     return@filter false
+                }
 
-                val rateLimit = statistics.sample.networkWrite
+                // TODO is this the right way?
+                val sample = statistics.sample
+                val rateLimit = maxOf(sample.networkWrite, sample.serverInference)
 
-                Duration.between(prevFrameTime, Instant.now()) >= rateLimit
+                if (Duration.between(prevFrameTime, Instant.now()) < rateLimit) {
+                    onDrop(it)
+                    return@filter false
+                }
+
+                true
             }.doOnNext {
                 prevFrameTime = Instant.now()
             }

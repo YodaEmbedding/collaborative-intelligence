@@ -73,6 +73,12 @@ class Statistics {
         }
     }
 
+    fun setResultResponse(frameNum: Int, resultResponse: ResultResponse) {
+        setPropsDecorator(frameNum) {
+            it.resultResponse = resultResponse
+        }
+    }
+
     fun appendSampleString(frameNum: Int, sampleString: String) {
         setPropsDecorator(frameNum) {
             it.sampleString += sampleString
@@ -111,6 +117,7 @@ data class Sample(
     var networkReadStart: Instant? = null,
     var networkReadEnd: Instant? = null,
     var uploadBytes: Int? = null,
+    var resultResponse: ResultResponse? = null,
     var sampleString: String = ""
 ) {
     val preprocess: Duration
@@ -121,12 +128,16 @@ data class Sample(
     //     get() = Duration.between(encodingStart, encodingEnd)
     val networkWrite: Duration
         get() = Duration.between(networkWriteStart, networkWriteEnd)
+    val serverInference: Duration
+        get() = Duration.ofMillis(resultResponse!!.inferenceTime)
     val networkRead: Duration
         get() = Duration.between(networkReadStart, networkReadEnd)
     val networkWait: Duration
         get() = Duration.between(networkWriteStart, networkReadEnd)
     val total: Duration
         get() = Duration.between(preprocessStart, networkReadEnd)
+    val frameNumber: Int
+        get() = resultResponse!!.frameNumber
 
     override fun toString() = durations()
         .zip(durationDescriptions)

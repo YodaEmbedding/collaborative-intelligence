@@ -19,7 +19,9 @@ class StatisticsUiController(
     private val preprocessText: TextView,
     private val clientInferenceText: TextView,
     private val encodingText: TextView,
-    private val networkWaitText: TextView,
+    private val networkReadText: TextView,
+    private val serverInferenceText: TextView,
+    private val networkWriteText: TextView,
     private val totalText: TextView,
     private val framesProcessedText: TextView,
     // private val framesDroppedText: TextView,
@@ -37,9 +39,8 @@ class StatisticsUiController(
         initChart()
     }
 
-    fun addResponse(response: ResultResponse, sample: Sample) {
-        Log.i(TAG, "Draw response: $response\nwith sample: $sample")
-        updateTextViews(response)
+    fun addSample(sample: Sample) {
+        updateTextViews(sample)
         updateChart(sample)
     }
 
@@ -66,19 +67,23 @@ class StatisticsUiController(
     }
 
     @SuppressLint("SetTextI18n")
-    private fun updateTextViews(response: ResultResponse) {
+    private fun updateTextViews(sample: Sample) {
         // TODO shouldn't these be synchronized? Or rather, statistics...
-        // response.inferenceTime // TODO?
-        predictionsText.text =
-            response.predictions.joinToString("\n") { "${it.description} ${(it.score * 100).toInt()}%" }
+        predictionsText.text = sample.resultResponse!!.predictions.joinToString("\n") {
+            "${it.description} ${(it.score * 100).toInt()}%"
+        }
         fpsText.text = "FPS: ${String.format("%.1f", statistics.fps)}"
-        uploadText.text = "Upload: ${statistics.uploadBytes / 1024} KB/frame"
-        preprocessText.text = "1. Preprocess: ${statistics.preprocess.toMillis()} ms"
-        clientInferenceText.text = "2. Client inference: ${statistics.clientInference.toMillis()} ms"
+        uploadText.text = "Upload: ${sample.uploadBytes!! / 1024} KB/frame"
+        preprocessText.text = "1. Preprocess: ${sample.preprocess.toMillis()} ms"
+        clientInferenceText.text =
+            "2. Client infer: ${sample.clientInference.toMillis()} ms"
         encodingText.text = "3. Encoding: N/A"
-        // encodingText.text = "3. Encoding: ${statistics.encoding.toMillis()} ms" // TODO
-        networkWaitText.text = "4. Network wait: ${statistics.networkWait.toMillis()} ms"
-        totalText.text = "Total: ${statistics.total.toMillis()} ms"
+        // encodingText.text = "3. Encoding: ${sample.encoding.toMillis()} ms" // TODO
+        // networkWaitText.text = "4. Network wait: ${sample.networkWait.toMillis()} ms"
+        networkWriteText.text = "4. Network send: ${sample.networkWrite.toMillis()} ms"
+        serverInferenceText.text = "5. Server infer: ${sample.serverInference.toMillis()} ms"
+        networkReadText.text = "6. Network read: ${sample.networkRead.toMillis()} ms"
+        totalText.text = "Total: ${sample.total.toMillis()} ms"
         framesProcessedText.text = "Processed: ${statistics.framesProcessed}" // TODO
         // framesDroppedText.text = "Dropped: ${statistics.framesDropped}"
     }
