@@ -222,14 +222,14 @@ class SmartProcessor(Generic[T, R]):
         return self.buffer.get()
 
     def _refresh_buffer(self):
-        items = list(self.work_distributor.get_many())
+        min_items = 1 if self.buffer.empty() else 0
+        items = list(self.work_distributor.get_many(min_items=min_items))
         idxs = (
             len(items) - i - 1
             for i, (_, (_, request_type, _)) in enumerate(reversed(items))
             if request_type == "release"
         )
         idx = next(idxs, None)
-        print(f"Idx: {idx}")
         if idx is None:
             for x in items:
                 self.buffer.put(x)
