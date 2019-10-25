@@ -2,6 +2,7 @@ package com.sicariusnoctis.collaborativeintelligence
 
 import android.util.Log
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.UnstableDefault
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import java.io.BufferedReader
@@ -18,6 +19,7 @@ class NetworkAdapter {
     private var prevModelConfig: ModelConfig? = null
 
     fun connect() {
+        val HOSTNAME = HOSTNAME
         socket = Socket(HOSTNAME, 5678)
 
         // TODO BufferedInputStream for byte data?
@@ -33,30 +35,24 @@ class NetworkAdapter {
         outputStream = null
     }
 
+    @UseExperimental(UnstableDefault::class)
     fun readData(): ResultResponse? {
         val msg = inputStream!!.readLine() ?: return null
-        Log.i(TAG, "Received: $msg")
         return Json.parse(ResultResponse.serializer(), msg)
     }
 
     fun writeData(frameNumber: Int, data: ByteArray) {
-        val eol = ByteArray(1) { 0 }
-        Log.i(TAG, "Tensor message size: ${data.size}")
-
         with(outputStream!!) {
             writeBytes("frame\n")
-            // write(eol)
             writeInt(frameNumber)
-            // write(eol)
             writeInt(data.size)
-            // write(eol)
             write(data)
-            // write(eol)
             flush()
         }
     }
 
     fun writeFrameRequest(frameRequest: FrameRequest<ByteArray>) {
+        Log.i(TAG, "Request: ${frameRequest.frameNumber}, ${frameRequest.modelConfig}")
         if (prevModelConfig != frameRequest.modelConfig) {
             writeModelConfig(frameRequest.modelConfig)
             prevModelConfig = frameRequest.modelConfig
@@ -64,6 +60,7 @@ class NetworkAdapter {
         writeData(frameRequest.frameNumber, frameRequest.obj)
     }
 
+    @UseExperimental(UnstableDefault::class)
     fun writeModelConfig(modelConfig: ModelConfig) {
         val jsonString = Json.stringify(ModelConfig.serializer(), modelConfig)
         with(outputStream!!) {
@@ -72,14 +69,6 @@ class NetworkAdapter {
             flush()
         }
     }
-
-    // fun writeJson(jsonObject: JsonObject) {
-    //     // val x = jsonObject["idk"]?.jsonObject?.get("e")
-    //     with(outputStream!!) {
-    //         // TODO is this... secure? What about quoted strings?
-    //         writeBytes("$jsonObject\n")
-    //     }
-    // }
 }
 
 @Serializable
@@ -110,7 +99,6 @@ data class ModelConfig(
         dictString(decoder, encoder_args)
     ).joinToString("&")
 
-    // TODO shouldn't args be ", " separated... not "," separated? Hmmm...
     private fun dictString(name: String, args: JsonObject?): String =
         if (args == null) {
             name

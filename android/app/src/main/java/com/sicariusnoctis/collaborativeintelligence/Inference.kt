@@ -37,7 +37,6 @@ class Inference : Closeable {
         return frameRequest.map { run(frameRequest.obj) }
     }
 
-    // TODO Could possibly eliminate copying by exposing buffers? But not "thread-safe"...
     fun run(inputArray: ByteArray): ByteArray {
         if (modelConfig.layer == "server")
             return inputArray.clone()
@@ -45,8 +44,6 @@ class Inference : Closeable {
         inputBuffer.rewind()
         inputBuffer.put(inputArray)
 
-        // TODO flip? read/write buffer modes...
-        // inputBuffer.rewind() // TODO needed?
         outputBuffer.rewind()
         tflite!!.run(inputBuffer, outputBuffer)
 

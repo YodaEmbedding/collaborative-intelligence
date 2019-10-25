@@ -24,7 +24,6 @@ class StatisticsUiController(
     private val networkWriteText: TextView,
     private val totalText: TextView,
     private val framesProcessedText: TextView,
-    // private val framesDroppedText: TextView,
     private val lineChart: LineChart
 ) {
     private val TAG = StatisticsUiController::class.qualifiedName
@@ -68,7 +67,6 @@ class StatisticsUiController(
 
     @SuppressLint("SetTextI18n")
     private fun updateTextViews(sample: Sample) {
-        // TODO shouldn't these be synchronized? Or rather, statistics...
         predictionsText.text = sample.resultResponse!!.predictions.joinToString("\n") {
             "${it.description} ${(it.score * 100).toInt()}%"
         }
@@ -78,14 +76,11 @@ class StatisticsUiController(
         clientInferenceText.text =
             "2. Client infer: ${sample.clientInference.toMillis()} ms"
         encodingText.text = "3. Encoding: N/A"
-        // encodingText.text = "3. Encoding: ${sample.encoding.toMillis()} ms" // TODO
-        // networkWaitText.text = "4. Network wait: ${sample.networkWait.toMillis()} ms"
         networkWriteText.text = "4. Network send: ${sample.networkWrite.toMillis()} ms"
         serverInferenceText.text = "5. Server infer: ${sample.serverInference.toMillis()} ms"
         networkReadText.text = "6. Network read: ${sample.networkRead.toMillis()} ms"
         totalText.text = "Total: ${sample.total.toMillis()} ms"
-        framesProcessedText.text = "Processed: ${statistics.framesProcessed}" // TODO
-        // framesDroppedText.text = "Dropped: ${statistics.framesDropped}"
+        framesProcessedText.text = "Processed: ${statistics.framesProcessed}"
     }
 
     private fun updateChart(sample: Sample) {
@@ -112,9 +107,5 @@ class StatisticsUiController(
         lineChart.invalidate()
 
         // TODO skip first sample whenever modelChange happens?
-
-        // TODO update limit by fps? downsample-lttb
-        // TODO validSamples? what do we do about blanks? shouldn't those be assigned x-axis values?
-        // also, give these an id so they're time ordered?
     }
 }

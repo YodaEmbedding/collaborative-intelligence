@@ -68,7 +68,6 @@ class MainActivity : AppCompatActivity() {
             networkWriteText,
             totalText,
             framesProcessedText,
-            // framesDroppedText,
             lineChart
         )
     }
@@ -117,9 +116,7 @@ class MainActivity : AppCompatActivity() {
             ),
             jpegQuality = manualJpegQuality(90),
             sensorSensitivity = lowestSensorSensitivity(),
-            // frameProcessor = this.frameProcessor::onNext
             frameProcessor = { frame: Frame ->
-                // Log.i(TAG, "Received preview frame")
                 this.frameProcessor.onNext(frame)
             }
         )
@@ -184,47 +181,32 @@ class MainActivity : AppCompatActivity() {
             })
             .subscribeOn(IoScheduler())
             .observeOn(AndroidSchedulers.mainThread())
+            .doOnNext { Log.i(TAG, "Finished processing frame ${it.frameNumber}") }
             .subscribeBy(
                 { it.printStackTrace() },
                 { },
                 { sample -> statisticsUiController.addSample(sample) })
 
-        // TODO Reduce requests if server is slow to respond (or rather, use server inference time to calculate how fast we should send frames -- always err on side of slower)
-
         // TODO Reduce requests if connection speed is not fast enough? (Backpressure here too!!!!!)
-
         // TODO Prevent duplicate subscriptions! (e.g. if onStart called multiple times); unsubscribe?
         // TODO .onTerminateDetach()
         val networkWriteSubscription = frameProcessor
             .onBackpressureLimitRate { statistics.frameDropped() }
             .zipWith(Flowable.range(0, Int.MAX_VALUE)) { frame, i ->
+                Log.i(TAG, "zip($i, ${modelUiController.modelConfig})")
                 FrameRequest(frame, i, modelUiController.modelConfig)
             }
-            // .subscribeOn(inferenceScheduler)
-            // .subscribeOn(IoScheduler(), false)
-            // .subscribeOn(IoScheduler(), true)
             .subscribeOn(IoScheduler())
-            // .onBackpressureLatest()
-            .doOnNext { Log.i(TAG, "Starting processing frame ${it.frameNumber}") }
-            // .onBackpressureDrop { statistics.frameDropped() }
-            // .onBackpressureDrop { }
             .mapTimed(statistics::setPreprocess) { it.map(postprocessor::process) }
-            .doOnNext { statistics.appendSampleString(it.frameNumber, it.obj.toPreviewString()) }
-            // .observeOn(inferenceScheduler)
             .observeOn(inferenceScheduler, false, 1)
             .mapTimed(statistics::setInference) { inference.run(this, it) }
-            .doOnNext { x ->
-                statistics.appendSampleString(x.frameNumber, "\n${x.obj.toPreviewString()}")
-            }
-            // .onBackpressureDrop { statistics.frameDropped() }  // TODO really hacky... we're needlessly processing frames that are never sent
             .observeOn(IoScheduler())
-            // .observeOn(IoScheduler(), false, 1)  // TODO: this is a bit hacky
             .doOnNextFrameTimed(statistics::setNetworkWrite) { networkAdapter!!.writeFrameRequest(it) }
             .doOnNext { statistics.setUpload(it.frameNumber, it.obj.size) }
             .subscribeBy(
                 { it.printStackTrace() },
                 { },
-                { Log.i(TAG, "Finished processing frame ${it.frameNumber}") }
+                { }
             )
 
         subscriptions = listOf(networkReadSubscription, networkWriteSubscription)
@@ -292,11 +274,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun ByteArray.toHexString() = joinToString("") { "%02x".format(it) }
-
-    private fun ByteArray.toPreviewString() =
-        take(12).toByteArray().toHexString() + "..." + takeLast(3).toByteArray().toHexString()
-
     companion object {
         @JvmStatic
         private fun selectPreviewResolution(iterable: Iterable<Resolution>): Resolution? {
@@ -312,11 +289,4 @@ class MainActivity : AppCompatActivity() {
                 .firstOrNull { it.min >= 5000 }
         }
     }
-
-    // TODO Stats: timer, battery, # frames dropped
-    // TODO Video input
-
-    // TODO E/BufferQueueProducer: [SurfaceTexture-0-22526-3] cancelBuffer: BufferQueue has been abandoned
-    // TODO why does the stream freeze on server-side?
-    // TODO run expensive operations in pipeline in parallel
 }

@@ -6,7 +6,6 @@ import android.view.View.TEXT_ALIGNMENT_TEXT_END
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Spinner
-import android.widget.SpinnerAdapter
 import com.warkiz.widget.IndicatorSeekBar
 import com.warkiz.widget.OnSeekChangeListener
 import com.warkiz.widget.SeekParams
@@ -15,11 +14,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectSerializer
 import kotlinx.serialization.json.content
-import android.view.Gravity
-import android.view.View.TEXT_ALIGNMENT_CENTER
-import android.widget.TextView
-import android.view.ViewGroup
-
 
 class ModelUiController(
     context: Context,
@@ -182,7 +176,6 @@ class ModelUiController(
 class ChoiceHistory {
     private val choiceHistory = lruMap<LinkedHashMap<String, String?>>()
 
-    // TODO why is it lastOrNull rather than firstOrNull? o_0
     fun get() = choiceHistory.entries.lastOrNull()?.key
 
     fun get(model: String) = choiceHistory[model]?.entries?.lastOrNull()?.key

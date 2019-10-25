@@ -12,18 +12,6 @@ class Statistics {
         @Synchronized get() = validSamples.size
     val fps
         @Synchronized get() = fps()
-    val uploadBytes
-        @Synchronized get() = last.uploadBytes!!
-    val preprocess: Duration
-        @Synchronized get() = last.preprocess
-    val clientInference: Duration
-        @Synchronized get() = last.clientInference
-    // val encoding: Duration
-    //     @Synchronized get() = last.encoding
-    val networkWait: Duration
-        @Synchronized get() = last.networkWait
-    val total: Duration
-        @Synchronized get() = last.total
     val sample: Sample
         @Synchronized get() = last
     val samples: List<Sample>
@@ -79,14 +67,6 @@ class Statistics {
         }
     }
 
-    fun appendSampleString(frameNum: Int, sampleString: String) {
-        setPropsDecorator(frameNum) {
-            it.sampleString += sampleString
-        }
-    }
-
-    // TODO reset validSamples? or something like that
-    // TODO this doesn't make any sense... using only validSamples?
     private fun fps() = 1000.0 * minOf(validSamples.size, 10) / Duration.between(
         validSamples.elementAt(maxOf(validSamples.size - 10, 0)).preprocessStart,
         last.networkReadEnd
@@ -117,8 +97,7 @@ data class Sample(
     var networkReadStart: Instant? = null,
     var networkReadEnd: Instant? = null,
     var uploadBytes: Int? = null,
-    var resultResponse: ResultResponse? = null,
-    var sampleString: String = ""
+    var resultResponse: ResultResponse? = null
 ) {
     val preprocess: Duration
         get() = Duration.between(preprocessStart, preprocessEnd)
@@ -143,7 +122,7 @@ data class Sample(
         .zip(durationDescriptions)
         .joinToString(separator = "\n") { (duration, description) ->
             "%.3fs %s".format(duration.toMillis() / 1000.0, description)
-        } + "\n$sampleString"
+        }
 
     val isValid get() = uploadBytes != null && instants().all { it != null }
 
