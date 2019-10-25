@@ -6,16 +6,19 @@ import asyncio
 import importlib.util
 import json
 import os
+import queue
 import time
 import traceback
 from asyncio import StreamReader, StreamWriter
 from dataclasses import asdict, dataclass
 from datetime import datetime
+from itertools import count
 from typing import (
     Any,
     Awaitable,
     ByteString,
     Dict,
+    Generator,
     Generic,
     List,
     Tuple,
@@ -182,6 +185,22 @@ class WorkDistributor(Generic[T, R]):
         """Synchronously retrieve item for processing."""
         return self._queue.sync_q.get()
 
+    def get_many(
+        self, min_items=1, max_items=None
+    ) -> Generator[Tuple[int, T], None, None]:
+        """Synchronously retrieve items for processing.
+
+        Retrieve at least min_items, blocking if necessary.
+        Retreive up to max_items if possible without blocking.
+        """
+        for _ in range(min_items):
+            yield self.get()
+        it = count() if max_items is None else range(max_items - min_items)
+        for _ in it:
+            if self._queue.sync_q.empty():
+                break
+            yield self.get()
+
     def empty(self) -> bool:
         """Check if process queue is empty."""
         return self._queue.sync_q.empty()
@@ -191,13 +210,43 @@ class WorkDistributor(Generic[T, R]):
         self._results[guid].sync_q.put(item)
 
 
+class SmartProcessor(Generic[T, R]):
+    """Looks ahead to determine if work items should be cancelled."""
+
+    def __init__(self, work_distributor: WorkDistributor[T, R]):
+        self.work_distributor = work_distributor
+        self.buffer = queue.Queue()
+
+    def get(self) -> Tuple[int, T]:
+        self._refresh_buffer()
+        return self.buffer.get()
+
+    def _refresh_buffer(self):
+        items = list(self.work_distributor.get_many())
+        idxs = (
+            len(items) - i - 1
+            for i, (_, (_, request_type, _)) in enumerate(reversed(items))
+            if request_type == "release"
+        )
+        idx = next(idxs, None)
+        print(f"Idx: {idx}")
+        if idx is None:
+            for x in items:
+                self.buffer.put(x)
+            return
+        self.buffer = queue.Queue()
+        for x in items[idx:]:
+            self.buffer.put(x)
+
+
 # TODO Propogate exceptions back to client?
 def processor(work_distributor: WorkDistributor):
     model_manager = ModelManager()
+    smart_processor = SmartProcessor(work_distributor)
 
     while True:
         try:
-            guid, item = work_distributor.get()
+            guid, item = smart_processor.get()
             model_config, request_type, item = item
 
             if request_type == "terminate":
