@@ -5,16 +5,8 @@ import android.os.Bundle
 import android.renderscript.RenderScript
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
-import io.fotoapparat.Fotoapparat
-import io.fotoapparat.configuration.CameraConfiguration
-import io.fotoapparat.log.logcat
-import io.fotoapparat.log.loggers
-import io.fotoapparat.parameter.FpsRange
-import io.fotoapparat.parameter.Resolution
-import io.fotoapparat.parameter.ScaleType
 import io.fotoapparat.parameter.camera.CameraParameters
 import io.fotoapparat.preview.Frame
-import io.fotoapparat.selector.*
 import io.reactivex.Flowable
 import io.reactivex.Scheduler
 import io.reactivex.Single
@@ -35,7 +27,7 @@ import java.util.concurrent.Executors
 class MainActivity : AppCompatActivity() {
     private val TAG = MainActivity::class.qualifiedName
 
-    private lateinit var fotoapparat: Fotoapparat
+    private lateinit var camera: Camera
     private lateinit var inference: Inference
     private lateinit var inferenceExecutor: ExecutorService
     private lateinit var inferenceScheduler: Scheduler
@@ -53,7 +45,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         rs = RenderScript.create(this)
-        initFotoapparat()
+        camera = Camera(this, cameraView) { frame -> this.frameProcessor.onNext(frame) }
         modelUiController = ModelUiController(this, modelSpinner, layerSeekBar, compressionSpinner)
         statisticsUiController = StatisticsUiController(
             statistics,
@@ -74,8 +66,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        fotoapparat.start()
-        fotoapparat.getCurrentParameters().whenAvailable(this::onCameraParametersAvailable)
+        camera.start(this::onCameraParametersAvailable)
         inferenceExecutor = Executors.newSingleThreadExecutor()
         inferenceScheduler = Schedulers.from(inferenceExecutor)
         inferenceExecutor.submit { inference = Inference() }
@@ -85,7 +76,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
-        fotoapparat.stop()
+        camera.stop()
         // TODO shouldn't this be part of "doFinally" for frameProcessor?
         inferenceExecutor.submit { inference.close() }
         // TODO release inferenceExecutor?
@@ -95,45 +86,6 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         subscriptions.forEach { x -> x.dispose() }
         super.onDestroy()
-    }
-
-    private fun initFotoapparat() {
-        val cameraConfiguration = CameraConfiguration(
-            pictureResolution = highestResolution(),
-            previewResolution = ::selectPreviewResolution,
-            previewFpsRange = ::selectFpsRange,
-            focusMode = firstAvailable(
-                continuousFocusPicture(),
-                continuousFocusVideo(),
-                autoFocus(),
-                fixed()
-            ),
-            antiBandingMode = firstAvailable(
-                auto(),
-                hz50(),
-                hz60(),
-                none()
-            ),
-            jpegQuality = manualJpegQuality(90),
-            sensorSensitivity = lowestSensorSensitivity(),
-            frameProcessor = { frame: Frame ->
-                this.frameProcessor.onNext(frame)
-            }
-        )
-
-        fotoapparat = Fotoapparat(
-            context = this,
-            view = cameraView,
-            scaleType = ScaleType.CenterCrop,
-            lensPosition = back(),
-            cameraConfiguration = cameraConfiguration,
-            logger = loggers(
-                logcat()
-            ),
-            cameraErrorCallback = { error ->
-                Log.e(TAG, "$error")
-            }
-        )
     }
 
     private fun onCameraParametersAvailable(cameraParameters: CameraParameters?) {
@@ -271,22 +223,6 @@ class MainActivity : AppCompatActivity() {
             val (result, start, end) = timed { mapper(x) }
             timeFunc(result.frameNumber, start, end)
             result
-        }
-    }
-
-    companion object {
-        @JvmStatic
-        private fun selectPreviewResolution(iterable: Iterable<Resolution>): Resolution? {
-            return iterable
-                .sortedBy { it.area }
-                .firstOrNull { it.width >= 224 * 2 && it.height >= 224 * 2 }
-        }
-
-        @JvmStatic
-        private fun selectFpsRange(iterable: Iterable<FpsRange>): FpsRange? {
-            return iterable
-                .sortedBy { it.min }
-                .firstOrNull { it.min >= 5000 }
         }
     }
 }
