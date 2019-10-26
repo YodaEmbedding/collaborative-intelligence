@@ -137,7 +137,8 @@ class MainActivity : AppCompatActivity() {
             .subscribeBy(
                 { it.printStackTrace() },
                 { },
-                { sample -> statisticsUiController.addSample(sample) })
+                { sample -> statisticsUiController.addSample(sample) }
+            )
 
         // TODO Reduce requests if connection speed is not fast enough? (Backpressure here too!!!!!)
         // TODO Prevent duplicate subscriptions! (e.g. if onStart called multiple times); unsubscribe?

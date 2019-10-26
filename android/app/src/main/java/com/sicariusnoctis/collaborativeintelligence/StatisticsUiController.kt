@@ -68,7 +68,7 @@ class StatisticsUiController(
     @SuppressLint("SetTextI18n")
     private fun updateTextViews(sample: Sample) {
         predictionsText.text = sample.resultResponse!!.predictions.joinToString("\n") {
-            "${it.description} ${(it.score * 100).toInt()}%"
+            "${formatPercentage(it.score)} ${it.description}"
         }
         fpsText.text = "FPS: ${String.format("%.1f", statistics.fps)}"
         uploadText.text = "Upload: ${sample.uploadBytes!! / 1024} KB/frame"
@@ -107,5 +107,12 @@ class StatisticsUiController(
         lineChart.invalidate()
 
         // TODO skip first sample whenever modelChange happens?
+    }
+
+    companion object {
+        fun formatPercentage(score: Float): String {
+            val s = (score * 100).toInt().toString()
+            return if (s.length == 1) " $s%" else "$s%"
+        }
     }
 }
