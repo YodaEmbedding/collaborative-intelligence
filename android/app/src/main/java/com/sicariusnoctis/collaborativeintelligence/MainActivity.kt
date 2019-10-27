@@ -179,10 +179,12 @@ class MainActivity : AppCompatActivity() {
     // no, because server doesn't cancel inferences... yet
     private fun <T> Flowable<T>.onBackpressureLimitRate(onDrop: (T) -> Unit): Flowable<T> {
         return this
-            .onBackpressureBuffer()
+            .onBackpressureDrop(onDrop)
             .filter {
                 if (prevFrameTime == null)
                     return@filter true
+
+                // TODO reset statistics on model switch...
 
                 // If first server response is not yet received, drop frame
                 if (statistics.samples.isEmpty()) {
@@ -190,10 +192,13 @@ class MainActivity : AppCompatActivity() {
                     return@filter false
                 }
 
+                // TODO this maintains a reasonable FPS, but doesn't help as much with latency (which can accumulate)
+
                 // TODO rate limit upload in a smarter way... maybe subtract ping and check upload? idk
                 val sample = statistics.sample
-                val networkLimit = minOf(sample.networkWrite, Duration.ofMillis(50))
-                val rateLimit = maxOf(networkLimit, sample.serverInference)
+                val fpsLimit = Duration.ofMillis((1000 / (statistics.fps * 1.3)).toLong())
+                // val networkLimit = minOf(sample.networkWrite, Duration.ofMillis(50))
+                val rateLimit = maxOf(fpsLimit, sample.serverInference)
 
                 if (Duration.between(prevFrameTime, Instant.now()) < rateLimit) {
                     onDrop(it)
