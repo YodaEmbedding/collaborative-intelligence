@@ -96,8 +96,7 @@ class MainActivity : AppCompatActivity() {
 
         val rotationCompensation =
             CameraPreviewPostprocessor.getRotationCompensation(
-                this,
-                CameraCharacteristics.LENS_FACING_BACK
+                this, CameraCharacteristics.LENS_FACING_BACK
             )
 
         postprocessor = CameraPreviewPostprocessor(
@@ -165,15 +164,6 @@ class MainActivity : AppCompatActivity() {
         subscriptions = listOf(networkReadSubscription, networkWriteSubscription)
     }
 
-    private fun <R> timed(
-        func: () -> R
-    ): Triple<R, Instant, Instant> {
-        val start = Instant.now()
-        val result = func()
-        val end = Instant.now()
-        return Triple(result, start, end)
-    }
-
     // TODO nullify prevFrameTime onModelConfigChanged? (for smoother transition)
     // TODO immediately send onModelConfigChanged request to server, instead of waiting for response?
     // no, because server doesn't cancel inferences... yet
@@ -211,24 +201,35 @@ class MainActivity : AppCompatActivity() {
             }
     }
 
-    private fun <T> Flowable<FrameRequest<T>>.doOnNextFrameTimed(
-        timeFunc: (Int, Instant, Instant) -> Unit,
-        onNext: (FrameRequest<T>) -> Unit
-    ): Flowable<FrameRequest<T>> {
-        return this.doOnNext { x ->
-            val (_, start, end) = timed { onNext(x) }
-            timeFunc(x.frameNumber, start, end)
+    companion object {
+        private fun <R> timed(
+            func: () -> R
+        ): Triple<R, Instant, Instant> {
+            val start = Instant.now()
+            val result = func()
+            val end = Instant.now()
+            return Triple(result, start, end)
         }
-    }
 
-    private fun <R, T> Flowable<FrameRequest<T>>.mapTimed(
-        timeFunc: (Int, Instant, Instant) -> Unit,
-        mapper: (FrameRequest<T>) -> FrameRequest<R>
-    ): Flowable<FrameRequest<R>> {
-        return this.map { x ->
-            val (result, start, end) = timed { mapper(x) }
-            timeFunc(result.frameNumber, start, end)
-            result
+        private fun <T> Flowable<FrameRequest<T>>.doOnNextFrameTimed(
+            timeFunc: (Int, Instant, Instant) -> Unit,
+            onNext: (FrameRequest<T>) -> Unit
+        ): Flowable<FrameRequest<T>> {
+            return this.doOnNext { x ->
+                val (_, start, end) = timed { onNext(x) }
+                timeFunc(x.frameNumber, start, end)
+            }
+        }
+
+        private fun <R, T> Flowable<FrameRequest<T>>.mapTimed(
+            timeFunc: (Int, Instant, Instant) -> Unit,
+            mapper: (FrameRequest<T>) -> FrameRequest<R>
+        ): Flowable<FrameRequest<R>> {
+            return this.map { x ->
+                val (result, start, end) = timed { mapper(x) }
+                timeFunc(result.frameNumber, start, end)
+                result
+            }
         }
     }
 }
