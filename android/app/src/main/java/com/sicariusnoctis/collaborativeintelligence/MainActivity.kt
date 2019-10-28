@@ -124,9 +124,10 @@ class MainActivity : AppCompatActivity() {
                     while (true) {
                         val (result, start, end) = timed { networkAdapter!!.readData() }
                         if (result == null) break
-                        statistics.setNetworkRead(result.frameNumber, start, end)
-                        statistics.setResultResponse(result.frameNumber, result)
-                        yield(statistics.sample)
+                        val stats = statistics[result.frameNumber]
+                        stats.setNetworkRead(result.frameNumber, start, end)
+                        stats.setResultResponse(result.frameNumber, result)
+                        yield(stats.sample)
                     }
                 }
             })
@@ -143,18 +144,20 @@ class MainActivity : AppCompatActivity() {
         // TODO Prevent duplicate subscriptions! (e.g. if onStart called multiple times); unsubscribe?
         // TODO .onTerminateDetach()
         val networkWriteSubscription = frameProcessor
-            .onBackpressureLimitRate { statistics.frameDropped() }
-            .zipWith(Flowable.range(0, Int.MAX_VALUE)) { frame, i ->
-                Log.i(TAG, "zip($i, ${modelUiController.modelConfig})")
-                FrameRequest(frame, FrameRequestInfo(i, modelUiController.modelConfig))
-            }
             .subscribeOn(IoScheduler())
-            .mapTimed(statistics::setPreprocess) { it.map(postprocessor::process) }
+            .map { it to modelUiController.modelConfig }
+            .onBackpressureLimitRate { statistics[it.second].frameDropped() }
+            .zipWith(Flowable.range(0, Int.MAX_VALUE)) { (frame, modelConfig), i ->
+                FrameRequest(frame, FrameRequestInfo(i, modelConfig))
+            }
+            .mapTimed(ModelStatistics::setPreprocess) { it.map(postprocessor::process) }
             .observeOn(inferenceScheduler, false, 1)
-            .mapTimed(statistics::setInference) { inference.run(this, it) }
+            .mapTimed(ModelStatistics::setInference) { inference.run(this, it) }
             .observeOn(IoScheduler())
-            .doOnNextFrameTimed(statistics::setNetworkWrite) { networkAdapter!!.writeFrameRequest(it) }
-            .doOnNext { statistics.setUpload(it.info.frameNumber, it.obj.size) }
+            .doOnNextTimed(ModelStatistics::setNetworkWrite) { networkAdapter!!.writeFrameRequest(it) }
+            .doOnNext {
+                statistics[it.info.modelConfig].setUpload(it.info.frameNumber, it.obj.size)
+            }
             .subscribeBy(
                 { it.printStackTrace() },
                 { },
@@ -167,28 +170,30 @@ class MainActivity : AppCompatActivity() {
     // TODO nullify prevFrameTime onModelConfigChanged? (for smoother transition)
     // TODO immediately send onModelConfigChanged request to server, instead of waiting for response?
     // no, because server doesn't cancel inferences... yet
-    private fun <T> Flowable<T>.onBackpressureLimitRate(onDrop: (T) -> Unit): Flowable<T> {
+    private fun Flowable<Pair<Frame, ModelConfig>>.onBackpressureLimitRate(
+        onDrop: (Pair<Frame, ModelConfig>) -> Unit
+    ): Flowable<Pair<Frame, ModelConfig>> {
         return this
             .onBackpressureDrop(onDrop)
             .filter {
-                if (prevFrameTime == null)
+                val stats = statistics[it.second]
+
+                if (!stats.isFirstExist)
                     return@filter true
 
-                // TODO reset statistics on model switch...
-
                 // If first server response is not yet received, drop frame
-                if (statistics.samples.isEmpty()) {
+                if (stats.isEmpty) {
                     onDrop(it)
                     return@filter false
                 }
 
-                // TODO this maintains a reasonable FPS, but doesn't help as much with latency (which can accumulate)
-
+                // TODO this maintains reasonable FPS, but doesn't help much with latency (which can accumulate)
                 // TODO rate limit upload in a smarter way... maybe subtract ping and check upload? idk
-                val sample = statistics.sample
-                val fpsLimit = Duration.ofMillis((1000 / (statistics.fps * 1.3)).toLong())
+                val sample = stats.sample
+                val fpsLimit = Duration.ofMillis((1000 / stats.fps / 1.3).toLong())
+                // val fpsLimit = stats.sample.total.multipliedBy(7).dividedBy(10)
                 // val networkLimit = minOf(sample.networkWrite, Duration.ofMillis(50))
-                val rateLimit = maxOf(fpsLimit, sample.serverInference)
+                val rateLimit = maxOf(fpsLimit, sample.serverInference, sample.clientInference)
 
                 if (Duration.between(prevFrameTime, Instant.now()) < rateLimit) {
                     onDrop(it)
@@ -201,6 +206,27 @@ class MainActivity : AppCompatActivity() {
             }
     }
 
+    private fun <T> Flowable<FrameRequest<T>>.doOnNextTimed(
+        timeFunc: (ModelStatistics, Int, Instant, Instant) -> Unit,
+        onNext: (FrameRequest<T>) -> Unit
+    ): Flowable<FrameRequest<T>> {
+        return this.doOnNext { x ->
+            val (_, start, end) = timed { onNext(x) }
+            timeFunc(statistics[x.info.modelConfig], x.info.frameNumber, start, end)
+        }
+    }
+
+    private fun <R, T> Flowable<FrameRequest<T>>.mapTimed(
+        timeFunc: (ModelStatistics, Int, Instant, Instant) -> Unit,
+        mapper: (FrameRequest<T>) -> FrameRequest<R>
+    ): Flowable<FrameRequest<R>> {
+        return this.map { x ->
+            val (result, start, end) = timed { mapper(x) }
+            timeFunc(statistics[x.info.modelConfig], x.info.frameNumber, start, end)
+            result
+        }
+    }
+
     companion object {
         private fun <R> timed(
             func: () -> R
@@ -209,27 +235,6 @@ class MainActivity : AppCompatActivity() {
             val result = func()
             val end = Instant.now()
             return Triple(result, start, end)
-        }
-
-        private fun <T> Flowable<FrameRequest<T>>.doOnNextFrameTimed(
-            timeFunc: (Int, Instant, Instant) -> Unit,
-            onNext: (FrameRequest<T>) -> Unit
-        ): Flowable<FrameRequest<T>> {
-            return this.doOnNext { x ->
-                val (_, start, end) = timed { onNext(x) }
-                timeFunc(x.info.frameNumber, start, end)
-            }
-        }
-
-        private fun <R, T> Flowable<FrameRequest<T>>.mapTimed(
-            timeFunc: (Int, Instant, Instant) -> Unit,
-            mapper: (FrameRequest<T>) -> FrameRequest<R>
-        ): Flowable<FrameRequest<R>> {
-            return this.map { x ->
-                val (result, start, end) = timed { mapper(x) }
-                timeFunc(result.info.frameNumber, start, end)
-                result
-            }
         }
     }
 }

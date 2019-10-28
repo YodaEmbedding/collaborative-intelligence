@@ -67,10 +67,11 @@ class StatisticsUiController(
 
     @SuppressLint("SetTextI18n")
     private fun updateTextViews(sample: Sample) {
+        val stats = statistics[sample.frameNumber]
         predictionsText.text = sample.resultResponse!!.predictions.joinToString("\n") {
             "${formatPercentage(it.score)} ${it.description}"
         }
-        fpsText.text = "FPS: ${String.format("%.1f", statistics.fps)}"
+        fpsText.text = "FPS: ${String.format("%.1f", stats.fps)}"
         uploadText.text = "Upload: ${sample.uploadBytes!! / 1024} KB/frame"
         preprocessText.text = "1. Preprocess: ${sample.preprocess.toMillis()} ms"
         clientInferenceText.text =
@@ -80,7 +81,7 @@ class StatisticsUiController(
         serverInferenceText.text = "5. Server infer: ${sample.serverInference.toMillis()} ms"
         networkReadText.text = "6. Network read: ${sample.networkRead.toMillis()} ms"
         totalText.text = "Total: ${sample.total.toMillis()} ms"
-        framesProcessedText.text = "Processed: ${statistics.framesProcessed}"
+        framesProcessedText.text = "Processed: ${stats.framesProcessed}"
     }
 
     private fun updateChart(sample: Sample) {

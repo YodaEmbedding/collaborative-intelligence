@@ -1,10 +1,30 @@
 package com.sicariusnoctis.collaborativeintelligence
 
+import com.google.common.collect.EvictingQueue
 import java.time.Duration
 import java.time.Instant
 import java.util.*
+import kotlin.collections.HashMap
+
+// TODO reduce spaghetti...
 
 class Statistics {
+    private val modelStats = HashMap<ModelConfig, ModelStatistics>()
+
+    operator fun get(modelConfig: ModelConfig): ModelStatistics =
+        modelStats.getOrPut(modelConfig, { ModelStatistics() })
+
+    operator fun get(frameNumber: Int): ModelStatistics = modelStats
+        .filterValues { v -> v.containsKey(frameNumber) }
+        .values
+        .first()
+}
+
+class ModelStatistics {
+    val isEmpty
+        @Synchronized get() = lastNValidSamples.isEmpty()
+    val isFirstExist: Boolean
+        @Synchronized get() = allSamples.size != 0
     var framesDropped = 0
         @Synchronized get
         private set
@@ -13,78 +33,69 @@ class Statistics {
     val fps
         @Synchronized get() = fps()
     val sample: Sample
-        @Synchronized get() = last
-    val samples: List<Sample>
+        @Synchronized get() = lastNValidSamples.last()
+    val samples: Map<Int, Sample>
         @Synchronized get() = validSamples
+    // val samples: List<Sample>
+    //     @Synchronized get() = validSamples.values.toList()
 
-    private val allSamples = Vector<Sample>()
-    private val validSamples = Vector<Sample>()
-    private val first get() = validSamples.firstElement()
-    private val last get() = validSamples.lastElement()
+    private val allSamples = LinkedHashMap<Int, Sample>()
+    private val validSamples = LinkedHashMap<Int, Sample>()
+    private val lastNValidSamples = EvictingQueue.create<Sample>(10)
+
+    @Synchronized
+    operator fun get(frameNumber: Int) = allSamples[frameNumber]!!
+
+    @Synchronized
+    fun containsKey(frameNumber: Int) = allSamples.containsKey(frameNumber)
 
     @Synchronized
     fun frameDropped() {
         framesDropped++
     }
 
-    fun setPreprocess(frameNum: Int, start: Instant, end: Instant) {
-        setPropsDecorator(frameNum) {
-            it.preprocessStart = start
-            it.preprocessEnd = end
-        }
-    }
-
-    fun setInference(frameNum: Int, start: Instant, end: Instant) {
-        setPropsDecorator(frameNum) {
-            it.inferenceStart = start
-            it.inferenceEnd = end
-        }
-    }
-
-    fun setNetworkWrite(frameNum: Int, start: Instant, end: Instant) {
-        setPropsDecorator(frameNum) {
-            it.networkWriteStart = start
-            it.networkWriteEnd = end
-        }
-    }
-
-    fun setNetworkRead(frameNum: Int, start: Instant, end: Instant) {
-        setPropsDecorator(frameNum) {
-            it.networkReadStart = start
-            it.networkReadEnd = end
-        }
-    }
-
-    fun setUpload(frameNum: Int, uploadBytes: Int) {
-        setPropsDecorator(frameNum) {
-            it.uploadBytes = uploadBytes
-        }
-    }
-
-    fun setResultResponse(frameNum: Int, resultResponse: ResultResponse) {
-        setPropsDecorator(frameNum) {
-            it.resultResponse = resultResponse
-        }
-    }
-
-    private fun fps() = 1000.0 * minOf(validSamples.size, 10) / Duration.between(
-        validSamples.elementAt(maxOf(validSamples.size - 10, 0)).preprocessStart,
-        last.networkReadEnd
-    ).toMillis().toDouble()
-
-    private fun resize(size: Int) {
-        val n = size - allSamples.size
-        if (n < 0) return
-        allSamples.addAll(List(n) { Sample() })
+    @Synchronized
+    fun setPreprocess(frameNumber: Int, start: Instant, end: Instant) {
+        allSamples[frameNumber] = Sample()
+        allSamples[frameNumber]!!.preprocessStart = start
+        allSamples[frameNumber]!!.preprocessEnd = end
     }
 
     @Synchronized
-    private fun setPropsDecorator(frameNum: Int, func: (Sample) -> Unit) {
-        resize(frameNum + 1)
-        func(allSamples[frameNum])
-        if (allSamples[frameNum].isValid)
-            validSamples.add(allSamples[frameNum])
+    fun setInference(frameNumber: Int, start: Instant, end: Instant) {
+        allSamples[frameNumber]!!.inferenceStart = start
+        allSamples[frameNumber]!!.inferenceEnd = end
     }
+
+    @Synchronized
+    fun setNetworkWrite(frameNumber: Int, start: Instant, end: Instant) {
+        allSamples[frameNumber]!!.networkWriteStart = start
+        allSamples[frameNumber]!!.networkWriteEnd = end
+    }
+
+    @Synchronized
+    fun setNetworkRead(frameNumber: Int, start: Instant, end: Instant) {
+        allSamples[frameNumber]!!.networkReadStart = start
+        allSamples[frameNumber]!!.networkReadEnd = end
+    }
+
+    @Synchronized
+    fun setUpload(frameNumber: Int, uploadBytes: Int) {
+        allSamples[frameNumber]!!.uploadBytes = uploadBytes
+    }
+
+    @Synchronized
+    fun setResultResponse(frameNumber: Int, resultResponse: ResultResponse) {
+        val sample = allSamples[frameNumber]!!
+        sample.resultResponse = resultResponse
+        validSamples[frameNumber] = sample
+        lastNValidSamples.add(sample)
+    }
+
+    private fun fps() = 1000.0 * lastNValidSamples.size / Duration.between(
+        lastNValidSamples.first().preprocessStart,
+        lastNValidSamples.last().networkReadEnd
+    ).toMillis().toDouble()
 }
 
 data class Sample(
