@@ -146,7 +146,7 @@ class MainActivity : AppCompatActivity() {
             .onBackpressureLimitRate { statistics.frameDropped() }
             .zipWith(Flowable.range(0, Int.MAX_VALUE)) { frame, i ->
                 Log.i(TAG, "zip($i, ${modelUiController.modelConfig})")
-                FrameRequest(frame, i, modelUiController.modelConfig)
+                FrameRequest(frame, FrameRequestInfo(i, modelUiController.modelConfig))
             }
             .subscribeOn(IoScheduler())
             .mapTimed(statistics::setPreprocess) { it.map(postprocessor::process) }
@@ -154,7 +154,7 @@ class MainActivity : AppCompatActivity() {
             .mapTimed(statistics::setInference) { inference.run(this, it) }
             .observeOn(IoScheduler())
             .doOnNextFrameTimed(statistics::setNetworkWrite) { networkAdapter!!.writeFrameRequest(it) }
-            .doOnNext { statistics.setUpload(it.frameNumber, it.obj.size) }
+            .doOnNext { statistics.setUpload(it.info.frameNumber, it.obj.size) }
             .subscribeBy(
                 { it.printStackTrace() },
                 { },
@@ -217,7 +217,7 @@ class MainActivity : AppCompatActivity() {
         ): Flowable<FrameRequest<T>> {
             return this.doOnNext { x ->
                 val (_, start, end) = timed { onNext(x) }
-                timeFunc(x.frameNumber, start, end)
+                timeFunc(x.info.frameNumber, start, end)
             }
         }
 
@@ -227,7 +227,7 @@ class MainActivity : AppCompatActivity() {
         ): Flowable<FrameRequest<R>> {
             return this.map { x ->
                 val (result, start, end) = timed { mapper(x) }
-                timeFunc(result.frameNumber, start, end)
+                timeFunc(result.info.frameNumber, start, end)
                 result
             }
         }

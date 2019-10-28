@@ -29,8 +29,8 @@ class Inference : Closeable {
     }
 
     fun run(context: Context, frameRequest: FrameRequest<ByteArray>): FrameRequest<ByteArray> {
-        if (!::modelConfig.isInitialized || modelConfig != frameRequest.modelConfig) {
-            modelConfig = frameRequest.modelConfig
+        if (!::modelConfig.isInitialized || modelConfig != frameRequest.info.modelConfig) {
+            modelConfig = frameRequest.info.modelConfig
             setTfliteModel(context)
         }
 
@@ -97,9 +97,12 @@ class Inference : Closeable {
 
 data class FrameRequest<T>(
     val obj: T,
+    val info: FrameRequestInfo
+) {
+    inline fun <R> map(func: (T) -> R): FrameRequest<R> = FrameRequest(func(obj), info)
+}
+
+data class FrameRequestInfo(
     val frameNumber: Int,
     val modelConfig: ModelConfig
-) {
-    inline fun <R> map(func: (T) -> R): FrameRequest<R> =
-        FrameRequest(func(obj), frameNumber, modelConfig)
-}
+)

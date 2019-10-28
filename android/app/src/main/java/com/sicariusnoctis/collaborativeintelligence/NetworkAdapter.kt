@@ -52,12 +52,12 @@ class NetworkAdapter {
     }
 
     fun writeFrameRequest(frameRequest: FrameRequest<ByteArray>) {
-        Log.i(TAG, "Request: ${frameRequest.frameNumber}, ${frameRequest.modelConfig}")
-        if (prevModelConfig != frameRequest.modelConfig) {
-            writeModelConfig(frameRequest.modelConfig)
-            prevModelConfig = frameRequest.modelConfig
+        Log.i(TAG, "Request: ${frameRequest.info.frameNumber}, ${frameRequest.info.modelConfig}")
+        if (prevModelConfig != frameRequest.info.modelConfig) {
+            writeModelConfig(frameRequest.info.modelConfig)
+            prevModelConfig = frameRequest.info.modelConfig
         }
-        writeData(frameRequest.frameNumber, frameRequest.obj)
+        writeData(frameRequest.info.frameNumber, frameRequest.obj)
     }
 
     @UseExperimental(UnstableDefault::class)
