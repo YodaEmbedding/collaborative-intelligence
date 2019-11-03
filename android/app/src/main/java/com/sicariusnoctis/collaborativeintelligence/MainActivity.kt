@@ -125,6 +125,8 @@ class MainActivity : AppCompatActivity() {
                         val (result, start, end) = timed { networkAdapter!!.readData() }
                         if (result == null) break
                         val stats = statistics[result.frameNumber]
+                        // TODO does this even make sense?
+                        // TODO Also, have a "ping"/ack return when all data is received
                         stats.setNetworkRead(result.frameNumber, start, end)
                         stats.setResultResponse(result.frameNumber, result)
                         yield(stats.sample)
@@ -146,7 +148,11 @@ class MainActivity : AppCompatActivity() {
         val networkWriteSubscription = frameProcessor
             .subscribeOn(IoScheduler())
             .map { it to modelUiController.modelConfig }
-            .onBackpressureLimitRate { statistics[it.second].frameDropped() }
+            .onBackpressureLimitRate(
+                onDrop = { statistics[it.second].frameDropped() },
+                limit = { shouldProcessFrame(statistics[it.second]) }
+            )
+            .doOnNext { prevFrameTime = Instant.now() }
             .zipWith(Flowable.range(0, Int.MAX_VALUE)) { (frame, modelConfig), i ->
                 FrameRequest(frame, FrameRequestInfo(i, modelConfig))
             }
@@ -156,7 +162,10 @@ class MainActivity : AppCompatActivity() {
             .observeOn(IoScheduler())
             .doOnNextTimed(ModelStatistics::setNetworkWrite) { networkAdapter!!.writeFrameRequest(it) }
             .doOnNext {
-                statistics[it.info.modelConfig].setUpload(it.info.frameNumber, it.obj.size)
+                statistics[it.info.modelConfig].setUpload(
+                    it.info.frameNumber,
+                    it.obj.size
+                )
             }
             .subscribeBy(
                 { it.printStackTrace() },
@@ -167,42 +176,76 @@ class MainActivity : AppCompatActivity() {
         subscriptions = listOf(networkReadSubscription, networkWriteSubscription)
     }
 
+    private fun shouldProcessFrame(stats: ModelStatistics): Boolean {
+        if (!stats.isFirstExist)
+            return true
+
+        // If first server response is not yet received, drop frame
+        if (stats.isEmpty)
+            return false
+
+        // TODO imagine we had the current upload bytes or bandwidth... then what?
+        // maybe use the total upload bytes to subtract from what has currently been sent?
+        // that tells us how much remains in the buffer...
+        // if it's greater than an average frame size, we probably shouldn't send more...
+
+        // val remainingBytes = totalSent - currSent
+        // vs uploadSpeed???? that should roughly predict how much time needed before remaining frame is completely sent... and if that time is "negative", speed up!
+        // remainingBytes
+
+        // but how do we ramp up to "max" capacity? actually, we don't really because we decide using the above candidates whether or not to drop frame...
+        // do we even need to phrase it in terms of "limits", actually?
+        // sort of... because clientInference might take longer than network sometimes.
+
+        // OK, but how to ramp up? Maybe leave a little gap? Or perhaps pre-measure network upload speed (and have user "reset" automatically?) sure
+
+        val sample = stats.sample
+
+        // TODO watch out for encoding time...
+        val t = Duration.between(sample.preprocessStart, sample.inferenceEnd)
+        val extrapolatedBytes = networkAdapter!!.uploadBytesPerSecond * t.toMillis() / 1000
+        val s = "${(networkAdapter!!.uploadBytesPerSecond / 1024).toInt()}KB/s, " +
+                "remaining: ${networkAdapter!!.uploadRemainingBytes}B, " +
+                "uploaded: ${networkAdapter!!.uploadStats.uploadedBytes}, " +
+                "goal: ${networkAdapter!!.uploadStats.goalBytes}"
+                Log.i(TAG, s)
+        if (networkAdapter!!.uploadRemainingBytes > extrapolatedBytes) {
+            Log.i(TAG, "Dropped frame because of slow upload speed!")
+            return false
+        }
+
+        // TODO app-test network bandwidth uploaded accuracy, max bandwidth, see if it ramps correctly, etc
+
+
+        // TODO also, make sure it's app bandwidth (this can be fixed later, though! just use TrafficStats for now)
+
+        // TODO this maintains reasonable FPS, but doesn't help much with latency (which can accumulate)
+        // TODO rate limit upload in a smarter way... maybe subtract ping and check upload? idk
+        // val fpsLimit = Duration.ofMillis((1000 / stats.fps / 1.3).toLong())
+        // val fpsLimit = stats.sample.total.multipliedBy(7).dividedBy(10)
+        // val networkLimit = minOf(sample.networkWrite, Duration.ofMillis(50))
+        // TODO watch out for encoding time...
+        val rateLimit = maxOf(sample.serverInference, sample.clientInference)
+
+        return Duration.between(prevFrameTime, Instant.now()) >= rateLimit
+    }
+
     // TODO nullify prevFrameTime onModelConfigChanged? (for smoother transition)
     // TODO immediately send onModelConfigChanged request to server, instead of waiting for response?
     // no, because server doesn't cancel inferences... yet
-    private fun Flowable<Pair<Frame, ModelConfig>>.onBackpressureLimitRate(
-        onDrop: (Pair<Frame, ModelConfig>) -> Unit
-    ): Flowable<Pair<Frame, ModelConfig>> {
+    private fun <T> Flowable<T>.onBackpressureLimitRate(
+        onDrop: (T) -> Unit,
+        limit: (T) -> Boolean
+    ): Flowable<T> {
         return this
-            .onBackpressureDrop(onDrop)
+            // .onBackpressureDrop(onDrop)
             .filter {
-                val stats = statistics[it.second]
-
-                if (!stats.isFirstExist)
-                    return@filter true
-
-                // If first server response is not yet received, drop frame
-                if (stats.isEmpty) {
+                if (limit(it)) {
+                    true
+                } else {
                     onDrop(it)
-                    return@filter false
+                    false
                 }
-
-                // TODO this maintains reasonable FPS, but doesn't help much with latency (which can accumulate)
-                // TODO rate limit upload in a smarter way... maybe subtract ping and check upload? idk
-                val sample = stats.sample
-                val fpsLimit = Duration.ofMillis((1000 / stats.fps / 1.3).toLong())
-                // val fpsLimit = stats.sample.total.multipliedBy(7).dividedBy(10)
-                // val networkLimit = minOf(sample.networkWrite, Duration.ofMillis(50))
-                val rateLimit = maxOf(fpsLimit, sample.serverInference, sample.clientInference)
-
-                if (Duration.between(prevFrameTime, Instant.now()) < rateLimit) {
-                    onDrop(it)
-                    return@filter false
-                }
-
-                true
-            }.doOnNext {
-                prevFrameTime = Instant.now()
             }
     }
 

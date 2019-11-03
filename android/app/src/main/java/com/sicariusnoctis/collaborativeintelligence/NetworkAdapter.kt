@@ -1,6 +1,11 @@
 package com.sicariusnoctis.collaborativeintelligence
 
+import android.net.TrafficStats
 import android.util.Log
+import com.facebook.network.connectionclass.ConnectionClassManager
+import io.reactivex.Observable
+import io.reactivex.disposables.CompositeDisposable
+import io.reactivex.internal.schedulers.IoScheduler
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UnstableDefault
 import kotlinx.serialization.json.Json
@@ -9,6 +14,10 @@ import java.io.BufferedReader
 import java.io.DataOutputStream
 import java.io.InputStreamReader
 import java.net.Socket
+import java.time.Duration
+import java.time.Instant
+import java.util.concurrent.TimeUnit
+import kotlin.reflect.jvm.javaConstructor
 
 class NetworkAdapter {
     private val TAG = NetworkAdapter::class.qualifiedName
@@ -17,10 +26,16 @@ class NetworkAdapter {
     private var outputStream: DataOutputStream? = null
     private var socket: Socket? = null
     private var prevModelConfig: ModelConfig? = null
+    lateinit var uploadStats: UploadStats
+
+    val uploadBytesPerSecond get() = uploadStats.bytesPerSecond
+    val uploadRemainingBytes get() = uploadStats.remainingBytes
 
     fun connect() {
         val HOSTNAME = HOSTNAME
         socket = Socket(HOSTNAME, 5678)
+        // Ensure write+flush turns into a packet by disabling Nagle
+        socket!!.tcpNoDelay = true
 
         // TODO BufferedInputStream for byte data?
         // https://stackoverflow.com/questions/15538509/dealing-with-end-of-file-using-bufferedreader-read
@@ -49,6 +64,7 @@ class NetworkAdapter {
             write(data)
             flush()
         }
+        uploadStats.addBytes(6 + 4 + 4 + data.size)
     }
 
     fun writeFrameRequest(frameRequest: FrameRequest<ByteArray>) {
@@ -68,7 +84,69 @@ class NetworkAdapter {
             writeBytes("$jsonString\n")
             flush()
         }
+        // TODO wait until all traffic is flushed?
+        switchModel()
     }
+
+    private fun switchModel() {
+        if (::uploadStats.isInitialized)
+            uploadStats.dispose()
+        uploadStats = UploadStats()
+    }
+}
+
+class UploadStats {
+    private val connectionClassManager: ConnectionClassManager
+    private val compositeDisposable = CompositeDisposable()
+    private var prevSampleTime: Instant? = null
+    private var prevSampleBytes: Long = -1
+    private var startBytes: Long = -1
+    var goalBytes: Long = 0; private set
+
+    val bytesPerSecond @Synchronized get() = 1000 * connectionClassManager.downloadKBitsPerSecond / 8
+    val uploadedBytes get() = bytes() - startBytes
+    val remainingBytes get() = goalBytes - uploadedBytes
+
+    init {
+        val constructor = ConnectionClassManager::class.constructors.first()
+        constructor.javaConstructor!!.isAccessible = true
+        connectionClassManager = constructor.javaConstructor!!.newInstance()
+        start()
+    }
+
+    fun dispose() = compositeDisposable.dispose()
+
+    fun addBytes(count: Int) {
+        goalBytes += count
+    }
+
+    private fun start() {
+        val disposable = Observable
+            .interval(0, 50, TimeUnit.MILLISECONDS)
+            .doOnNext {
+                val now = Instant.now()
+                val bytes = bytes()
+
+                if (startBytes == -1L) {
+                    startBytes = bytes
+                }
+                else {
+                    val byteDiff = bytes - prevSampleBytes
+                    val timeDiff = Duration.between(prevSampleTime, now)
+                    synchronized(this) {
+                        connectionClassManager.addBandwidth(byteDiff, timeDiff.toMillis())
+                    }
+                }
+
+                prevSampleTime = now
+                prevSampleBytes = bytes
+            }
+            .subscribeOn(IoScheduler())
+            .subscribe()
+        compositeDisposable.add(disposable)
+    }
+
+    private fun bytes() = TrafficStats.getTotalTxBytes()
 }
 
 @Serializable
