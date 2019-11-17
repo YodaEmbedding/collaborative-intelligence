@@ -104,17 +104,19 @@ class ModelManager:
 
     def acquire(self, model_config: ModelConfig):
         if model_config not in self.models:
-            print(f"Loaded model {model_config}")
+            print(f"Loading model {model_config}")
             model = self._load_model(model_config)
             self.models[model_config] = ModelReference(0, model)
+            print(f"Loaded model {model_config}")
         self.models[model_config].ref_count += 1
 
     def release(self, model_config: ModelConfig):
         self.models[model_config].ref_count -= 1
         if self.models[model_config].ref_count == 0:
+            print(f"Releasing model {model_config}")
+            # del self.models[model_config].model
+            # del self.models[model_config]
             print(f"Released model {model_config}")
-            del self.models[model_config].model
-            del self.models[model_config]
 
     # @synchronized
     def predict(
@@ -135,7 +137,7 @@ class ModelManager:
         model_name = model_config.model
         if model_config.layer == "server":
             return keras.models.load_model(
-                filepath=f"../tools/{model_name}/{model_name}-full.h5",
+                filepath=f"../tools/{model_name}/{model_name}-full.h5"
             )
         decoder = model_config.decoder
         custom_objects = {}
@@ -284,13 +286,13 @@ async def read_tensor_frame(
     reader: StreamReader,
 ) -> Awaitable[Tuple[int, ByteString]]:
     frame_number = await read_int(reader)
-    print(frame_number)
+    # print(frame_number)
     # await read_eol(reader)
     data_len = await read_int(reader)
-    print(data_len)
+    # print(data_len)
     # await read_eol(reader)
     data = await reader.readexactly(data_len)
-    print(str_preview(data))
+    # print(str_preview(data))
     # await read_eol(reader)
     return frame_number, data
 
@@ -302,7 +304,7 @@ async def read_json(reader: StreamReader) -> Awaitable[dict]:
 # TODO form protocol on json and binary data
 async def read_item(reader: StreamReader) -> Awaitable[Tuple[str, Any]]:
     input_type = (await reader.readline()).decode("utf8").rstrip("\n")
-    print(input_type)
+    # print(input_type)
     if len(input_type) == 0:
         return "terminate", None
     reader_func = {"frame": read_tensor_frame, "json": read_json}[input_type]
@@ -315,9 +317,8 @@ async def produce(reader: StreamReader, putter):
     try:
         while True:
             input_type, item = await read_item(reader)
-            print(
-                f"Produce: {input_type}, {str_preview(str(item).encode('utf8'))}"
-            )
+            # s = f"Produce: {input_type}, {str_preview(str(item).encode('utf8'))}"
+            # print(s)
             if input_type == "terminate":
                 break
             # TODO instead of always passing model_config, why not make class?
@@ -343,12 +344,14 @@ async def produce(reader: StreamReader, putter):
 
 async def consume(writer: StreamWriter, getter):
     try:
-        while True:
+        for i in count():
             item = await getter()
             if item is None:
                 break
-            print("Consume:")
-            print(json.dumps(json.loads(item.decode("utf8")), indent=4))
+            item_d = json.loads(item.decode("utf8"))
+            print(f"Consume {i}: {item_d['frameNumber']}")
+            # print(json.dumps(item_d, indent=4))
+            # TODO is this correct? await drain?
             writer.write(item)
             await writer.drain()
     # TODO what does close even do? do we need the finally?
