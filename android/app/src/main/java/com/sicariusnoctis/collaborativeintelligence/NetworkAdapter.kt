@@ -6,10 +6,13 @@ import com.facebook.network.connectionclass.ConnectionClassManager
 import io.reactivex.Observable
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.internal.schedulers.IoScheduler
+import kotlinx.serialization.PolymorphicSerializer
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UnstableDefault
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.modules.SerializersModule
 import java.io.BufferedReader
 import java.io.DataOutputStream
 import java.io.InputStreamReader
@@ -27,6 +30,14 @@ class NetworkAdapter {
     private var socket: Socket? = null
     private var prevModelConfig: ModelConfig? = null
     lateinit var uploadStats: UploadStats
+    private val jsonSerializer = Json(
+        context = SerializersModule {
+            polymorphic<Response> {
+                ResultResponse::class with ResultResponse.serializer()
+                ConfirmationResponse::class with ConfirmationResponse.serializer()
+            }
+        }
+    )
 
     val uploadBytesPerSecond get() = uploadStats.bytesPerSecond
     val uploadRemainingBytes get() = uploadStats.remainingBytes
@@ -50,13 +61,24 @@ class NetworkAdapter {
         outputStream = null
     }
 
-    @UseExperimental(UnstableDefault::class)
-    fun readData(): ResultResponse? {
+    private fun readResponse(): Response? {
         val msg = inputStream!!.readLine() ?: return null
-        return Json.parse(ResultResponse.serializer(), msg)
+        Log.i(TAG, "Receive: $msg")
+        return jsonSerializer.parse(PolymorphicSerializer(Response::class), msg) as Response
     }
 
-    fun writeData(frameNumber: Int, data: ByteArray) {
+    @UseExperimental(UnstableDefault::class)
+    fun readResultResponse(): ResultResponse? {
+        var response: Response
+        // TODO
+        do {
+            response = readResponse() ?: return null
+        }
+        while (response !is ResultResponse)
+        return response
+    }
+
+    private fun writeData(frameNumber: Int, data: ByteArray) {
         with(outputStream!!) {
             writeBytes("frame\n")
             writeInt(frameNumber)
@@ -153,13 +175,24 @@ class UploadStats {
 data class Prediction(val name: String, val description: String, val score: Float)
 
 @Serializable
+open class Response
+
+@Serializable
+@SerialName("confirmation")
+data class ConfirmationResponse(
+    val frameNumber: Int
+    // val status: String
+) : Response()
+
+@Serializable
+@SerialName("result")
 data class ResultResponse(
     val frameNumber: Int,
     // val readTime: Long,
     // val feedTime: Long,
     val inferenceTime: Long,
     val predictions: List<Prediction>
-)
+) : Response()
 
 @Serializable
 data class ModelConfig(

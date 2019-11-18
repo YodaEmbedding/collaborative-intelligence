@@ -122,7 +122,7 @@ class MainActivity : AppCompatActivity() {
                     // TODO Wait until thread is alive using CountDownLatch?
                     // TODO thread.isAlive()? socket.isOpen? volatile boolean flag?
                     while (true) {
-                        val (result, start, end) = timed { networkAdapter!!.readData() }
+                        val (result, start, end) = timed { networkAdapter!!.readResultResponse() }
                         if (result == null) break
                         val stats = statistics[result.frameNumber]
                         // TODO does this even make sense?
