@@ -99,6 +99,11 @@ class ModelReference:
 
 
 class ModelManager:
+    """Manages TensorFlow models.
+
+    Holds model references, loads, releases, and runs predictions.
+    """
+
     def __init__(self):
         self.models: Dict[ModelConfig, ModelReference] = {}
 
@@ -154,14 +159,19 @@ T = TypeVar("T")
 
 
 class WorkDistributor(Generic[T, R]):
-    """Process async items synchronously."""
+    """Process async items synchronously.
 
-    _queue: janus.Queue
+    Queues asynchronous requests for synchronous processing. Once
+    processor is ready, it reads item from request queue, then puts the
+    result into the result queue.
+    """
+
+    _requests: janus.Queue
     _results: Dict[int, janus.Queue]
 
     def __init__(self):
         self._guid = 0
-        self._queue = janus.Queue()
+        self._requests = janus.Queue()
         self._results = {}
 
     def register(self):
@@ -176,7 +186,7 @@ class WorkDistributor(Generic[T, R]):
         self._results[guid] = janus.Queue()
 
         async def put_request(item: T):
-            await self._queue.async_q.put((guid, item))
+            await self._requests.async_q.put((guid, item))
 
         async def get_result() -> Awaitable[R]:
             return await self._results[guid].async_q.get()
@@ -184,28 +194,28 @@ class WorkDistributor(Generic[T, R]):
         return put_request, get_result
 
     def get(self) -> Tuple[int, T]:
-        """Synchronously retrieve item for processing."""
-        return self._queue.sync_q.get()
+        """Synchronously retrieve request for processing."""
+        return self._requests.sync_q.get()
 
     def get_many(
         self, min_items=1, max_items=None
     ) -> Generator[Tuple[int, T], None, None]:
-        """Synchronously retrieve items for processing.
+        """Synchronously retrieve requests for processing.
 
-        Retrieve at least min_items, blocking if necessary.
-        Retreive up to max_items if possible without blocking.
+        Retrieve at least min_items, blocking if necessary. Retreive up
+        to max_items if possible without blocking.
         """
         for _ in range(min_items):
             yield self.get()
         it = count() if max_items is None else range(max_items - min_items)
         for _ in it:
-            if self._queue.sync_q.empty():
+            if self._requests.sync_q.empty():
                 break
             yield self.get()
 
     def empty(self) -> bool:
         """Check if process queue is empty."""
-        return self._queue.sync_q.empty()
+        return self._requests.sync_q.empty()
 
     def put(self, guid: int, item: R):
         """Synchronously push processed result."""
@@ -243,6 +253,7 @@ class SmartProcessor(Generic[T, R]):
 
 # TODO Propogate exceptions back to client?
 def processor(work_distributor: WorkDistributor):
+    """Process work items received from work distributor."""
     model_manager = ModelManager()
     smart_processor = SmartProcessor(work_distributor)
 
@@ -303,6 +314,7 @@ async def read_json(reader: StreamReader) -> Awaitable[dict]:
 
 # TODO form protocol on json and binary data
 async def read_item(reader: StreamReader) -> Awaitable[Tuple[str, Any]]:
+    """Retrieve single item of various types from stream."""
     input_type = (await reader.readline()).decode("utf8").rstrip("\n")
     # print(input_type)
     if len(input_type) == 0:
@@ -312,6 +324,7 @@ async def read_item(reader: StreamReader) -> Awaitable[Tuple[str, Any]]:
 
 
 async def produce(reader: StreamReader, putter):
+    """Reads from socket, and pushes requests to processor."""
     model_config: ModelConfig = None
 
     try:
@@ -343,6 +356,7 @@ async def produce(reader: StreamReader, putter):
 
 
 async def consume(writer: StreamWriter, getter):
+    """Receives items and writes them to socket."""
     try:
         for i in count():
             item = await getter()
