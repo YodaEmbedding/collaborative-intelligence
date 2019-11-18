@@ -93,8 +93,14 @@ def json_result(
     )
 
 
-def json_confirmation(frame_number: int) -> str:
-    return json.dumps({"type": "confirmation", "frameNumber": frame_number})
+def json_confirmation(frame_number: int, num_bytes: int) -> str:
+    return json.dumps(
+        {
+            "type": "confirmation",
+            "frameNumber": frame_number,
+            "numBytes": num_bytes,
+        }
+    )
 
 
 @dataclass
@@ -275,7 +281,9 @@ def processor(work_distributor: WorkDistributor):
                 model_manager.release(model_config)
             elif request_type == "predict":
                 frame_number, data = item
-                confirmation = json_confirmation(frame_number=frame_number)
+                confirmation = json_confirmation(
+                    frame_number=frame_number, num_bytes=len(data)
+                )
                 confirmation = f"{confirmation}\n".encode("utf8")
                 work_distributor.put(guid, confirmation)
                 t0 = time.time()
