@@ -203,16 +203,20 @@ class MainActivity : AppCompatActivity() {
 
         // TODO watch out for encoding time...
         val t = Duration.between(sample.preprocessStart, sample.inferenceEnd)
-        val extrapolatedBytes = networkAdapter!!.uploadBytesPerSecond * t.toMillis() / 1000
-        val s = "${(networkAdapter!!.uploadBytesPerSecond / 1024).toInt()}KB/s, " +
-                "remaining: ${networkAdapter!!.uploadRemainingBytes}B, " +
-                "uploaded: ${networkAdapter!!.uploadStats.uploadedBytes}, " +
-                "goal: ${networkAdapter!!.uploadStats.goalBytes}"
-                Log.i(TAG, s)
-        if (networkAdapter!!.uploadRemainingBytes > extrapolatedBytes) {
+        if (networkAdapter!!.timeUntilWriteAvailable > t) {
             Log.i(TAG, "Dropped frame because of slow upload speed!")
             return false
         }
+        // val extrapolatedBytes = networkAdapter!!.uploadBytesPerSecond * t.toMillis() / 1000
+        // val s = "${(networkAdapter!!.uploadBytesPerSecond / 1024).toInt()}KB/s, " +
+        //         "remaining: ${networkAdapter!!.uploadRemainingBytes}B, " +
+        //         "uploaded: ${networkAdapter!!.uploadStats.uploadedBytes}, " +
+        //         "goal: ${networkAdapter!!.uploadStats.goalBytes}"
+        //         Log.i(TAG, s)
+        // if (networkAdapter!!.uploadRemainingBytes > extrapolatedBytes) {
+        //     Log.i(TAG, "Dropped frame because of slow upload speed!")
+        //     return false
+        // }
 
         // TODO app-test network bandwidth uploaded accuracy, max bandwidth, see if it ramps correctly, etc
 

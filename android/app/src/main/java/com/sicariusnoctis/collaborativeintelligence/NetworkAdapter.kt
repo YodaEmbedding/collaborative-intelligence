@@ -1,11 +1,6 @@
 package com.sicariusnoctis.collaborativeintelligence
 
-import android.net.TrafficStats
 import android.util.Log
-import com.facebook.network.connectionclass.ConnectionClassManager
-import io.reactivex.Observable
-import io.reactivex.disposables.CompositeDisposable
-import io.reactivex.internal.schedulers.IoScheduler
 import kotlinx.serialization.PolymorphicSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -19,17 +14,16 @@ import java.io.InputStreamReader
 import java.net.Socket
 import java.time.Duration
 import java.time.Instant
-import java.util.concurrent.TimeUnit
-import kotlin.reflect.jvm.javaConstructor
+import java.util.*
 
 class NetworkAdapter {
     private val TAG = NetworkAdapter::class.qualifiedName
 
+    private val frameHeaderSize = 6 + 4 + 4
     private var inputStream: BufferedReader? = null
     private var outputStream: DataOutputStream? = null
     private var socket: Socket? = null
     private var prevModelConfig: ModelConfig? = null
-    lateinit var uploadStats: UploadStats
     private val jsonSerializer = Json(
         context = SerializersModule {
             polymorphic<Response> {
@@ -39,8 +33,8 @@ class NetworkAdapter {
         }
     )
 
-    val uploadBytesPerSecond get() = uploadStats.bytesPerSecond
-    val uploadRemainingBytes get() = uploadStats.remainingBytes
+    lateinit var uploadStats: UploadStats
+    val timeUntilWriteAvailable get() = uploadStats.timeUntilAvailable
 
     fun connect() {
         val HOSTNAME = HOSTNAME
@@ -67,18 +61,18 @@ class NetworkAdapter {
         return jsonSerializer.parse(PolymorphicSerializer(Response::class), msg) as Response
     }
 
-    @UseExperimental(UnstableDefault::class)
     fun readResultResponse(): ResultResponse? {
-        var response: Response
-        // TODO
-        do {
-            response = readResponse() ?: return null
+        while (true) {
+            val response = readResponse() ?: return null
+            if (response is ConfirmationResponse)
+                uploadStats.confirmBytes(response.frameNumber, frameHeaderSize + response.numBytes)
+            else if (response is ResultResponse)
+                return response
         }
-        while (response !is ResultResponse)
-        return response
     }
 
     private fun writeData(frameNumber: Int, data: ByteArray) {
+        uploadStats.sendBytes(frameNumber, frameHeaderSize + data.size)
         with(outputStream!!) {
             writeBytes("frame\n")
             writeInt(frameNumber)
@@ -86,7 +80,6 @@ class NetworkAdapter {
             write(data)
             flush()
         }
-        uploadStats.addBytes(6 + 4 + 4 + data.size)
     }
 
     fun writeFrameRequest(frameRequest: FrameRequest<ByteArray>) {
@@ -101,6 +94,7 @@ class NetworkAdapter {
     @UseExperimental(UnstableDefault::class)
     fun writeModelConfig(modelConfig: ModelConfig) {
         val jsonString = Json.stringify(ModelConfig.serializer(), modelConfig)
+        // uploadStats.sendBytes(frameNumber, 6 + jsonString.length)
         with(outputStream!!) {
             writeBytes("json\n")
             writeBytes("$jsonString\n")
@@ -111,64 +105,51 @@ class NetworkAdapter {
     }
 
     private fun switchModel() {
-        if (::uploadStats.isInitialized)
-            uploadStats.dispose()
         uploadStats = UploadStats()
     }
 }
 
 class UploadStats {
-    private val connectionClassManager: ConnectionClassManager
-    private val compositeDisposable = CompositeDisposable()
-    private var prevSampleTime: Instant? = null
-    private var prevSampleBytes: Long = -1
-    private var startBytes: Long = -1
-    var goalBytes: Long = 0; private set
+    private var goalBytes: Long = 0
+    private var confirmedBytes: Long = 0
+    private val samples = LinkedHashMap<Int, Sample>()
+    private lateinit var lastSentSample: Sample
+    private lateinit var lastConfirmedSample: Sample
 
-    val bytesPerSecond @Synchronized get() = 1000 * connectionClassManager.downloadKBitsPerSecond / 8
-    val uploadedBytes get() = bytes() - startBytes
-    val remainingBytes get() = goalBytes - uploadedBytes
+    // TODO exponential geometric average may be more accurate
+    // TODO though confirmation may not be received after long time, bytesPerSecond remains same...
+    // TODO subtract ping? or is that only for first frame? nah for all frames
+    val bytesPerSecond
+        @Synchronized get() = 1000.0 * lastConfirmedSample.bytes / Duration.between(
+            lastConfirmedSample.timeStart,
+            lastConfirmedSample.timeEnd
+        ).toMillis()
+    val remainingBytes @Synchronized get() = goalBytes - confirmedBytes
+    val timeUntilAvailable: Duration
+        @Synchronized get() {
+            val elapsed = Duration.between(lastSentSample.timeStart, Instant.now())
+            val expected = Duration.ofMillis((1000 * remainingBytes / bytesPerSecond).toLong())
+            return expected - elapsed
+        }
 
-    init {
-        val constructor = ConnectionClassManager::class.constructors.first()
-        constructor.javaConstructor!!.isAccessible = true
-        connectionClassManager = constructor.javaConstructor!!.newInstance()
-        start()
-    }
-
-    fun dispose() = compositeDisposable.dispose()
-
-    fun addBytes(count: Int) {
+    @Synchronized
+    fun sendBytes(frameNumber: Int, count: Int) {
         goalBytes += count
+        samples[frameNumber] = Sample(Instant.now(), null, count.toLong())
+        lastSentSample = samples[frameNumber]!!
     }
 
-    private fun start() {
-        val disposable = Observable
-            .interval(0, 50, TimeUnit.MILLISECONDS)
-            .doOnNext {
-                val now = Instant.now()
-                val bytes = bytes()
-
-                if (startBytes == -1L) {
-                    startBytes = bytes
-                }
-                else {
-                    val byteDiff = bytes - prevSampleBytes
-                    val timeDiff = Duration.between(prevSampleTime, now)
-                    synchronized(this) {
-                        connectionClassManager.addBandwidth(byteDiff, timeDiff.toMillis())
-                    }
-                }
-
-                prevSampleTime = now
-                prevSampleBytes = bytes
-            }
-            .subscribeOn(IoScheduler())
-            .subscribe()
-        compositeDisposable.add(disposable)
+    @Synchronized
+    fun confirmBytes(frameNumber: Int, count: Int) {
+        confirmedBytes += count
+        val sample = samples[frameNumber]!!
+        sample.timeEnd = Instant.now()
+        if (sample.bytes != count.toLong())
+            throw Exception("Confirmed bytes ($count) less than were sent (${sample.bytes})")
+        lastConfirmedSample = sample
     }
 
-    private fun bytes() = TrafficStats.getTotalTxBytes()
+    private data class Sample(var timeStart: Instant, var timeEnd: Instant?, var bytes: Long)
 }
 
 @Serializable
@@ -180,8 +161,8 @@ open class Response
 @Serializable
 @SerialName("confirmation")
 data class ConfirmationResponse(
-    val frameNumber: Int
-    // val status: String
+    val frameNumber: Int,
+    val numBytes: Int
 ) : Response()
 
 @Serializable
