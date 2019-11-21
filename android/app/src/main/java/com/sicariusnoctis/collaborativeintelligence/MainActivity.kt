@@ -11,14 +11,13 @@ import io.reactivex.Flowable
 import io.reactivex.Scheduler
 import io.reactivex.Single
 import io.reactivex.android.schedulers.AndroidSchedulers
-import io.reactivex.disposables.Disposable
+import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.internal.schedulers.IoScheduler
 import io.reactivex.processors.PublishProcessor
 import io.reactivex.rxkotlin.subscribeBy
 import io.reactivex.rxkotlin.zipWith
 import io.reactivex.schedulers.Schedulers
 import kotlinx.android.synthetic.main.activity_main.*
-import kotlinx.serialization.ImplicitReflectionSerializer
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ExecutorService
@@ -35,11 +34,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var rs: RenderScript
     private lateinit var modelUiController: ModelUiController
     private lateinit var statisticsUiController: StatisticsUiController
-    private val frameProcessor: PublishProcessor<Frame> = PublishProcessor.create()
     private var networkAdapter: NetworkAdapter? = null
-    private val statistics = Statistics()
-    private var subscriptions = listOf<Disposable>()
     private var prevFrameTime: Instant? = null
+    private val frameProcessor: PublishProcessor<Frame> = PublishProcessor.create()
+    private val statistics = Statistics()
+    private val subscriptions = CompositeDisposable()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,7 +70,7 @@ class MainActivity : AppCompatActivity() {
         inferenceScheduler = Schedulers.from(inferenceExecutor)
         inferenceExecutor.submit { inference = Inference() }
         networkAdapter = NetworkAdapter()
-        connectNetworkAdapter()
+        subscribeNetworkAdapter()
     }
 
     override fun onStop() {
@@ -84,7 +83,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        subscriptions.forEach { x -> x.dispose() }
+        subscriptions.dispose()
         super.onDestroy()
     }
 
@@ -104,77 +103,71 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    private fun connectNetworkAdapter() {
-        Single.just(networkAdapter!!)
-            .subscribeOn(IoScheduler())
-            .doOnSuccess { it.connect() }
-            .subscribeBy(
-                { it.printStackTrace() },
-                { subscribeNetworkIo() }
-            )
-    }
+    private fun subscribeNetworkAdapter() = Single
+        .just(networkAdapter!!)
+        .subscribeOn(IoScheduler())
+        .doOnSuccess { it.connect() }
+        .doOnSuccess { subscribeNetworkIo() }
+        .subscribeBy({ it.printStackTrace() })
 
-    @UseExperimental(ImplicitReflectionSerializer::class)
+    // TODO Prevent duplicate subscriptions! (e.g. if onStart called multiple times); unsubscribe?
+    // TODO .onTerminateDetach()
     private fun subscribeNetworkIo() {
-        val networkReadSubscription = Flowable
-            .fromIterable(Iterable {
-                iterator {
-                    // TODO Wait until thread is alive using CountDownLatch?
-                    // TODO thread.isAlive()? socket.isOpen? volatile boolean flag?
-                    while (true) {
-                        val (result, start, end) = timed { networkAdapter!!.readResultResponse() }
-                        if (result == null) break
-                        val stats = statistics[result.frameNumber]
-                        // TODO does this even make sense?
-                        // TODO Also, have a "ping"/ack return when all data is received
-                        stats.setNetworkRead(result.frameNumber, start, end)
-                        stats.setResultResponse(result.frameNumber, result)
-                        yield(stats.sample)
-                    }
-                }
-            })
-            .subscribeOn(IoScheduler())
-            .observeOn(AndroidSchedulers.mainThread())
-            .doOnNext { Log.i(TAG, "Finished processing frame ${it.frameNumber}") }
-            .subscribeBy(
-                { it.printStackTrace() },
-                { },
-                { sample -> statisticsUiController.addSample(sample) }
-            )
-
-        // TODO Reduce requests if connection speed is not fast enough? (Backpressure here too!!!!!)
-        // TODO Prevent duplicate subscriptions! (e.g. if onStart called multiple times); unsubscribe?
-        // TODO .onTerminateDetach()
-        val networkWriteSubscription = frameProcessor
-            .subscribeOn(IoScheduler())
-            .map { it to modelUiController.modelConfig }
-            .onBackpressureLimitRate(
-                onDrop = { statistics[it.second].frameDropped() },
-                limit = { shouldProcessFrame(statistics[it.second]) }
-            )
-            .doOnNext { prevFrameTime = Instant.now() }
-            .zipWith(Flowable.range(0, Int.MAX_VALUE)) { (frame, modelConfig), i ->
-                FrameRequest(frame, FrameRequestInfo(i, modelConfig))
-            }
-            .mapTimed(ModelStatistics::setPreprocess) { it.map(postprocessor::process) }
-            .observeOn(inferenceScheduler, false, 1)
-            .mapTimed(ModelStatistics::setInference) { inference.run(this, it) }
-            .observeOn(IoScheduler())
-            .doOnNextTimed(ModelStatistics::setNetworkWrite) { networkAdapter!!.writeFrameRequest(it) }
-            .doOnNext {
-                statistics[it.info.modelConfig].setUpload(
-                    it.info.frameNumber,
-                    it.obj.size
-                )
-            }
-            .subscribeBy(
-                { it.printStackTrace() },
-                { },
-                { }
-            )
-
-        subscriptions = listOf(networkReadSubscription, networkWriteSubscription)
+        subscriptions.addAll(subscribeNetworkRead(), subscribeNetworkWrite())
     }
+
+    private fun subscribeNetworkRead() = Flowable
+        .fromIterable(Iterable {
+            iterator {
+                // TODO Wait until thread is alive using CountDownLatch?
+                // TODO thread.isAlive()? socket.isOpen? volatile boolean flag?
+                while (true) {
+                    val (result, start, end) = timed { networkAdapter!!.readResultResponse() }
+                    if (result == null) break
+                    val stats = statistics[result.frameNumber]
+                    // TODO does this even make sense?
+                    // TODO Also, have a "ping"/ack return when all data is received
+                    stats.setNetworkRead(result.frameNumber, start, end)
+                    stats.setResultResponse(result.frameNumber, result)
+                    yield(stats.sample)
+                }
+            }
+        })
+        .subscribeOn(IoScheduler())
+        .observeOn(AndroidSchedulers.mainThread())
+        .doOnNext { Log.i(TAG, "Finished processing frame ${it.frameNumber}") }
+        .subscribeBy(
+            { it.printStackTrace() },
+            { },
+            { sample -> statisticsUiController.addSample(sample) }
+        )
+
+    // TODO Reduce requests if connection speed is not fast enough? (Backpressure here too!!!!!)
+    private fun subscribeNetworkWrite() = frameProcessor
+        .subscribeOn(IoScheduler())
+        .map { it to modelUiController.modelConfig }
+        .onBackpressureLimitRate(
+            onDrop = { statistics[it.second].frameDropped() },
+            limit = { shouldProcessFrame(statistics[it.second]) }
+        )
+        .doOnNext { prevFrameTime = Instant.now() }
+        .zipWith(Flowable.range(0, Int.MAX_VALUE)) { (frame, modelConfig), i ->
+            FrameRequest(frame, FrameRequestInfo(i, modelConfig))
+        }
+        .mapTimed(ModelStatistics::setPreprocess) { it.map(postprocessor::process) }
+        .observeOn(inferenceScheduler, false, 1)
+        .mapTimed(ModelStatistics::setInference) { inference.run(this, it) }
+        .observeOn(IoScheduler())
+        .doOnNextTimed(ModelStatistics::setNetworkWrite) { networkAdapter!!.writeFrameRequest(it) }
+        .doOnNext {
+            statistics[it.info.modelConfig].setUpload(
+                it.info.frameNumber,
+                it.obj.size
+            )
+        }
+        .subscribeBy(
+            { it.printStackTrace() }
+        )
 
     private fun shouldProcessFrame(stats: ModelStatistics): Boolean {
         if (!stats.isFirstExist)
@@ -219,7 +212,6 @@ class MainActivity : AppCompatActivity() {
         // }
 
         // TODO app-test network bandwidth uploaded accuracy, max bandwidth, see if it ramps correctly, etc
-
 
         // TODO also, make sure it's app bandwidth (this can be fixed later, though! just use TrafficStats for now)
 

@@ -106,6 +106,7 @@ class NetworkAdapter {
 
     private fun switchModel() {
         uploadStats = UploadStats()
+        // TODO maybe send ping here?
     }
 }
 
