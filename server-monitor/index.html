@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Server Monitor</title>
+    <head>
+      <link rel="stylesheet" href="./style.css" />
+    </head>
+  </head>
+  <body>
+    <h1>Server Monitor</h1>
+
+    Frame number:
+    <span id="frameNumber"></span>
+    <br />
+
+    Inference time:
+    <span id="inferenceTime"></span>
+    <br />
+
+    Predictions:
+    <span id="predictions"></span>
+    <br />
+
+    Data preview:
+    <span id="dataPreview"></span>
+    <br />
+
+    Monitor stats raw:
+    <span id="monitorStatsRaw"></span>
+    <br />
+
+    Statistics raw:
+    <span id="statisticsRaw"></span>
+    <br />
+
+    <input type="text" id="text" />
+    <button id="send">Send</button>
+
+    <script src="./dist/renderer.js"></script>
+  </body>
+</html>

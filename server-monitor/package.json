@@ -1,0 +1,23 @@
+{
+  "name": "server-monitor",
+  "version": "1.0.0",
+  "author": "Mateen Ulhaq",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "lint": "tslint -c tslint.json -p tsconfig.json",
+    "start": "npm run build && electron ./dist/main.js"
+  },
+  "devDependencies": {
+    "electron": "7.1.2",
+    "source-map-support": "^0.5.16",
+    "typescript": "3.7.2"
+  },
+  "dependencies": {
+    "@types/split2": "^2.1.6",
+    "@types/through2": "^2.0.34",
+    "split2": "^3.1.1",
+    "through2": "^3.0.1"
+  }
+}
