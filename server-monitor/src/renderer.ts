@@ -18,7 +18,7 @@ ipcRenderer.on("update", (_event, data: string) => {
   inferenceTimeText.textContent = d["inferenceTime"];
   dataPreviewText.textContent =
     d["data"].slice(0, 60) + (d["data"].length > 60 ? "..." : "");
-  updateTable(predictionsTable, d["predictions"]);
+  updateTable(predictionsTable, predictionsFormatter(d["predictions"]));
 });
 
 function tableById(id: string): HTMLTableElement {
@@ -49,6 +49,14 @@ function createTableBody(xss: string[][]): HTMLTableSectionElement {
   }
 
   return tbody;
+}
+
+function predictionsFormatter(predictions: any[][]): string[][] {
+  predictions
+    .forEach(xs => {
+      xs[2] = Math.floor(100 * Number(xs[2])).toString() + "%";
+    });
+  return predictions;
 }
 
 sendBtn.addEventListener("click", () => {
