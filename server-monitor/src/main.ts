@@ -73,7 +73,7 @@ function createWindow() {
     height: 600,
     webPreferences: {
       nodeIntegration: true,
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(__dirname, "preload.js")
     }
   });
 
@@ -88,7 +88,6 @@ function registerHandlers() {
   // ipcMain.on("SEND_DATA", (event, data) => {
   //   client.send(data);
   // });
-
   // ipcMain.on("RECEIVE_DATA", (event, data) => {
   //
   // });

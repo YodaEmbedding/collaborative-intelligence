@@ -10,28 +10,51 @@
   <body>
     <h1>Server Monitor</h1>
 
-    Frame number:
+    <span class="label_info">Frame number:</span>
     <span id="frameNumber"></span>
     <br />
-
-    Inference time:
-    <span id="inferenceTime"></span>
     <br />
 
-    Predictions:
-    <span id="predictions"></span>
+    <span class="label_info">Inference time:</span>
+    <span id="inferenceTime"></span> ms
+    <br />
     <br />
 
-    Data preview:
+    <span class="label_info">Predictions:</span>
+    <table id="predictions">
+      <colgroup>
+        <col />
+        <col width="150" />
+        <col width="50" />
+      </colgroup>
+      <thead align="left">
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+          <th>Score</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <br />
+    <br />
+
+    <span class="label_info">Data preview:</span>
+    <br />
     <span id="dataPreview"></span>
     <br />
-
-    Monitor stats raw:
-    <span id="monitorStatsRaw"></span>
     <br />
 
-    Statistics raw:
+    <span class="label_info">Monitor stats raw:</span>
+    <br />
+    <span id="monitorStatsRaw"></span>
+    <br />
+    <br />
+
+    <span class="label_info">Statistics raw:</span>
+    <br />
     <span id="statisticsRaw"></span>
+    <br />
     <br />
 
     <input type="text" id="text" />
