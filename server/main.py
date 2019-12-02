@@ -31,6 +31,9 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.applications import imagenet_utils
 
+import monitor_client
+from monitor_client import MonitorStats
+
 spec = importlib.util.spec_from_file_location("layers", "../tools/layers.py")
 layers = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(layers)
@@ -45,6 +48,7 @@ ModelConfig = modelconfig.ModelConfig
 
 IP = "0.0.0.0"
 PORT = 5678
+PORT2 = 5680
 
 
 def str_preview(s: ByteString, max_len=16):
@@ -263,7 +267,7 @@ class SmartProcessor(Generic[T, R]):
 
 
 # TODO Propogate exceptions back to client?
-def processor(work_distributor: WorkDistributor):
+def processor(work_distributor: WorkDistributor, monitor_stats: MonitorStats):
     """Process work items received from work distributor."""
     model_manager = ModelManager()
     smart_processor = SmartProcessor(work_distributor)
@@ -286,9 +290,11 @@ def processor(work_distributor: WorkDistributor):
                 )
                 confirmation = f"{confirmation}\n".encode("utf8")
                 work_distributor.put(guid, confirmation)
+                # TODO decode here, especially for MP4s...
                 t0 = time.time()
                 preds = model_manager.predict(model_config, data)
                 t1 = time.time()
+                inference_time = int(1000 * (t1 - t0))
                 result = json_result(
                     frame_number=frame_number,
                     inference_time=int(1000 * (t1 - t0)),
@@ -296,6 +302,13 @@ def processor(work_distributor: WorkDistributor):
                 )
                 result = f"{result}\n".encode("utf8")
                 work_distributor.put(guid, result)
+                monitor_stats.add(
+                    frame_number=frame_number,
+                    # data_shape=..., # TODO different shapes for data?
+                    inference_time=inference_time,
+                    predictions=preds,
+                    data=data,
+                )
         except Exception:
             traceback.print_exc()
 
@@ -405,11 +418,15 @@ def handle_client(work_distributor: WorkDistributor):
 
 async def main():
     work_distributor = WorkDistributor()
+    monitor_stats = MonitorStats()
     loop = asyncio.get_event_loop()
-    loop.run_in_executor(None, processor, work_distributor)
+    loop.run_in_executor(None, processor, work_distributor, monitor_stats)
     client_handler = handle_client(work_distributor)
     server = await asyncio.start_server(client_handler, IP, PORT)
-    await server.serve_forever()
+    monitor_handler = monitor_client.handle_client(monitor_stats)
+    monitor_server = await asyncio.start_server(monitor_handler, IP, PORT2)
+    print("Started server")
+    await asyncio.wait([server.serve_forever(), monitor_server.serve_forever()])
 
 
 if __name__ == "__main__":
