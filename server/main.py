@@ -391,8 +391,10 @@ async def consume(writer: StreamWriter, getter):
 
 
 def handle_client(work_distributor: WorkDistributor):
-    async def client_handler(reader, writer):
+    async def client_handler(reader: StreamReader, writer: StreamWriter):
         print("New client...")
+        ip, port = writer.get_extra_info("peername")
+        print(f"Connected to {ip}:{port}")
         putter, getter = work_distributor.register()
         coros = [produce(reader, putter), consume(writer, getter)]
         tasks = map(asyncio.create_task, coros)
