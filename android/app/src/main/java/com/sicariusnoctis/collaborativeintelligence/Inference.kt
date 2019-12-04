@@ -1,6 +1,7 @@
 package com.sicariusnoctis.collaborativeintelligence
 
 import android.content.Context
+import kotlinx.serialization.Serializable
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.GpuDelegate
 import java.io.Closeable
@@ -102,6 +103,7 @@ data class FrameRequest<T>(
     inline fun <R> map(func: (T) -> R): FrameRequest<R> = FrameRequest(func(obj), info)
 }
 
+@Serializable
 data class FrameRequestInfo(
     val frameNumber: Int,
     val modelConfig: ModelConfig

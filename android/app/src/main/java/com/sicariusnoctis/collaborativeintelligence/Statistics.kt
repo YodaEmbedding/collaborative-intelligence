@@ -1,6 +1,7 @@
 package com.sicariusnoctis.collaborativeintelligence
 
 import com.google.common.collect.EvictingQueue
+import kotlinx.serialization.Serializable
 import java.time.Duration
 import java.time.Instant
 import java.util.*
@@ -96,6 +97,31 @@ class ModelStatistics {
         lastNValidSamples.first().preprocessStart,
         lastNValidSamples.last().networkReadEnd
     ).toMillis().toDouble()
+}
+
+@Serializable
+data class SerializableSample(
+    val frameNumber: Int,
+    val preprocess: Long,
+    val clientInference: Long,
+    val networkWrite: Long,
+    val serverInference: Long,
+    val networkRead: Long,
+    val networkWait: Long,
+    val total: Long
+) {
+    companion object {
+        fun fromSample(frameNumber: Int, sample: Sample) = SerializableSample(
+            frameNumber,
+            sample.preprocess.toMillis(),
+            sample.clientInference.toMillis(),
+            sample.networkWrite.toMillis(),
+            sample.serverInference.toMillis(),
+            sample.networkRead.toMillis(),
+            sample.networkWait.toMillis(),
+            sample.total.toMillis()
+        )
+    }
 }
 
 data class Sample(

@@ -104,6 +104,18 @@ class NetworkAdapter {
         switchModel()
     }
 
+    @UseExperimental(UnstableDefault::class)
+    fun writeSample(frameRequest: FrameRequest<Sample>) {
+        val sample = SerializableSample.fromSample(frameRequest.info.frameNumber, frameRequest.obj)
+        val jsonString = Json.stringify(SerializableSample.serializer(), sample)
+        // uploadStats.sendBytes(frameNumber, 6 + jsonString.length)
+        with(outputStream!!) {
+            writeBytes("json\n")
+            writeBytes("$jsonString\n")
+            flush()
+        }
+    }
+
     private fun switchModel() {
         uploadStats = UploadStats()
         // TODO maybe send ping here?
