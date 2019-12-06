@@ -10,9 +10,11 @@ import io.fotoapparat.parameter.FpsRange
 import io.fotoapparat.parameter.Resolution
 import io.fotoapparat.parameter.ScaleType
 import io.fotoapparat.parameter.camera.CameraParameters
+import io.fotoapparat.result.ParametersResult
 import io.fotoapparat.util.FrameProcessor
 import io.fotoapparat.selector.*
 import io.fotoapparat.view.CameraView
+import java.util.concurrent.Future
 
 class Camera(context: Context, cameraView: CameraView, frameProcessor: FrameProcessor) {
     private val TAG = Camera::class.qualifiedName
@@ -54,14 +56,15 @@ class Camera(context: Context, cameraView: CameraView, frameProcessor: FrameProc
         )
     }
 
-    fun start(onCameraParametersAvailable: (CameraParameters?) -> Unit) {
+    fun start() {
         fotoapparat.start()
-        fotoapparat.getCurrentParameters().whenAvailable(onCameraParametersAvailable)
     }
 
     fun stop() {
         fotoapparat.stop()
     }
+
+    fun getCurrentParameters() = fotoapparat.getCurrentParameters()
 
     companion object {
         @JvmStatic

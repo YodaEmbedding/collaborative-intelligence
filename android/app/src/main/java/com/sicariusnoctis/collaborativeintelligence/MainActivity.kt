@@ -5,11 +5,11 @@ import android.os.Bundle
 import android.renderscript.RenderScript
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
-import io.fotoapparat.parameter.camera.CameraParameters
+import io.fotoapparat.parameter.Resolution
 import io.fotoapparat.preview.Frame
+import io.reactivex.Completable
 import io.reactivex.Flowable
 import io.reactivex.Scheduler
-import io.reactivex.Single
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.internal.schedulers.IoScheduler
@@ -20,6 +20,7 @@ import io.reactivex.schedulers.Schedulers
 import kotlinx.android.synthetic.main.activity_main.*
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -31,6 +32,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var inferenceExecutor: ExecutorService
     private lateinit var inferenceScheduler: Scheduler
     private lateinit var postprocessor: CameraPreviewPostprocessor
+    private lateinit var previewResolution: Resolution
     private lateinit var rs: RenderScript
     private lateinit var modelUiController: ModelUiController
     private lateinit var statisticsUiController: StatisticsUiController
@@ -65,12 +67,27 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        camera.start(this::onCameraParametersAvailable)
+
+        val cameraReady = CompletableFuture<Unit>()
+        camera.start()
+        camera.getCurrentParameters().whenAvailable {
+            this.previewResolution = it!!.previewResolution
+            cameraReady.complete(Unit)
+        }
         inferenceExecutor = Executors.newSingleThreadExecutor()
         inferenceScheduler = Schedulers.from(inferenceExecutor)
-        inferenceExecutor.submit { inference = Inference() }
         networkAdapter = NetworkAdapter()
-        subscribeNetworkAdapter()
+
+        Completable
+            .mergeArray(
+                Completable.fromFuture(cameraReady),
+                initInference(),
+                connectNetworkAdapter()
+            )
+            .subscribeOn(IoScheduler())
+            .andThen(initPostprocessor())
+            .andThen(subscribeNetworkIo())
+            .subscribeBy({ it.printStackTrace() })
     }
 
     override fun onStop() {
@@ -87,32 +104,32 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    private fun onCameraParametersAvailable(cameraParameters: CameraParameters?) {
-        val resolution = cameraParameters!!.previewResolution
+    private fun initInference() = Completable
+        .fromRunnable { inference = Inference() }
+        .subscribeOn(inferenceScheduler)
 
+    private fun initPostprocessor() = Completable.fromRunnable {
+        // TODO this kind of doesn't work nice when you onStop/onStart the app
         if (::postprocessor.isInitialized)
-            return
+            return@fromRunnable
 
-        val rotationCompensation =
-            CameraPreviewPostprocessor.getRotationCompensation(
-                this, CameraCharacteristics.LENS_FACING_BACK
-            )
-
-        postprocessor = CameraPreviewPostprocessor(
-            rs, resolution.width, resolution.height, 224, 224, rotationCompensation
+        val width = previewResolution.width
+        val height = previewResolution.height
+        val rotationCompensation = CameraPreviewPostprocessor.getRotationCompensation(
+            this, CameraCharacteristics.LENS_FACING_BACK
         )
+
+        postprocessor =
+            CameraPreviewPostprocessor(rs, width, height, 224, 224, rotationCompensation)
     }
 
-    private fun subscribeNetworkAdapter() = Single
-        .just(networkAdapter!!)
+    private fun connectNetworkAdapter() = Completable
+        .fromRunnable { networkAdapter!!.connect() }
         .subscribeOn(IoScheduler())
-        .doOnSuccess { it.connect() }
-        .doOnSuccess { subscribeNetworkIo() }
-        .subscribeBy({ it.printStackTrace() })
 
     // TODO Prevent duplicate subscriptions! (e.g. if onStart called multiple times); unsubscribe?
     // TODO .onTerminateDetach()
-    private fun subscribeNetworkIo() {
+    private fun subscribeNetworkIo() = Completable.fromRunnable {
         subscriptions.addAll(subscribeNetworkRead(), subscribeNetworkWrite())
     }
 
@@ -121,6 +138,7 @@ class MainActivity : AppCompatActivity() {
             iterator {
                 // TODO Wait until thread is alive using CountDownLatch?
                 // TODO thread.isAlive()? socket.isOpen? volatile boolean flag?
+                // TODO while (!subscriber.isDisposed())?
                 while (true) {
                     val (result, start, end) = timed { networkAdapter!!.readResultResponse() }
                     if (result == null) break
@@ -158,6 +176,10 @@ class MainActivity : AppCompatActivity() {
         .observeOn(inferenceScheduler, false, 1)
         .mapTimed(ModelStatistics::setInference) { inference.run(this, it) }
         .observeOn(IoScheduler())
+
+        // TODO split out into network stream... Also, you don't need @Synchronized on write/read... if all is managed by one thread
+        // Maybe draw a diagram...
+
         .doOnNextTimed(ModelStatistics::setNetworkWrite) { networkAdapter!!.writeFrameRequest(it) }
         .doOnNext {
             statistics[it.info.modelConfig].setUpload(
