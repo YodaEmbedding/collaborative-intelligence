@@ -55,7 +55,7 @@ class NetworkAdapter {
         outputStream = null
     }
 
-    private fun readResponse(): Response? {
+    fun readResponse(): Response? {
         val msg = inputStream!!.readLine() ?: return null
         Log.i(TAG, "Receive: $msg")
         return jsonSerializer.parse(PolymorphicSerializer(Response::class), msg) as Response
@@ -70,6 +70,24 @@ class NetworkAdapter {
                 return response
         }
     }
+
+    // @Suppress("UNCHECKED_CAST")
+    // fun write(args: Any) {
+    //     when (args) {
+    //         is ModelConfig -> writeModelConfig(args)
+    //         is Pair<*, *> -> {
+    //             when (args) {
+    //                 is Int, is ByteArray -> writeData(args.first as Int, args.second as ByteArray)
+    //             }
+    //         }
+    //         is FrameRequest<*> -> {
+    //             when (args.obj) {
+    //                 is ByteArray -> writeFrameRequest(args as FrameRequest<ByteArray>)
+    //                 is Sample -> writeSample(args as FrameRequest<Sample>)
+    //             }
+    //         }
+    //     }
+    // }
 
     private fun writeData(frameNumber: Int, data: ByteArray) {
         uploadStats.sendBytes(frameNumber, frameHeaderSize + data.size)

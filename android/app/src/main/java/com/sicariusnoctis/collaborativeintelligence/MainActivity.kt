@@ -9,10 +9,12 @@ import io.fotoapparat.parameter.Resolution
 import io.fotoapparat.preview.Frame
 import io.reactivex.Completable
 import io.reactivex.Flowable
+import io.reactivex.Observable
 import io.reactivex.Scheduler
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.internal.schedulers.IoScheduler
+import io.reactivex.observables.ConnectableObservable
 import io.reactivex.processors.PublishProcessor
 import io.reactivex.rxkotlin.subscribeBy
 import io.reactivex.rxkotlin.zipWith
@@ -31,16 +33,22 @@ class MainActivity : AppCompatActivity() {
     private lateinit var inference: Inference
     private lateinit var inferenceExecutor: ExecutorService
     private lateinit var inferenceScheduler: Scheduler
+    private lateinit var networkWriteExecutor: ExecutorService
+    private lateinit var networkWriteScheduler: Scheduler
     private lateinit var postprocessor: CameraPreviewPostprocessor
     private lateinit var previewResolution: Resolution
     private lateinit var rs: RenderScript
     private lateinit var modelUiController: ModelUiController
     private lateinit var statisticsUiController: StatisticsUiController
+
     private var networkAdapter: NetworkAdapter? = null
     private var prevFrameTime: Instant? = null
     private val frameProcessor: PublishProcessor<Frame> = PublishProcessor.create()
     private val statistics = Statistics()
     private val subscriptions = CompositeDisposable()
+
+    private var networkRead: Observable<Response>? = null
+    private var networkWrite: PublishProcessor<Any>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,14 +76,18 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
 
+        inferenceExecutor = Executors.newSingleThreadExecutor()
+        inferenceScheduler = Schedulers.from(inferenceExecutor)
+        networkWriteExecutor = Executors.newSingleThreadExecutor()
+        networkWriteScheduler = Schedulers.from(networkWriteExecutor)
+
         val cameraReady = CompletableFuture<Unit>()
         camera.start()
         camera.getCurrentParameters().whenAvailable {
             this.previewResolution = it!!.previewResolution
             cameraReady.complete(Unit)
         }
-        inferenceExecutor = Executors.newSingleThreadExecutor()
-        inferenceScheduler = Schedulers.from(inferenceExecutor)
+
         networkAdapter = NetworkAdapter()
 
         Completable
@@ -130,38 +142,76 @@ class MainActivity : AppCompatActivity() {
     // TODO Prevent duplicate subscriptions! (e.g. if onStart called multiple times); unsubscribe?
     // TODO .onTerminateDetach()
     private fun subscribeNetworkIo() = Completable.fromRunnable {
-        subscriptions.addAll(subscribeNetworkRead(), subscribeNetworkWrite())
-    }
+        // TODO don't really NEED a networkWrite observable... if we make a single executor thread
+        networkWrite = PublishProcessor.create()
+        val networkWriteRequests = networkWrite!!.subscribeOn(networkWriteScheduler)
 
-    private fun subscribeNetworkRead() = Flowable
-        .fromIterable(Iterable {
+        val networkWriteModelConfigSubscription = networkWriteRequests
+            .filter { it is ModelConfig }
+            .doOnNext { networkAdapter!!.writeModelConfig(it as ModelConfig) }
+            .subscribeBy({ it.printStackTrace() })
+        subscriptions.add(networkWriteModelConfigSubscription)
+
+        val networkWriteFrameRequestSubscription = networkWriteRequests
+            .filter { it is FrameRequest<*> && it.obj is ByteArray }
+            .doOnNext { networkAdapter!!.writeFrameRequest(it as FrameRequest<ByteArray>) }
+            .subscribeBy({ it.printStackTrace() })
+        subscriptions.add(networkWriteFrameRequestSubscription)
+
+        val networkWriteSampleSubscription = networkWriteRequests
+            .filter { it is FrameRequest<*> && it.obj is Sample }
+            .doOnNext { networkAdapter!!.writeSample(it as FrameRequest<Sample>) }
+            .subscribeBy({ it.printStackTrace() })
+        subscriptions.add(networkWriteSampleSubscription)
+
+        networkRead = Observable.fromIterable(Iterable {
             iterator {
                 // TODO Wait until thread is alive using CountDownLatch?
                 // TODO thread.isAlive()? socket.isOpen? volatile boolean flag?
-                // TODO while (!subscriber.isDisposed())?
                 while (true) {
-                    val (result, start, end) = timed { networkAdapter!!.readResultResponse() }
+                    val (result, start, end) = timed { networkAdapter!!.readResultResponse() as Response }  // TODO
                     if (result == null) break
-                    val stats = statistics[result.frameNumber]
-                    // TODO does this even make sense?
-                    // TODO Also, have a "ping"/ack return when all data is received
-                    stats.setNetworkRead(result.frameNumber, start, end)
-                    stats.setResultResponse(result.frameNumber, result)
-                    yield(stats.sample)
+                    if (result is ResultResponse) {
+                        // TODO does this even make sense?
+                        // TODO Also, have a "ping"/ack return when all data is received
+                        val stats = statistics[result.frameNumber]
+                        stats.setNetworkRead(result.frameNumber, start, end)
+                        stats.setResultResponse(result.frameNumber, result)
+                    }
+                    yield(result)
                 }
             }
         })
-        .subscribeOn(IoScheduler())
-        .observeOn(AndroidSchedulers.mainThread())
-        .doOnNext { Log.i(TAG, "Finished processing frame ${it.frameNumber}") }
-        .subscribeBy(
-            { it.printStackTrace() },
-            { },
-            { sample -> statisticsUiController.addSample(sample) }
-        )
+            .subscribeOn(IoScheduler())
+            .publish()
+
+        // val networkConfirmationResponses = networkRead!!
+        networkRead!!
+            .filter { it is ConfirmationResponse }
+            .map { it as ConfirmationResponse }
+            // TODO
+
+        // val networkResultResponses = networkRead!!
+        val networkResultResponsesSubscription = networkRead!!
+            .filter { it is ResultResponse }
+            .map { it as ResultResponse }
+            .map { statistics[it.frameNumber].sample }
+            .observeOn(AndroidSchedulers.mainThread())
+            .doOnNext { Log.i(TAG, "Finished processing frame ${it.frameNumber}") }
+            .subscribeBy(
+                { it.printStackTrace() },
+                { },
+                { sample -> statisticsUiController.addSample(sample) }
+            )
+        subscriptions.add(networkResultResponsesSubscription)
+
+        (networkRead!! as ConnectableObservable).connect()
+
+        subscriptions.add(subscribeFrameProcessor())
+    }
 
     // TODO Reduce requests if connection speed is not fast enough? (Backpressure here too!!!!!)
-    private fun subscribeNetworkWrite() = frameProcessor
+    private fun subscribeFrameProcessor() = frameProcessor
         .subscribeOn(IoScheduler())
         .map { it to modelUiController.modelConfig }
         .onBackpressureLimitRate(
@@ -175,21 +225,10 @@ class MainActivity : AppCompatActivity() {
         .mapTimed(ModelStatistics::setPreprocess) { it.map(postprocessor::process) }
         .observeOn(inferenceScheduler, false, 1)
         .mapTimed(ModelStatistics::setInference) { inference.run(this, it) }
-        .observeOn(IoScheduler())
-
-        // TODO split out into network stream... Also, you don't need @Synchronized on write/read... if all is managed by one thread
-        // Maybe draw a diagram...
-
+        .observeOn(networkWriteScheduler)
         .doOnNextTimed(ModelStatistics::setNetworkWrite) { networkAdapter!!.writeFrameRequest(it) }
-        .doOnNext {
-            statistics[it.info.modelConfig].setUpload(
-                it.info.frameNumber,
-                it.obj.size
-            )
-        }
-        .subscribeBy(
-            { it.printStackTrace() }
-        )
+        .doOnNext { statistics[it.info.modelConfig].setUpload(it.info.frameNumber, it.obj.size) }
+        .subscribeBy({ it.printStackTrace() })
 
     private fun shouldProcessFrame(stats: ModelStatistics): Boolean {
         if (!stats.isFirstExist)
