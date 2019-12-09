@@ -250,14 +250,17 @@ class MainActivity : AppCompatActivity() {
             return true
 
         // If first server response is not yet received, drop frame
-        if (stats.isEmpty)
+        if (stats.isEmpty) {
+            Log.i(TAG, "Dropped frame because waiting for first server response")
             return false
+        }
 
         // Load new model if needed, once latest sample has been processed client-side
         val modelConfig = modelUiController.modelConfig
         if (modelConfig != inference.modelConfig && stats.currentSample.networkWriteEnd != null) {
             switchModel().blockingAwait()
             statistics[modelConfig] = ModelStatistics()
+            Log.i(TAG, "Dropped frame after switching model")
             return false
         }
 
@@ -305,9 +308,20 @@ class MainActivity : AppCompatActivity() {
         // val fpsLimit = stats.sample.total.multipliedBy(7).dividedBy(10)
         // val networkLimit = minOf(sample.networkWrite, Duration.ofMillis(50))
         // TODO watch out for encoding time...
-        val rateLimit = maxOf(sample.serverInference, sample.clientInference)
 
-        return Duration.between(prevFrameTime, Instant.now()) >= rateLimit
+        val timeSinceLastFrameRequest = Duration.between(prevFrameTime, Instant.now())
+
+        if (timeSinceLastFrameRequest < sample.clientInference) {
+            Log.i(TAG, "Dropped frame because of slow client inference time!")
+            return false
+        }
+
+        if (timeSinceLastFrameRequest < sample.serverInference) {
+            Log.i(TAG, "Dropped frame because of slow server inference time!")
+            return false
+        }
+
+        return true
     }
 
     // TODO nullify prevFrameTime onModelConfigChanged? (for smoother transition)
