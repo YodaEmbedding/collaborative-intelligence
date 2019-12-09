@@ -374,16 +374,19 @@ async def produce(reader: StreamReader, putter):
 
     try:
         while True:
+            print("Read begin")
             input_type, item = await read_item(reader)
-            # s = f"Produce: {input_type}, {str_preview(str(item).encode('utf8'))}"
-            # print(s)
+            print("Read end")
             if input_type == "terminate":
                 break
             # TODO instead of always passing model_config, why not make class?
             # TODO merge with processor()?
             elif input_type == "frame":
+                i, data = item
+                print(f"Produce: {i} {str_preview(data)}")
                 await putter((model_config, "predict", item))
             elif input_type == "json":
+                print(f"Produce: {json}")
                 item = {k: v for k, v in item.items() if v is not None}
                 next_model_config = ModelConfig(**item)
                 valid = model_config is not None
@@ -410,11 +413,14 @@ async def consume(writer: StreamWriter, getter):
             if item is None:
                 break
             item_d = json.loads(item.decode("utf8"))
-            print(f"Consume {i}: {item_d['frameNumber']}")
+            print(f"Consume {i}: {item_d.get('frameNumber', 'no_frame_num')}")
             # print(json.dumps(item_d, indent=4))
             # TODO is this correct? await drain?
+            print("Write begin")
             writer.write(item)
+            print("Drain...")
             await writer.drain()
+            print("Write end")
     # TODO what does close even do? do we need the finally?
     finally:
         print("Closing client...")
@@ -444,7 +450,9 @@ async def main():
     monitor_handler = monitor_client.handle_client(monitor_stats)
     monitor_server = await asyncio.start_server(monitor_handler, IP, PORT2)
     print("Started server")
-    await asyncio.wait([server.serve_forever(), monitor_server.serve_forever()])
+    await asyncio.wait(
+        [server.serve_forever(), monitor_server.serve_forever()]
+    )
 
 
 if __name__ == "__main__":
