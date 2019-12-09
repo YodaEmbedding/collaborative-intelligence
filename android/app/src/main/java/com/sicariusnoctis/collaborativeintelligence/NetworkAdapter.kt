@@ -8,9 +8,7 @@ import kotlinx.serialization.UnstableDefault
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.modules.SerializersModule
-import java.io.BufferedReader
-import java.io.DataOutputStream
-import java.io.InputStreamReader
+import java.io.*
 import java.net.Socket
 import java.time.Duration
 import java.time.Instant
@@ -22,6 +20,7 @@ class NetworkAdapter {
     private val frameHeaderSize = 6 + 4 + 4
     private var inputStream: BufferedReader? = null
     private var outputStream: DataOutputStream? = null
+    // private var outputStream: OutputStream? = null
     private var socket: Socket? = null
     private var prevModelConfig: ModelConfig? = null
     private val jsonSerializer = Json(
@@ -46,6 +45,7 @@ class NetworkAdapter {
         // https://stackoverflow.com/questions/15538509/dealing-with-end-of-file-using-bufferedreader-read
         inputStream = BufferedReader(InputStreamReader(socket!!.inputStream))
         outputStream = DataOutputStream(socket!!.outputStream)
+        // outputStream = BufferedOutputStream(socket!!.outputStream)
     }
 
     fun close() {
@@ -92,10 +92,25 @@ class NetworkAdapter {
     private fun writeData(frameNumber: Int, data: ByteArray) {
         uploadStats.sendBytes(frameNumber, frameHeaderSize + data.size)
         with(outputStream!!) {
+            // writer().write("frame\n")
+            // writer().write(frameNumber)
+            // writer().write(data.size)
             writeBytes("frame\n")
             writeInt(frameNumber)
             writeInt(data.size)
             write(data)
+            flush()
+        }
+    }
+
+    @UseExperimental(UnstableDefault::class)
+    private fun writeJson(jsonString: String) {
+        // uploadStats.sendBytes(frameNumber, 6 + jsonString.length)
+        with(outputStream!!) {
+            writeBytes("json\n")
+            writeBytes("$jsonString\n")
+            // writer().write("json\n")
+            // writer().write("$jsonString\n")
             flush()
         }
     }
@@ -113,11 +128,7 @@ class NetworkAdapter {
     fun writeModelConfig(modelConfig: ModelConfig) {
         val jsonString = Json.stringify(ModelConfig.serializer(), modelConfig)
         // uploadStats.sendBytes(frameNumber, 6 + jsonString.length)
-        with(outputStream!!) {
-            writeBytes("json\n")
-            writeBytes("$jsonString\n")
-            flush()
-        }
+        writeJson(jsonString)
         // TODO wait until all traffic is flushed?
         switchModel()
     }
@@ -127,11 +138,7 @@ class NetworkAdapter {
         val sample = SerializableSample.fromSample(frameRequest.info.frameNumber, frameRequest.obj)
         val jsonString = Json.stringify(SerializableSample.serializer(), sample)
         // uploadStats.sendBytes(frameNumber, 6 + jsonString.length)
-        with(outputStream!!) {
-            writeBytes("json\n")
-            writeBytes("$jsonString\n")
-            flush()
-        }
+        writeJson(jsonString)
     }
 
     private fun switchModel() {

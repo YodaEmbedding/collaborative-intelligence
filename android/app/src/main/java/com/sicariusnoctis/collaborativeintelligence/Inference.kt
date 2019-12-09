@@ -1,6 +1,7 @@
 package com.sicariusnoctis.collaborativeintelligence
 
 import android.content.Context
+import android.util.Log
 import kotlinx.serialization.Serializable
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.GpuDelegate
@@ -13,6 +14,8 @@ import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel.MapMode.READ_ONLY
 
 class Inference : Closeable {
+    private val TAG = Inference::class.qualifiedName
+
     lateinit var modelConfig: ModelConfig; private set
     private lateinit var inputBuffer: ByteBuffer
     private lateinit var outputBuffer: ByteBuffer

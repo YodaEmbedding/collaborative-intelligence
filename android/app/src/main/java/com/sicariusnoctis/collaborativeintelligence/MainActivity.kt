@@ -271,10 +271,18 @@ class MainActivity : AppCompatActivity() {
             return false
         }
 
-        // if (stats.currentSample?.inferenceEnd == null) {
-        // if (stats.currentSample?.networkWriteEnd == null) {
-        if (stats.currentSample?.networkReadEnd == null) {
+        if (stats.currentSample?.inferenceEnd == null) {
             Log.i(TAG, "Dropped frame because frame is currently being processed")
+            return false
+        }
+
+        if (stats.currentSample?.networkWriteEnd == null) {
+            Log.i(TAG, "Dropped frame because frame is currently being written over network")
+            return false
+        }
+
+        if (stats.currentSample?.networkReadEnd == null) {
+            Log.i(TAG, "Dropped frame because frame is currently being processed by server")
             return false
         }
 
