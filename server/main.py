@@ -315,7 +315,8 @@ def processor(work_distributor: WorkDistributor, monitor_stats: MonitorStats):
                 )
             elif request_type == "ping":
                 id_ = item
-                work_distributor.put(guid, json_ping(id_))
+                response = f"{json_ping(id_)}\n".encode("utf8")
+                work_distributor.put(guid, response)
         except Exception:
             traceback.print_exc()
 
@@ -413,7 +414,8 @@ async def consume(writer: StreamWriter, getter):
             if item is None:
                 break
             item_d = json.loads(item.decode("utf8"))
-            print(f"Consume {i}: {item_d.get('frameNumber', 'no_frame_num')}")
+            item_d.pop("predictions", None)
+            print(f"Consume {i}: {item_d}")
             # print(json.dumps(item_d, indent=4))
             # TODO is this correct? await drain?
             print("Write begin")
