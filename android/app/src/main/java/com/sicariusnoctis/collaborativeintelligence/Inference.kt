@@ -33,7 +33,7 @@ class Inference : Closeable {
         if (!::modelConfig.isInitialized || modelConfig != frameRequest.info.modelConfig) {
             // modelConfig = frameRequest.info.modelConfig
             // setTfliteModel(context)
-            throw Exception()
+            throw Exception("Current config $modelConfig differs from requested config ${frameRequest.info.modelConfig}")
         }
 
         return frameRequest.map { run(frameRequest.obj) }

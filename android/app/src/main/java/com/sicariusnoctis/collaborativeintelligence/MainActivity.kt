@@ -98,7 +98,7 @@ class MainActivity : AppCompatActivity() {
             )
             .subscribeOn(IoScheduler())
             .andThen(initPostprocessor())
-            .andThen(switchModel())
+            .andThen(switchModel(modelUiController.modelConfig))
             .andThen(subscribeNetworkIo())
             .andThen(subscribeFrameProcessor())
             .subscribeBy({ it.printStackTrace() })
@@ -215,10 +215,12 @@ class MainActivity : AppCompatActivity() {
     private fun subscribeFrameProcessor() = Completable.fromRunnable {
         val frameProcessorSubscription = frameProcessor
             .subscribeOn(IoScheduler())
+            .onBackpressureDrop()
+            .observeOn(IoScheduler(), false, 1)
             .map { it to modelUiController.modelConfig }
             .onBackpressureLimitRate(
                 onDrop = { statistics[it.second].frameDropped() },
-                limit = { shouldProcessFrame(statistics[it.second]) }
+                limit = { shouldProcessFrame(it.second) }
             )
             .doOnNext { prevFrameTime = Instant.now() }
             .zipWith(Flowable.range(0, Int.MAX_VALUE)) { (frame, modelConfig), i ->
@@ -239,13 +241,27 @@ class MainActivity : AppCompatActivity() {
         subscriptions.add(frameProcessorSubscription)
     }
 
-    private fun switchModel() = Completable.fromRunnable {
+    private fun switchModel(modelConfig: ModelConfig) = Completable.fromRunnable {
         // TODO networkModelLoadedResponse, renderscriptLoaded?
-        inference.switchModel(this, modelUiController.modelConfig)
+        inference.switchModel(this, modelConfig)
     }
         .subscribeOn(inferenceScheduler)
 
-    private fun shouldProcessFrame(stats: ModelStatistics): Boolean {
+    private fun shouldProcessFrame(modelConfig: ModelConfig): Boolean {
+        val stats = statistics[modelConfig]
+
+        // Load new model if needed, once latest sample has been processed client-side
+        if (modelConfig != inference.modelConfig) {
+            if (stats.currentSample?.networkWriteEnd != null) {
+                Log.i(TAG, "Dropped frame after model switch request in progress")
+                return false
+            }
+            switchModel(modelConfig).blockingAwait()
+            statistics[modelConfig] = ModelStatistics()
+            Log.i(TAG, "Dropped frame after switching model")
+            return false
+        }
+
         if (!stats.isFirstExist)
             return true
 
@@ -255,12 +271,10 @@ class MainActivity : AppCompatActivity() {
             return false
         }
 
-        // Load new model if needed, once latest sample has been processed client-side
-        val modelConfig = modelUiController.modelConfig
-        if (modelConfig != inference.modelConfig && stats.currentSample.networkWriteEnd != null) {
-            switchModel().blockingAwait()
-            statistics[modelConfig] = ModelStatistics()
-            Log.i(TAG, "Dropped frame after switching model")
+        // if (stats.currentSample?.inferenceEnd == null) {
+        // if (stats.currentSample?.networkWriteEnd == null) {
+        if (stats.currentSample?.networkReadEnd == null) {
+            Log.i(TAG, "Dropped frame because frame is currently being processed")
             return false
         }
 
