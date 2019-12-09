@@ -98,7 +98,9 @@ class MainActivity : AppCompatActivity() {
             )
             .subscribeOn(IoScheduler())
             .andThen(initPostprocessor())
+            .andThen(switchModel())
             .andThen(subscribeNetworkIo())
+            .andThen(subscribeFrameProcessor())
             .subscribeBy({ it.printStackTrace() })
     }
 
@@ -116,8 +118,9 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    private fun initInference() = Completable
-        .fromRunnable { inference = Inference() }
+    private fun initInference() = Completable.fromRunnable {
+        inference = Inference()
+    }
         .subscribeOn(inferenceScheduler)
 
     private fun initPostprocessor() = Completable.fromRunnable {
@@ -135,8 +138,9 @@ class MainActivity : AppCompatActivity() {
             CameraPreviewPostprocessor(rs, width, height, 224, 224, rotationCompensation)
     }
 
-    private fun connectNetworkAdapter() = Completable
-        .fromRunnable { networkAdapter!!.connect() }
+    private fun connectNetworkAdapter() = Completable.fromRunnable {
+        networkAdapter!!.connect()
+    }
         .subscribeOn(IoScheduler())
 
     // TODO Prevent duplicate subscriptions! (e.g. if onStart called multiple times); unsubscribe?
@@ -189,7 +193,7 @@ class MainActivity : AppCompatActivity() {
         networkRead!!
             .filter { it is ConfirmationResponse }
             .map { it as ConfirmationResponse }
-            // TODO
+        // TODO
 
         // val networkResultResponses = networkRead!!
         val networkResultResponsesSubscription = networkRead!!
@@ -204,31 +208,42 @@ class MainActivity : AppCompatActivity() {
                 { sample -> statisticsUiController.addSample(sample) }
             )
         subscriptions.add(networkResultResponsesSubscription)
-
         (networkRead!! as ConnectableObservable).connect()
-
-        subscriptions.add(subscribeFrameProcessor())
     }
 
     // TODO Reduce requests if connection speed is not fast enough? (Backpressure here too!!!!!)
-    private fun subscribeFrameProcessor() = frameProcessor
-        .subscribeOn(IoScheduler())
-        .map { it to modelUiController.modelConfig }
-        .onBackpressureLimitRate(
-            onDrop = { statistics[it.second].frameDropped() },
-            limit = { shouldProcessFrame(statistics[it.second]) }
-        )
-        .doOnNext { prevFrameTime = Instant.now() }
-        .zipWith(Flowable.range(0, Int.MAX_VALUE)) { (frame, modelConfig), i ->
-            FrameRequest(frame, FrameRequestInfo(i, modelConfig))
-        }
-        .mapTimed(ModelStatistics::setPreprocess) { it.map(postprocessor::process) }
-        .observeOn(inferenceScheduler, false, 1)
-        .mapTimed(ModelStatistics::setInference) { inference.run(this, it) }
-        .observeOn(networkWriteScheduler)
-        .doOnNextTimed(ModelStatistics::setNetworkWrite) { networkAdapter!!.writeFrameRequest(it) }
-        .doOnNext { statistics[it.info.modelConfig].setUpload(it.info.frameNumber, it.obj.size) }
-        .subscribeBy({ it.printStackTrace() })
+    private fun subscribeFrameProcessor() = Completable.fromRunnable {
+        val frameProcessorSubscription = frameProcessor
+            .subscribeOn(IoScheduler())
+            .map { it to modelUiController.modelConfig }
+            .onBackpressureLimitRate(
+                onDrop = { statistics[it.second].frameDropped() },
+                limit = { shouldProcessFrame(statistics[it.second]) }
+            )
+            .doOnNext { prevFrameTime = Instant.now() }
+            .zipWith(Flowable.range(0, Int.MAX_VALUE)) { (frame, modelConfig), i ->
+                FrameRequest(frame, FrameRequestInfo(i, modelConfig))
+            }
+            .mapTimed(ModelStatistics::setPreprocess) { it.map(postprocessor::process) }
+            .observeOn(inferenceScheduler, false, 1)
+            .mapTimed(ModelStatistics::setInference) { inference.run(it) }
+            .observeOn(networkWriteScheduler)
+            .doOnNextTimed(ModelStatistics::setNetworkWrite) {
+                networkAdapter!!.writeFrameRequest(it)
+            }
+            .doOnNext {
+                statistics[it.info.modelConfig].setUpload(it.info.frameNumber, it.obj.size)
+            }
+            .subscribeBy({ it.printStackTrace() })
+
+        subscriptions.add(frameProcessorSubscription)
+    }
+
+    private fun switchModel() = Completable.fromRunnable {
+        // TODO networkModelLoadedResponse, renderscriptLoaded?
+        inference.switchModel(this, modelUiController.modelConfig)
+    }
+        .subscribeOn(inferenceScheduler)
 
     private fun shouldProcessFrame(stats: ModelStatistics): Boolean {
         if (!stats.isFirstExist)
@@ -237,6 +252,14 @@ class MainActivity : AppCompatActivity() {
         // If first server response is not yet received, drop frame
         if (stats.isEmpty)
             return false
+
+        // Load new model if needed, once latest sample has been processed client-side
+        val modelConfig = modelUiController.modelConfig
+        if (modelConfig != inference.modelConfig && stats.currentSample.networkWriteEnd != null) {
+            switchModel().blockingAwait()
+            statistics[modelConfig] = ModelStatistics()
+            return false
+        }
 
         // TODO imagine we had the current upload bytes or bandwidth... then what?
         // maybe use the total upload bytes to subtract from what has currently been sent?

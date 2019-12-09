@@ -19,6 +19,10 @@ class Statistics {
         .filterValues { v -> v.containsKey(frameNumber) }
         .values
         .first()
+
+    operator fun set(modelConfig: ModelConfig, modelStatistics: ModelStatistics) {
+        modelStats[modelConfig] = modelStatistics
+    }
 }
 
 class ModelStatistics {
@@ -37,8 +41,8 @@ class ModelStatistics {
         @Synchronized get() = lastNValidSamples.last()
     val samples: Map<Int, Sample>
         @Synchronized get() = validSamples
-    // val samples: List<Sample>
-    //     @Synchronized get() = validSamples.values.toList()
+    lateinit var currentSample: Sample
+        private set
 
     private val allSamples = LinkedHashMap<Int, Sample>()
     private val validSamples = LinkedHashMap<Int, Sample>()
@@ -57,7 +61,8 @@ class ModelStatistics {
 
     @Synchronized
     fun setPreprocess(frameNumber: Int, start: Instant, end: Instant) {
-        allSamples[frameNumber] = Sample()
+        currentSample = Sample()
+        allSamples[frameNumber] = currentSample
         allSamples[frameNumber]!!.preprocessStart = start
         allSamples[frameNumber]!!.preprocessEnd = end
     }

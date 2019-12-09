@@ -13,9 +13,9 @@ import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel.MapMode.READ_ONLY
 
 class Inference : Closeable {
+    lateinit var modelConfig: ModelConfig; private set
     private lateinit var inputBuffer: ByteBuffer
     private lateinit var outputBuffer: ByteBuffer
-    private lateinit var modelConfig: ModelConfig
     private val gpuDelegate: GpuDelegate = GpuDelegate()
     private val tfliteOptions = Interpreter.Options()
     private var tflite: Interpreter? = null
@@ -29,10 +29,11 @@ class Inference : Closeable {
             .addDelegate(gpuDelegate)
     }
 
-    fun run(context: Context, frameRequest: FrameRequest<ByteArray>): FrameRequest<ByteArray> {
+    fun run(frameRequest: FrameRequest<ByteArray>): FrameRequest<ByteArray> {
         if (!::modelConfig.isInitialized || modelConfig != frameRequest.info.modelConfig) {
-            modelConfig = frameRequest.info.modelConfig
-            setTfliteModel(context)
+            // modelConfig = frameRequest.info.modelConfig
+            // setTfliteModel(context)
+            throw Exception()
         }
 
         return frameRequest.map { run(frameRequest.obj) }
@@ -59,13 +60,15 @@ class Inference : Closeable {
         gpuDelegate.close()
     }
 
-    private fun setTfliteModel(context: Context) {
+    fun switchModel(context: Context, modelConfig: ModelConfig) {
         // TODO First 65 operations will run on the GPU, and the remaining 3 on the CPU.TfLiteGpuDelegate
         // Invoke: Delegate should run on the same thread where it was initialized.Node number 68
         // (TfLiteGpuDelegate) failed to invoke.
         // TODO gpuDelegate.bindGlBufferToTensor(outputTensor, outputSsboId);
 
         tflite?.close()
+
+        this.modelConfig = modelConfig
 
         if (modelConfig.layer == "server") {
             tfliteModel = null
@@ -75,7 +78,7 @@ class Inference : Closeable {
             return
         }
 
-        tfliteModel = loadModel(context, "${modelConfig.toPath()}-client.tflite")
+        tfliteModel = loadModelFromFile(context, "${modelConfig.toPath()}-client.tflite")
         tflite = Interpreter(tfliteModel!!, tfliteOptions)
 
         val inputCapacity = tflite!!.getInputTensor(0).numBytes()
@@ -89,7 +92,7 @@ class Inference : Closeable {
     }
 
     @Throws(IOException::class)
-    private fun loadModel(context: Context, filename: String): MappedByteBuffer {
+    private fun loadModelFromFile(context: Context, filename: String): MappedByteBuffer {
         val fd = context.assets.openFd(filename)
         val channel = FileInputStream(fd.fileDescriptor).channel
         return channel.map(READ_ONLY, fd.startOffset, fd.declaredLength)
