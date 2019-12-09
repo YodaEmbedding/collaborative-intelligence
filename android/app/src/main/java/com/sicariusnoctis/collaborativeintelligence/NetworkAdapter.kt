@@ -26,8 +26,9 @@ class NetworkAdapter {
     private val jsonSerializer = Json(
         context = SerializersModule {
             polymorphic<Response> {
-                ResultResponse::class with ResultResponse.serializer()
                 ConfirmationResponse::class with ConfirmationResponse.serializer()
+                PingResponse::class with PingResponse.serializer()
+                ResultResponse::class with ResultResponse.serializer()
             }
         }
     )
@@ -56,38 +57,25 @@ class NetworkAdapter {
     }
 
     fun readResponse(): Response? {
+        while (true) {
+            val response = readResponseInner() ?: return null
+            if (response is ConfirmationResponse)
+                handleConfirmation(response)
+            else
+                return response
+        }
+    }
+
+    private fun readResponseInner(): Response? {
         val msg = inputStream!!.readLine() ?: return null
         Log.i(TAG, "Receive: $msg")
         return jsonSerializer.parse(PolymorphicSerializer(Response::class), msg) as Response
     }
 
-    fun readResultResponse(): ResultResponse? {
-        while (true) {
-            val response = readResponse() ?: return null
-            if (response is ConfirmationResponse)
-                uploadStats.confirmBytes(response.frameNumber, frameHeaderSize + response.numBytes)
-            else if (response is ResultResponse)
-                return response
-        }
+    private fun handleConfirmation(response: ConfirmationResponse) {
+        uploadStats.confirmBytes(response.frameNumber, frameHeaderSize + response.numBytes)
+        Log.i(TAG, "Confirmation: $response\nRemaining bytes: ${uploadStats.remainingBytes}")
     }
-
-    // @Suppress("UNCHECKED_CAST")
-    // fun write(args: Any) {
-    //     when (args) {
-    //         is ModelConfig -> writeModelConfig(args)
-    //         is Pair<*, *> -> {
-    //             when (args) {
-    //                 is Int, is ByteArray -> writeData(args.first as Int, args.second as ByteArray)
-    //             }
-    //         }
-    //         is FrameRequest<*> -> {
-    //             when (args.obj) {
-    //                 is ByteArray -> writeFrameRequest(args as FrameRequest<ByteArray>)
-    //                 is Sample -> writeSample(args as FrameRequest<Sample>)
-    //             }
-    //         }
-    //     }
-    // }
 
     private fun writeData(frameNumber: Int, data: ByteArray) {
         uploadStats.sendBytes(frameNumber, frameHeaderSize + data.size)
@@ -131,6 +119,14 @@ class NetworkAdapter {
         writeJson(jsonString)
         // TODO wait until all traffic is flushed?
         switchModel()
+    }
+
+    fun writePingRequest(pingRequest: PingRequest) {
+        with(outputStream!!) {
+            writeBytes("ping\n")
+            writeInt(pingRequest.id)
+            flush()
+        }
     }
 
     @UseExperimental(UnstableDefault::class)
@@ -194,6 +190,9 @@ class UploadStats {
 data class Prediction(val name: String, val description: String, val score: Float)
 
 @Serializable
+data class PingRequest(val id: Int)
+
+@Serializable
 open class Response
 
 @Serializable
@@ -201,6 +200,12 @@ open class Response
 data class ConfirmationResponse(
     val frameNumber: Int,
     val numBytes: Int
+) : Response()
+
+@Serializable
+@SerialName("ping")
+data class PingResponse(
+    val id: Int
 ) : Response()
 
 @Serializable

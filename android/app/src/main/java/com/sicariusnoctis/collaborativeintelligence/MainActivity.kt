@@ -13,6 +13,7 @@ import io.reactivex.Observable
 import io.reactivex.Scheduler
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
+import io.reactivex.functions.BiFunction
 import io.reactivex.internal.schedulers.IoScheduler
 import io.reactivex.observables.ConnectableObservable
 import io.reactivex.processors.PublishProcessor
@@ -25,6 +26,7 @@ import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
     private val TAG = MainActivity::class.qualifiedName
@@ -100,6 +102,7 @@ class MainActivity : AppCompatActivity() {
             .andThen(initPostprocessor())
             .andThen(switchModel(modelUiController.modelConfig))
             .andThen(subscribeNetworkIo())
+            .andThen(subscribePingGenerator())
             .andThen(subscribeFrameProcessor())
             .subscribeBy({ it.printStackTrace() })
     }
@@ -148,7 +151,12 @@ class MainActivity : AppCompatActivity() {
     private fun subscribeNetworkIo() = Completable.fromRunnable {
         // TODO don't really NEED a networkWrite observable... if we make a single executor thread
         networkWrite = PublishProcessor.create()
-        val networkWriteRequests = networkWrite!!.subscribeOn(networkWriteScheduler)
+        val networkWriteRequests = networkWrite!!
+            .subscribeOn(networkWriteScheduler)
+            .onBackpressureBuffer()
+            .share()
+
+        // TODO collapse all these into single function...
 
         val networkWriteModelConfigSubscription = networkWriteRequests
             .filter { it is ModelConfig }
@@ -168,32 +176,40 @@ class MainActivity : AppCompatActivity() {
             .subscribeBy({ it.printStackTrace() })
         subscriptions.add(networkWriteSampleSubscription)
 
+        val networkWritePingSubscription = networkWriteRequests
+            .filter { it is PingRequest }
+            .doOnNext { networkAdapter!!.writePingRequest(it as PingRequest) }
+            .subscribeBy({ it.printStackTrace() })
+        subscriptions.add(networkWritePingSubscription)
+
         networkRead = Observable.fromIterable(Iterable {
             iterator {
                 // TODO Wait until thread is alive using CountDownLatch?
                 // TODO thread.isAlive()? socket.isOpen? volatile boolean flag?
                 while (true) {
-                    val (result, start, end) = timed { networkAdapter!!.readResultResponse() as Response }  // TODO
+                    val (result, start, end) = timed { networkAdapter!!.readResponse() }
                     if (result == null) break
-                    if (result is ResultResponse) {
+                    val response = result!!
+                    if (response is ResultResponse) {
                         // TODO does this even make sense?
                         // TODO Also, have a "ping"/ack return when all data is received
-                        val stats = statistics[result.frameNumber]
-                        stats.setNetworkRead(result.frameNumber, start, end)
-                        stats.setResultResponse(result.frameNumber, result)
+                        val stats = statistics[response.frameNumber]
+                        stats.setNetworkRead(response.frameNumber, start, end)
+                        stats.setResultResponse(response.frameNumber, response)
                     }
-                    yield(result)
+                    yield(response)
                 }
             }
         })
             .subscribeOn(IoScheduler())
             .publish()
 
-        // val networkConfirmationResponses = networkRead!!
-        networkRead!!
-            .filter { it is ConfirmationResponse }
-            .map { it as ConfirmationResponse }
-        // TODO
+        val networkPingResponsesSubscription = networkRead!!
+            .filter { it is PingResponse }
+            .map { it as PingResponse }
+            .doOnNext { Log.i(TAG, "Ping received: ${it.id}") }
+            .subscribeBy({ it.printStackTrace() })
+        subscriptions.add(networkPingResponsesSubscription)
 
         // val networkResultResponses = networkRead!!
         val networkResultResponsesSubscription = networkRead!!
@@ -208,7 +224,20 @@ class MainActivity : AppCompatActivity() {
                 { sample -> statisticsUiController.addSample(sample) }
             )
         subscriptions.add(networkResultResponsesSubscription)
+
         (networkRead!! as ConnectableObservable).connect()
+    }
+
+    private fun subscribePingGenerator() = Completable.fromRunnable {
+        // val ids = Observable.fromIterable(generateSequence(0) { it + 1 }.asIterable())
+        // val times = Observable.interval(1, TimeUnit.SECONDS)
+        subscriptions.add(Observable
+            .interval(1, TimeUnit.SECONDS)
+            .observeOn(networkWriteScheduler, false, 1)
+            .doOnNext { networkAdapter!!.writePingRequest(PingRequest(it.toInt())) }
+            .doOnNext { Log.i(TAG, "Ping sent: $it") }
+            .subscribeBy({ it.printStackTrace() })
+        )
     }
 
     // TODO Reduce requests if connection speed is not fast enough? (Backpressure here too!!!!!)
