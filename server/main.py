@@ -107,6 +107,10 @@ def json_confirmation(frame_number: int, num_bytes: int) -> str:
     )
 
 
+def json_ping(id_) -> str:
+    return json.dumps({"type": "ping", "id": id_})
+
+
 @dataclass
 class ModelReference:
     ref_count: int
@@ -309,6 +313,9 @@ def processor(work_distributor: WorkDistributor, monitor_stats: MonitorStats):
                     predictions=preds,
                     data=data,
                 )
+            elif request_type == "ping":
+                id_ = item
+                work_distributor.put(guid, json_ping(id_))
         except Exception:
             traceback.print_exc()
 
@@ -341,14 +348,23 @@ async def read_json(reader: StreamReader) -> Awaitable[dict]:
     return json.loads(await reader.readline())
 
 
+async def read_ping(reader: StreamReader) -> Awaitable:
+    id_ = await read_int(reader)
+    return id_
+
+
 # TODO form protocol on json and binary data
 async def read_item(reader: StreamReader) -> Awaitable[Tuple[str, Any]]:
     """Retrieve single item of various types from stream."""
     input_type = (await reader.readline()).decode("utf8").rstrip("\n")
-    # print(input_type)
+    print(input_type)
     if len(input_type) == 0:
         return "terminate", None
-    reader_func = {"frame": read_tensor_frame, "json": read_json}[input_type]
+    reader_func = {
+        "frame": read_tensor_frame,
+        "json": read_json,
+        "ping": read_ping,
+    }[input_type]
     return input_type, await reader_func(reader)
 
 
@@ -378,6 +394,8 @@ async def produce(reader: StreamReader, putter):
                     await putter((model_config, "release", None))
                 model_config = next_model_config
                 await putter((model_config, "acquire", None))
+            elif input_type == "ping":
+                await putter((model_config, "ping", item))
     finally:
         if model_config is not None:
             await putter((model_config, "release", None))
