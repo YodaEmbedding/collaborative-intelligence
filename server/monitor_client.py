@@ -1,5 +1,4 @@
 import asyncio
-import base64
 import json
 from asyncio import StreamReader, StreamWriter
 from typing import Awaitable
@@ -21,7 +20,7 @@ class MonitorStats:
             "frameNumber": self.frame_number,
             "inferenceTime": self.inference_time,
             "predictions": self.predictions,
-            "data": base64.b64encode(self.data).decode("utf8"),
+            "data": self.data,
         }
 
 
@@ -38,12 +37,12 @@ def handle_client(monitor_stats: MonitorStats):
         while True:
             # request = await read_json(reader)
             d = monitor_stats.json_dict()
-            response = json.dumps(d)# .encode("utf8")
+            response = json.dumps(d)
             writer.write(f"{response}\n".encode("utf8"))
             print(f"Monitor upload: {len(response)} B; {response[:50]}")
             print()
             # print(f"Monitor upload: {len(response) // 1000} KB")
             await writer.drain()
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.2)
 
     return client_handler

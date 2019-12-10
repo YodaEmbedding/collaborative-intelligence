@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import functools
 import importlib.util
 import json
+import math
 import os
 import queue
 import time
@@ -12,6 +15,7 @@ import traceback
 from asyncio import StreamReader, StreamWriter
 from dataclasses import asdict, dataclass
 from datetime import datetime
+from io import BytesIO
 from itertools import count
 from typing import (
     Any,
@@ -28,6 +32,7 @@ from typing import (
 import janus
 import numpy as np
 import tensorflow as tf
+from PIL import Image
 from tensorflow import keras
 from tensorflow.keras.applications import imagenet_utils
 
@@ -73,6 +78,91 @@ def decode_data(model: keras.Model, data: ByteString) -> np.ndarray:
         (-1, *input_shape)
     )
     return t
+
+
+@functools.lru_cache()
+def primes(n: int) -> List[int]:
+    xs = [2]
+    for i in range(3, n, 2):
+        if all(i % x != 0 for x in xs):
+            xs.append(i)
+    return xs
+
+
+@functools.lru_cache()
+def factorize(n: int) -> List[Tuple[int, int]]:
+    ps = primes(int(math.sqrt(n)))
+    xs = []
+    for p in ps:
+        count = 0
+        while n % p == 0:
+            n /= p
+            count += 1
+        xs.append((p, count))
+    return xs
+
+
+def tile(arr: np.ndarray, nrows: int, ncols: int) -> np.ndarray:
+    """
+    Args:
+        arr: HWC format array
+        nrows: number of tiled rows
+        ncols: number of tiled columns
+    """
+    h, w, c = arr.shape
+    out_height = nrows * h
+    out_width = ncols * w
+    chw = np.moveaxis(arr, (0, 1, 2), (1, 2, 0))
+
+    if c < nrows * ncols:
+        chw = chw.reshape(-1).copy()
+        chw.resize(nrows * ncols * h * w)
+
+    return (
+        chw.reshape(nrows, ncols, h, w)
+        .swapaxes(1, 2)
+        .reshape(out_height, out_width)
+    )
+
+
+def detile(
+    arr: np.ndarray, nrows: int, ncols: int, c: int, h: int, w: int
+) -> np.ndarray:
+    """
+    Args:
+        arr: tiled array
+        nrows: number of tiled rows
+        ncols: number of tiled columns
+        c: channels (number of tiles to keep)
+        h: height of tile
+        w: width of tile
+    """
+    chw = (
+        arr.reshape(nrows, h, ncols, w)
+        .swapaxes(1, 2)
+        .reshape(-1)[: c * h * w]
+        .reshape(c, h, w)
+    )
+
+    return np.moveaxis(chw, (0, 1, 2), (2, 0, 1)).reshape(h, w, c)
+
+
+def tile_tensor(data_tensor: np.ndarray) -> np.ndarray:
+    h, w, c = data_tensor.shape[-3:]
+    # nrows = np.product([p ** (k // 2) for p, k in factorize(c)])
+    nrows = int(math.sqrt(c))
+    return tile(data_tensor[0], nrows=nrows, ncols=math.ceil(c / nrows))
+
+
+def image_preview(data_tensor: np.ndarray) -> ByteString:
+    if data_tensor.dtype != np.uint8:
+        return ""
+    data_tensor = tile_tensor(data_tensor)
+    img = Image.fromarray(data_tensor)
+    with BytesIO() as buffer:
+        img.save(buffer, "png")
+        raw = base64.b64encode(buffer.getvalue()).decode("utf8")
+        return f"data:image/png;base64,{raw}"
 
 
 def json_result(
@@ -142,12 +232,18 @@ class ModelManager:
             # del self.models[model_config]
             print(f"Released model {model_config}")
 
-    # @synchronized
-    def predict(
+    def decode_data(
         self, model_config: ModelConfig, data: ByteString
-    ) -> List[Tuple[str, str, float]]:
+    ) -> np.ndarray:
         model = self.models[model_config].model
         data_tensor = decode_data(model, data)
+        return data_tensor
+
+    # @synchronized
+    def predict(
+        self, model_config: ModelConfig, data_tensor: np.ndarray
+    ) -> List[Tuple[str, str, float]]:
+        model = self.models[model_config].model
         predictions = model.predict(data_tensor)
         return self._decode_predictions(predictions)
 
@@ -296,7 +392,8 @@ def processor(work_distributor: WorkDistributor, monitor_stats: MonitorStats):
                 work_distributor.put(guid, confirmation)
                 # TODO decode here, especially for MP4s...
                 t0 = time.time()
-                preds = model_manager.predict(model_config, data)
+                data_tensor = model_manager.decode_data(model_config, data)
+                preds = model_manager.predict(model_config, data_tensor)
                 t1 = time.time()
                 inference_time = int(1000 * (t1 - t0))
                 result = json_result(
@@ -311,7 +408,7 @@ def processor(work_distributor: WorkDistributor, monitor_stats: MonitorStats):
                     # data_shape=..., # TODO different shapes for data?
                     inference_time=inference_time,
                     predictions=preds,
-                    data=data,
+                    data=image_preview(data_tensor),
                 )
             elif request_type == "ping":
                 id_ = item
