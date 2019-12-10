@@ -271,7 +271,7 @@ class MainActivity : AppCompatActivity() {
     private fun switchModel(modelConfig: ModelConfig) = Completable.fromRunnable {
         // TODO networkModelLoadedResponse, renderscriptLoaded?
         Log.i(TAG, "Switching model begin")
-        inference.switchModel(this, modelConfig)
+        inference.switchModel(modelConfig)
         Log.i(TAG, "Switching model end")
     }
         .subscribeOn(inferenceScheduler)

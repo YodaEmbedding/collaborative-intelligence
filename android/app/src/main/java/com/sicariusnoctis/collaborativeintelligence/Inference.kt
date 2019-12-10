@@ -1,7 +1,5 @@
 package com.sicariusnoctis.collaborativeintelligence
 
-import android.content.Context
-import android.util.Log
 import kotlinx.serialization.Serializable
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.GpuDelegate
@@ -12,6 +10,10 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder.nativeOrder
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel.MapMode.READ_ONLY
+import android.os.Environment.getExternalStorageDirectory
+import java.io.File
+import java.nio.file.Paths
+
 
 class Inference : Closeable {
     private val TAG = Inference::class.qualifiedName
@@ -63,7 +65,7 @@ class Inference : Closeable {
         gpuDelegate.close()
     }
 
-    fun switchModel(context: Context, modelConfig: ModelConfig) {
+    fun switchModel(modelConfig: ModelConfig) {
         // TODO First 65 operations will run on the GPU, and the remaining 3 on the CPU.TfLiteGpuDelegate
         // Invoke: Delegate should run on the same thread where it was initialized.Node number 68
         // (TfLiteGpuDelegate) failed to invoke.
@@ -81,7 +83,7 @@ class Inference : Closeable {
             return
         }
 
-        tfliteModel = loadModelFromFile(context, "${modelConfig.toPath()}-client.tflite")
+        tfliteModel = loadModelFromFile("${modelConfig.toPath()}-client.tflite")
         tflite = Interpreter(tfliteModel!!, tfliteOptions)
 
         val inputCapacity = tflite!!.getInputTensor(0).numBytes()
@@ -95,10 +97,13 @@ class Inference : Closeable {
     }
 
     @Throws(IOException::class)
-    private fun loadModelFromFile(context: Context, filename: String): MappedByteBuffer {
-        val fd = context.assets.openFd(filename)
-        val channel = FileInputStream(fd.fileDescriptor).channel
-        return channel.map(READ_ONLY, fd.startOffset, fd.declaredLength)
+    private fun loadModelFromFile(filename: String): MappedByteBuffer {
+        val folderRoot = "collaborative-intelligence"
+        val sdcard = getExternalStorageDirectory().toString()
+        val parent = Paths.get(sdcard, folderRoot).toString()
+        val file = File(parent, filename)
+        val channel = FileInputStream(file).channel
+        return channel.map(READ_ONLY, 0, file.length())
     }
 }
 
