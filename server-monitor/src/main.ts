@@ -9,6 +9,9 @@ import * as through2 from "through2";
 
 // import { Client } from "./client";
 
+const HOSTNAME: string = "localhost";
+const PORT: number = 5680;
+
 let mainWindow: BrowserWindow;
 // let client: Client;
 let socket: net.Socket;
@@ -51,7 +54,7 @@ app.on("ready", () => {
       })
     );
 
-  socket.connect(5680, "localhost");
+  socket.connect(PORT, HOSTNAME);
 
   // client = new Client();
   // client.connect(5680, "localhost");

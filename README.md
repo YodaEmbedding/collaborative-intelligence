@@ -81,7 +81,7 @@ By default, the server monitor connects to a server running on `"localhost"`,
 but you may change the following line in [`main.ts`](server-monitor/src/main.ts):
 
 ```typescript
-socket.connect(5680, "localhost");
+const HOSTNAME: string = "localhost";
 ```
 
 To install the required packages and run:
