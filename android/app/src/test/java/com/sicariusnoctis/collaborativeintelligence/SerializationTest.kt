@@ -32,7 +32,7 @@ class SerializationTest {
         ))
 
         // val s2 = jsonSerializer.stringify(PolymorphicSerializer(Response::class), expected)
-        val notExpected = ConfirmationResponse(0)
+        val notExpected = ConfirmationResponse(0, 42)
         val actual = jsonSerializer.parse(PolymorphicSerializer(Response::class), s)
 
         assertEquals(expected, actual)
