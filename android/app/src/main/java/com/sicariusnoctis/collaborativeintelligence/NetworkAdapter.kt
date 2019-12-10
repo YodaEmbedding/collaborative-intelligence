@@ -37,8 +37,9 @@ class NetworkAdapter {
     val timeUntilWriteAvailable get() = uploadStats.timeUntilAvailable
 
     fun connect() {
-        val HOSTNAME = HOSTNAME
-        socket = Socket(HOSTNAME, 5678)
+        val HOSTNAMES = listOf(HOSTNAME)
+        tryConnect(HOSTNAMES)
+
         // Ensure write+flush turns into a packet by disabling Nagle
         socket!!.tcpNoDelay = true
 
@@ -47,6 +48,17 @@ class NetworkAdapter {
         inputStream = BufferedReader(InputStreamReader(socket!!.inputStream))
         outputStream = DataOutputStream(socket!!.outputStream)
         // outputStream = BufferedOutputStream(socket!!.outputStream)
+    }
+
+    private fun tryConnect(hostnames: List<String>) {
+        for (hostname in hostnames) {
+            try {
+                socket = Socket(hostname, 5678)
+                return
+            } catch (e: Exception) {
+            }
+        }
+        throw Exception("Could not establish connection with any of the hosts")
     }
 
     fun close() {
