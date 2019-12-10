@@ -60,6 +60,10 @@ class StatisticsUiController(
         lineData.addDataSet(uploadLineDataset)
         lineData.addDataSet(totalLineDataset)
 
+        lineChart.axisLeft.axisMinimum = 0.0f
+        lineChart.axisLeft.axisMaximum = 600.0f
+        lineChart.axisRight.axisMinimum = 0.0f
+        lineChart.axisRight.axisMaximum = 600.0f
         lineChart.data = lineData
         lineChart.description = null
         lineChart.invalidate()
