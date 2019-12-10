@@ -42,11 +42,12 @@ class ModelStatistics {
     val samples: Map<Int, Sample>
         @Synchronized get() = validSamples
     var currentSample: Sample? = null
-        private set
+        @Synchronized get() = currentSample_
 
     private val allSamples = LinkedHashMap<Int, Sample>()
     private val validSamples = LinkedHashMap<Int, Sample>()
     private val lastNValidSamples = EvictingQueue.create<Sample>(10)
+    private var currentSample_: Sample? = null
 
     @Synchronized
     operator fun get(frameNumber: Int) = allSamples[frameNumber]!!
@@ -61,8 +62,8 @@ class ModelStatistics {
 
     @Synchronized
     fun setPreprocess(frameNumber: Int, start: Instant, end: Instant) {
-        currentSample = Sample()
-        allSamples[frameNumber] = currentSample!!
+        currentSample_ = Sample()
+        allSamples[frameNumber] = currentSample_!!
         allSamples[frameNumber]!!.preprocessStart = start
         allSamples[frameNumber]!!.preprocessEnd = end
     }

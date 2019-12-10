@@ -272,19 +272,23 @@ class MainActivity : AppCompatActivity() {
 
     private fun switchModel(modelConfig: ModelConfig) = Completable.fromRunnable {
         // TODO networkModelLoadedResponse, renderscriptLoaded?
+        Log.i(TAG, "Switching model begin")
         inference.switchModel(this, modelConfig)
+        Log.i(TAG, "Switching model end")
     }
         .subscribeOn(inferenceScheduler)
 
     private fun shouldProcessFrame(modelConfig: ModelConfig): Boolean {
         val stats = statistics[modelConfig]
 
-        // Load new model if needed, once latest sample has been processed client-side
+        // Load new model if config changed
         if (modelConfig != inference.modelConfig) {
-            if (stats.currentSample?.networkWriteEnd != null) {
-                Log.i(TAG, "Dropped frame after model switch request in progress")
+            // Wait till latest sample has been processed client-side first
+            if (stats.currentSample != null && stats.currentSample!!.inferenceEnd == null) {
+                Log.i(TAG, "Dropped frame because waiting to switch models")
                 return false
             }
+
             switchModel(modelConfig).blockingAwait()
             statistics[modelConfig] = ModelStatistics()
             Log.i(TAG, "Dropped frame after switching model")
