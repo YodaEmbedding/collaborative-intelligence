@@ -1,5 +1,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+![Android app screenshot](https://i.imgur.com/xxmUkCp.jpg)
+
 ## Requirements
 
  - Android Studio
