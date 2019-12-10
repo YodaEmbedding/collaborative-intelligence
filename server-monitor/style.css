@@ -10,3 +10,8 @@ th, td {
 .label_info {
   font-weight: bold;
 }
+
+#tensor_view {
+    width: 448px;
+    image-rendering: pixelated;
+}

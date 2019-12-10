@@ -9,6 +9,7 @@ const inferenceTimeText = spanById("inferenceTime");
 const predictionsTable = tableById("predictions");
 const dataPreviewText = spanById("dataPreview");
 const monitorStatsRawText = spanById("monitorStatsRaw");
+const tensorViewImage = imageById("tensor_view");
 
 ipcRenderer.on("update", (_event, data: string) => {
   const d = JSON.parse(data);
@@ -18,6 +19,13 @@ ipcRenderer.on("update", (_event, data: string) => {
   inferenceTimeText.textContent = d["inferenceTime"];
   dataPreviewText.textContent =
     d["data"].slice(0, 60) + (d["data"].length > 60 ? "..." : "");
+
+  // tensorViewImage.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAPQAAAD0CAAAAACJRFQiAAABKUlEQVR4nO3YMQ0AMAwEsab8ObcwMviMICf9lDnjuQc0b/uCBdO8EUUrilYUrShaUbSiaEXRCjK6z4mCnHfRiqIVRSuKVhStKFpRtKJoRdGKohVFK4pWFK0oWlG0omhF0YqiFUUrilYUrShaUbSiaEXRiqIVRSuKVhStKFpRtKJoRdGKohVFK4pWFK0oWlG0omhF0YqiFUUrilYUrShaUbSiaEXRiqIVRSuKVhStKFpRtKJoRdGKohVFK4pWFK0oWlG0omhF0YqiFUUrilYUrShaUbSiaEXRiqIVRSuKVhStKFpRtKJoRdGKohVFK4pWFK0oWlG0omhF0YqiFUUrilYUrShaUbSiaEXRiqIVRSuKVhStKFpRtKJoRdGKohVFK4pWFK0oWkFGf1URBrvRMeBcAAAAAElFTkSuQmCC'
+
+  // tensorViewImage.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAOAAAADgCAAAAAA/RjU9AAAASElEQVR4nO3BMQEAAADCoPVPbQo/oAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAICXAcTgAAG6EJuyAAAAAElFTkSuQmCC'
+
+  tensorViewImage.src = d["data"]
+
   updateTable(predictionsTable, predictionsFormatter(d["predictions"]));
 });
 
@@ -27,6 +35,10 @@ function tableById(id: string): HTMLTableElement {
 
 function spanById(id: string): HTMLSpanElement {
   return document.getElementById(id) as HTMLSpanElement;
+}
+
+function imageById(id: string): HTMLImageElement {
+  return document.getElementById(id) as HTMLImageElement;
 }
 
 function updateTable(table: HTMLTableElement, xss: string[][]) {
