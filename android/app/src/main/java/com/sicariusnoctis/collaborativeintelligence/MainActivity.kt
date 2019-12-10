@@ -218,11 +218,8 @@ class MainActivity : AppCompatActivity() {
             .map { statistics[it.frameNumber].sample }
             .observeOn(AndroidSchedulers.mainThread())
             .doOnNext { Log.i(TAG, "Finished processing frame ${it.frameNumber}") }
-            .subscribeBy(
-                { it.printStackTrace() },
-                { },
-                { sample -> statisticsUiController.addSample(sample) }
-            )
+            .doOnNext { sample -> statisticsUiController.addSample(sample) }
+            .subscribeBy({ it.printStackTrace() })
         subscriptions.add(networkResultResponsesSubscription)
 
         (networkRead!! as ConnectableObservable).connect()
@@ -247,6 +244,7 @@ class MainActivity : AppCompatActivity() {
             .onBackpressureDrop()
             .observeOn(IoScheduler(), false, 1)
             .map { it to modelUiController.modelConfig }
+            .doOnNext { Log.d(TAG, "${it.second}") }
             .onBackpressureLimitRate(
                 onDrop = { statistics[it.second].frameDropped() },
                 limit = { shouldProcessFrame(it.second) }
@@ -258,7 +256,7 @@ class MainActivity : AppCompatActivity() {
             .mapTimed(ModelStatistics::setPreprocess) { it.map(postprocessor::process) }
             .observeOn(inferenceScheduler, false, 1)
             .mapTimed(ModelStatistics::setInference) { inference.run(it) }
-            .observeOn(networkWriteScheduler)
+            .observeOn(networkWriteScheduler, false, 1)
             .doOnNextTimed(ModelStatistics::setNetworkWrite) {
                 networkAdapter!!.writeFrameRequest(it)
             }
@@ -337,8 +335,10 @@ class MainActivity : AppCompatActivity() {
         val sample = stats.sample
 
         // TODO watch out for encoding time...
-        val t = Duration.between(sample.preprocessStart, sample.inferenceEnd)
-        if (networkAdapter!!.timeUntilWriteAvailable > t) {
+        // val preWriteTime = Duration.between(sample.preprocessStart, sample.inferenceEnd)
+        // val enoughTime = preWriteTime.multipliedBy(2).dividedBy(3) + Duration.ofMillis(20)
+        val enoughTime = Duration.ofMillis(0)
+        if (networkAdapter!!.timeUntilWriteAvailable > enoughTime) {
             Log.i(TAG, "Dropped frame because of slow upload speed!")
             return false
         }
