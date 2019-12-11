@@ -74,12 +74,14 @@ def to_np_dtype(dtype):
 
 
 def decode_data(model: keras.Model, data: ByteString) -> np.ndarray:
+    # Handle client side
+    if model is None:
+        # TODO np.float32? should probably store more info about model
+        return np.frombuffer(data, dtype=np.float32)[None, ...]
     input_shape = model.layers[1].input_shape[1:]
     input_type = model.layers[0].dtype  # TODO verify
-    t = np.frombuffer(data, dtype=to_np_dtype(input_type)).reshape(
-        (-1, *input_shape)
-    )
-    return t
+    dtype = to_np_dtype(input_type)
+    return np.frombuffer(data, dtype=dtype).reshape((-1, *input_shape))
 
 
 @functools.lru_cache()
@@ -265,7 +267,9 @@ class ModelManager:
         self, model_config: ModelConfig, data_tensor: np.ndarray
     ) -> List[Tuple[str, str, float]]:
         model = self.models[model_config].model
-        predictions = model.predict(data_tensor)
+        predictions = (
+            model.predict(data_tensor) if model is not None else data_tensor
+        )
         return self._decode_predictions(predictions)
 
     def _decode_predictions(
@@ -280,6 +284,8 @@ class ModelManager:
             return keras.models.load_model(
                 filepath=f"../tools/{model_name}/{model_name}-full.h5"
             )
+        if model_config.layer == "client":
+            return None
         decoder = model_config.decoder
         custom_objects = {}
         if decoder != "None":
