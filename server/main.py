@@ -33,6 +33,8 @@ import janus
 import numpy as np
 import tensorflow as tf
 from PIL import Image
+from matplotlib import cm
+from matplotlib.colors import Normalize
 from tensorflow import keras
 from tensorflow.keras.applications import imagenet_utils
 
@@ -158,7 +160,11 @@ def image_preview(data_tensor: np.ndarray) -> ByteString:
     if data_tensor.dtype != np.uint8:
         return ""
     data_tensor = tile_tensor(data_tensor)
-    img = Image.fromarray(data_tensor)
+    cmap = cm.viridis
+    norm = Normalize(vmin=0, vmax=255)
+    rgba = cmap(norm(data_tensor))
+    arr = (rgba[:, :, :3] * 255.99).astype(dtype=np.uint8)
+    img = Image.fromarray(arr)
     with BytesIO() as buffer:
         img.save(buffer, "png")
         raw = base64.b64encode(buffer.getvalue()).decode("utf8")
