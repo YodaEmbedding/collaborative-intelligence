@@ -38,7 +38,9 @@ class NetworkAdapter {
 
     fun connect() {
         val HOSTNAMES = listOf(HOSTNAME)
-        tryConnect(HOSTNAMES)
+        val PORT = 5678
+
+        tryConnect(HOSTNAMES, PORT)
 
         // Ensure write+flush turns into a packet by disabling Nagle
         socket!!.tcpNoDelay = true
@@ -50,12 +52,14 @@ class NetworkAdapter {
         // outputStream = BufferedOutputStream(socket!!.outputStream)
     }
 
-    private fun tryConnect(hostnames: List<String>) {
+    private fun tryConnect(hostnames: List<String>, port: Int) {
         for (hostname in hostnames) {
             try {
-                socket = Socket(hostname, 5678)
+                Log.i(TAG, "Try to connect to $hostname:$port")
+                socket = Socket(hostname, port)
+                Log.i(TAG, "Connection established on $hostname:$port")
                 return
-            } catch (e: Exception) {
+            } catch (e: IOException) {
             }
         }
         throw Exception("Could not establish connection with any of the hosts")
