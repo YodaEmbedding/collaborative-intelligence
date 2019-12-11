@@ -8,60 +8,76 @@
     </head>
   </head>
   <body>
-    <h1>Server Monitor</h1>
+    <div class="row">
+      <div class="column_left">
+        <div class="column_left_inner">
+          <h1>Server Monitor</h1>
 
-    <span class="label_info">Frame number:</span>
-    <span id="frameNumber"></span>
-    <br />
-    <br />
+          <span class="label_info">Frame number:</span>
+          <span id="frameNumber"></span>
+          <br />
+          <br />
 
-    <span class="label_info">Inference time:</span>
-    <span id="inferenceTime"></span> ms
-    <br />
-    <br />
+          <span class="label_info">Inference time:</span>
+          <span id="inferenceTime"></span> ms
+          <br />
+          <br />
 
-    <span class="label_info">Predictions:</span>
-    <table id="predictions">
-      <colgroup>
-        <col />
-        <col width="150" />
-        <col width="50" />
-      </colgroup>
-      <thead align="left">
-        <tr>
-          <th>Name</th>
-          <th>Description</th>
-          <th>Score</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-    <br />
-    <br />
+          <span class="label_info">Predictions:</span>
+          <table id="predictions">
+            <colgroup>
+              <col />
+              <col width="150" />
+              <col width="50" />
+            </colgroup>
+            <thead align="left">
+              <tr>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Score</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <br />
+          <br />
 
-    <span class="label_info">Data preview:</span>
-    <br />
-    <span id="dataPreview"></span>
-    <br />
-    <br />
+          <div class="debug">
+            <span class="label_info">Data preview:</span>
+            <br />
+            <span id="dataPreview"></span>
+            <br />
+            <br />
+          </div>
 
-    <span class="label_info">Monitor stats raw:</span>
-    <br />
-    <span id="monitorStatsRaw"></span>
-    <br />
-    <br />
+          <div class="debug">
+            <span class="label_info">Monitor stats raw:</span>
+            <br />
+            <span id="monitorStatsRaw"></span>
+            <br />
+            <br />
+          </div>
 
-    <span class="label_info">Statistics raw:</span>
-    <br />
-    <span id="statisticsRaw"></span>
-    <br />
-    <br />
+          <div class="debug">
+            <span class="label_info">Statistics raw:</span>
+            <br />
+            <span id="statisticsRaw"></span>
+            <br />
+            <br />
+          </div>
 
-    <img id="tensor_view" />
-    <br />
+          <div class="debug">
+            <input type="text" id="text" />
+            <button id="send">Send</button>
+          </div>
+        </div>
+      </div>
 
-    <input type="text" id="text" />
-    <button id="send">Send</button>
+      <div class="column_right">
+        <img id="tensor_view" />
+        <br />
+      </div>
+    </div>
 
     <script src="./dist/renderer.js"></script>
   </body>

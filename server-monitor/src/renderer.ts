@@ -11,6 +11,8 @@ const dataPreviewText = spanById("dataPreview");
 const monitorStatsRawText = spanById("monitorStatsRaw");
 const tensorViewImage = imageById("tensor_view");
 
+const blackPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAOAAAADgCAAAAAA/RjU9AAAASElEQVR4nO3BMQEAAADCoPVPbQo/oAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAICXAcTgAAG6EJuyAAAAAElFTkSuQmCC"
+
 ipcRenderer.on("update", (_event, data: string) => {
   const d = JSON.parse(data);
   monitorStatsRawText.textContent =
@@ -19,13 +21,7 @@ ipcRenderer.on("update", (_event, data: string) => {
   inferenceTimeText.textContent = d["inferenceTime"];
   dataPreviewText.textContent =
     d["data"].slice(0, 60) + (d["data"].length > 60 ? "..." : "");
-
-  // tensorViewImage.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAPQAAAD0CAAAAACJRFQiAAABKUlEQVR4nO3YMQ0AMAwEsab8ObcwMviMICf9lDnjuQc0b/uCBdO8EUUrilYUrShaUbSiaEXRCjK6z4mCnHfRiqIVRSuKVhStKFpRtKJoRdGKohVFK4pWFK0oWlG0omhF0YqiFUUrilYUrShaUbSiaEXRiqIVRSuKVhStKFpRtKJoRdGKohVFK4pWFK0oWlG0omhF0YqiFUUrilYUrShaUbSiaEXRiqIVRSuKVhStKFpRtKJoRdGKohVFK4pWFK0oWlG0omhF0YqiFUUrilYUrShaUbSiaEXRiqIVRSuKVhStKFpRtKJoRdGKohVFK4pWFK0oWlG0omhF0YqiFUUrilYUrShaUbSiaEXRiqIVRSuKVhStKFpRtKJoRdGKohVFK4pWFK0oWkFGf1URBrvRMeBcAAAAAElFTkSuQmCC'
-
-  // tensorViewImage.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAOAAAADgCAAAAAA/RjU9AAAASElEQVR4nO3BMQEAAADCoPVPbQo/oAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAICXAcTgAAG6EJuyAAAAAElFTkSuQmCC'
-
-  tensorViewImage.src = d["data"]
-
+  tensorViewImage.src = d["data"] != "" ? d["data"] : blackPng
   updateTable(predictionsTable, predictionsFormatter(d["predictions"]));
 });
 
