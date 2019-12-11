@@ -22,20 +22,14 @@ cd tools
 python main.py
 ```
 
-Copy or symlink `models.json` to
-[`android/app/src/main/assets`](android/app/src/main/assets):
-
-```bash
-cd android/app/src/main/assets
-ln -s ../../../../../tools/models.json .
-```
 
 Then, create the folder `sdcard/collaborative-intelligence` on the device, and
-copy the generated `*.tflite` models into it:
+copy `models.json` and the generated `*.tflite` models and into the folder:
 
 ```bash
 cd tools
 adb shell mkdir "sdcard/collaborative-intelligence/"
+adb push models.json "/sdcard/collaborative-intelligence/"
 adb push **/*.tflite "/sdcard/collaborative-intelligence/"
 ```
 
