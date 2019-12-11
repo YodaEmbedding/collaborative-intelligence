@@ -1,6 +1,6 @@
 package com.sicariusnoctis.collaborativeintelligence
 
-import android.content.Context
+import android.os.Environment
 import android.view.View
 import android.view.View.TEXT_ALIGNMENT_TEXT_END
 import android.widget.AdapterView
@@ -14,9 +14,10 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectSerializer
 import kotlinx.serialization.json.content
+import java.io.File
+import java.nio.file.Paths
 
 class ModelUiController(
-    context: Context,
     private val modelSpinner: Spinner,
     private val layerSeekBar: IndicatorSeekBar,
     private val compressionSpinner: Spinner
@@ -25,7 +26,7 @@ class ModelUiController(
         @Synchronized get() = _modelConfig
 
     private lateinit var _modelConfig: ModelConfig
-    private val modelConfigMap = loadModelConfigs(context, "models.json")
+    private val modelConfigMap = loadModelConfigs("models.json")
     private val model
         get() = modelSpinner.getItemAtPosition(modelSpinner.selectedItemPosition).toString()
     private val layer
@@ -147,17 +148,17 @@ class ModelUiController(
         )
 
         @UseExperimental(UnstableDefault::class)
-        private fun loadConfig(context: Context, filename: String): JsonObject {
-            val inputStream = context.assets.open(filename)
+        private fun loadConfig(filename: String): JsonObject {
+            val folderRoot = "collaborative-intelligence"
+            val sdcard = Environment.getExternalStorageDirectory().toString()
+            val parent = Paths.get(sdcard, folderRoot).toString()
+            val inputStream = File(parent, filename)
             val jsonString = inputStream.bufferedReader().use { it.readText() }
             return Json.parse(JsonObjectSerializer, jsonString)
         }
 
-        private fun loadModelConfigs(
-            context: Context,
-            filename: String
-        ): LinkedHashMap<String, List<ModelConfig>> {
-            return loadConfig(context, filename).map { (k, v) ->
+        private fun loadModelConfigs(filename: String): LinkedHashMap<String, List<ModelConfig>> {
+            return loadConfig(filename).map { (k, v) ->
                 k to v.jsonArray.map { x -> jsonToModelConfig(x.jsonObject, k) }
             }.toMap() as LinkedHashMap
         }

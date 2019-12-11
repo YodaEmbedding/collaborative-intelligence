@@ -13,7 +13,6 @@ import io.reactivex.Observable
 import io.reactivex.Scheduler
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
-import io.reactivex.functions.BiFunction
 import io.reactivex.internal.schedulers.IoScheduler
 import io.reactivex.observables.ConnectableObservable
 import io.reactivex.processors.PublishProcessor
@@ -57,7 +56,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         rs = RenderScript.create(this)
         camera = Camera(this, cameraView) { frame -> this.frameProcessor.onNext(frame) }
-        modelUiController = ModelUiController(this, modelSpinner, layerSeekBar, compressionSpinner)
+        modelUiController = ModelUiController(modelSpinner, layerSeekBar, compressionSpinner)
         statisticsUiController = StatisticsUiController(
             statistics,
             predictionsText,
