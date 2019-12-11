@@ -158,6 +158,15 @@ def tile_tensor(data_tensor: np.ndarray) -> np.ndarray:
     return tile(data_tensor[0], nrows=nrows, ncols=math.ceil(c / nrows))
 
 
+def squarify_1d(data_tensor: np.ndarray) -> np.ndarray:
+    c = data_tensor.size
+    nrows = int(math.sqrt(c))
+    ncols = math.ceil(c / nrows)
+    t = data_tensor.reshape(-1).copy()
+    t.resize(nrows * ncols)
+    return t.reshape((nrows, ncols))
+
+
 def b64png_encode(arr: np.ndarray) -> ByteString:
     img = Image.fromarray(arr)
     with BytesIO() as buffer:
@@ -167,10 +176,25 @@ def b64png_encode(arr: np.ndarray) -> ByteString:
 
 
 def image_preview(data_tensor: np.ndarray) -> ByteString:
+    def denorm(x):
+        return (x * 255.99).astype(dtype=np.uint8)
+
     def colormap(x):
         cmap = cm.viridis
         rgba = cmap(x)
-        return (rgba[:, :, :3] * 255.99).astype(dtype=np.uint8)
+        return denorm(rgba[:, :, :3])
+
+    # Handle softmax layer
+    if len(data_tensor.shape) <= 2:
+        return b64png_encode(denorm(squarify_1d(data_tensor)))
+
+    # Handle grayscale image case
+    if len(data_tensor.shape) <= 3:
+        return b64png_encode(data_tensor[0])
+
+    # Handle RGB image case
+    if data_tensor.shape[-1] <= 3:
+        return b64png_encode(data_tensor[0].astype(dtype=np.uint8))
 
     # Handle non-uint8 types by clipping to min/max
     if data_tensor.dtype != np.uint8:
@@ -178,10 +202,6 @@ def image_preview(data_tensor: np.ndarray) -> ByteString:
         b = np.max(data_tensor)
         arr = tile_tensor((data_tensor - a) / (b - a))
         return b64png_encode(colormap(arr))
-
-    # Handle RGB image case
-    if data_tensor.shape[-1] <= 3:
-        return b64png_encode(data_tensor)
 
     norm = Normalize(vmin=0, vmax=255)
     arr = norm(tile_tensor(data_tensor))
