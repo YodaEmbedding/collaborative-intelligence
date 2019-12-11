@@ -44,17 +44,25 @@ class StatisticsUiController(
     }
 
     private fun initChart() {
+        val orange = Color.rgb(255, 128, 0)
+        val orangeH = Color.rgb(255, 160, 32)
+        val blue = Color.rgb(0, 255, 255)
+
         uploadLineDataset = LineDataSet(RealtimeSortedEntryList(), "Upload (KB/frame)")
+        uploadLineDataset.setDrawCircleHole(false)
         uploadLineDataset.setDrawCircles(false)
         uploadLineDataset.setDrawValues(false)
-        uploadLineDataset.color = Color.rgb(0, 255, 255)
-        uploadLineDataset.lineWidth = 2f
+        uploadLineDataset.color = blue
+        uploadLineDataset.lineWidth = 4f
 
         totalLineDataset = LineDataSet(RealtimeSortedEntryList(), "Total inference time (ms)")
-        totalLineDataset.setDrawCircles(false)
+        totalLineDataset.setDrawCircleHole(false)
+        totalLineDataset.setDrawCircles(true)
         totalLineDataset.setDrawValues(false)
-        totalLineDataset.color = Color.rgb(255, 128, 0)
-        totalLineDataset.lineWidth = 2f
+        totalLineDataset.circleColors = listOf(orangeH)
+        totalLineDataset.circleRadius = 2f
+        totalLineDataset.color = orange
+        totalLineDataset.lineWidth = 4f
 
         lineData = LineData()
         lineData.addDataSet(uploadLineDataset)
@@ -66,6 +74,8 @@ class StatisticsUiController(
         lineChart.axisRight.axisMaximum = 600.0f
         lineChart.data = lineData
         lineChart.description = null
+        lineChart.legend.textSize = 12.0f
+        lineChart.legend.xEntrySpace = 18.0f
         lineChart.invalidate()
     }
 
