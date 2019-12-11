@@ -156,19 +156,34 @@ def tile_tensor(data_tensor: np.ndarray) -> np.ndarray:
     return tile(data_tensor[0], nrows=nrows, ncols=math.ceil(c / nrows))
 
 
-def image_preview(data_tensor: np.ndarray) -> ByteString:
-    if data_tensor.dtype != np.uint8:
-        return ""
-    data_tensor = tile_tensor(data_tensor)
-    cmap = cm.viridis
-    norm = Normalize(vmin=0, vmax=255)
-    rgba = cmap(norm(data_tensor))
-    arr = (rgba[:, :, :3] * 255.99).astype(dtype=np.uint8)
+def b64png_encode(arr: np.ndarray) -> ByteString:
     img = Image.fromarray(arr)
     with BytesIO() as buffer:
         img.save(buffer, "png")
         raw = base64.b64encode(buffer.getvalue()).decode("utf8")
         return f"data:image/png;base64,{raw}"
+
+
+def image_preview(data_tensor: np.ndarray) -> ByteString:
+    def colormap(x):
+        cmap = cm.viridis
+        rgba = cmap(x)
+        return (rgba[:, :, :3] * 255.99).astype(dtype=np.uint8)
+
+    # Handle non-uint8 types by clipping to min/max
+    if data_tensor.dtype != np.uint8:
+        a = np.min(data_tensor)
+        b = np.max(data_tensor)
+        arr = tile_tensor((data_tensor - a) / (b - a))
+        return b64png_encode(colormap(arr))
+
+    # Handle RGB image case
+    if data_tensor.shape[-1] <= 3:
+        return b64png_encode(data_tensor)
+
+    norm = Normalize(vmin=0, vmax=255)
+    arr = norm(tile_tensor(data_tensor))
+    return b64png_encode(colormap(arr))
 
 
 def json_result(
