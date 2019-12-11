@@ -21,6 +21,7 @@ class UniformQuantizationU8Encoder(Layer):
         # x = K.clip(x, -4, 1)
         # x = (x + 4) * (255 / 5)
         x = (x - self.clip_range[0]) * self._scale
+        x = K.clip(x, 0.0, 255.0)
         x = K.cast(x, "uint8")
         return x
 
