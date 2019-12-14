@@ -147,18 +147,9 @@ class ModelUiController(
             decoder_args = jsonObject["decoder_args"]?.jsonObject
         )
 
-        @UseExperimental(UnstableDefault::class)
-        private fun loadConfig(filename: String): JsonObject {
-            val folderRoot = "collaborative-intelligence"
-            val sdcard = Environment.getExternalStorageDirectory().toString()
-            val parent = Paths.get(sdcard, folderRoot).toString()
-            val inputStream = File(parent, filename)
-            val jsonString = inputStream.bufferedReader().use { it.readText() }
-            return Json.parse(JsonObjectSerializer, jsonString)
-        }
-
+        @UnstableDefault
         private fun loadModelConfigs(filename: String): LinkedHashMap<String, List<ModelConfig>> {
-            return loadConfig(filename).map { (k, v) ->
+            return loadJsonFromDefaultFolder(filename)!!.map { (k, v) ->
                 k to v.jsonArray.map { x -> jsonToModelConfig(x.jsonObject, k) }
             }.toMap() as LinkedHashMap
         }

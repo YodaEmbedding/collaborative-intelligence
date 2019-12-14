@@ -5,8 +5,7 @@ import kotlinx.serialization.PolymorphicSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UnstableDefault
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.*
 import kotlinx.serialization.modules.SerializersModule
 import java.io.*
 import java.net.Socket
@@ -36,11 +35,15 @@ class NetworkAdapter {
     lateinit var uploadStats: UploadStats
     val timeUntilWriteAvailable get() = uploadStats.timeUntilAvailable
 
+    @UnstableDefault
     fun connect() {
         val HOSTNAMES = listOf(HOSTNAME)
         val PORT = 5678
 
-        tryConnect(HOSTNAMES, PORT)
+        val networkConfig = loadJsonFromDefaultFolder("network.json")
+        val hostnameOverride = listOfNotNull(networkConfig?.get("hostname")?.content)
+        val portOverride = networkConfig?.get("port")?.intOrNull
+        tryConnect(hostnameOverride + HOSTNAMES, portOverride ?: PORT)
 
         // Ensure write+flush turns into a packet by disabling Nagle
         socket!!.tcpNoDelay = true
@@ -107,7 +110,6 @@ class NetworkAdapter {
         }
     }
 
-    @UseExperimental(UnstableDefault::class)
     private fun writeJson(jsonString: String) {
         // uploadStats.sendBytes(frameNumber, 6 + jsonString.length)
         with(outputStream!!) {
@@ -119,6 +121,7 @@ class NetworkAdapter {
         }
     }
 
+    @UnstableDefault
     fun writeFrameRequest(frameRequest: FrameRequest<ByteArray>) {
         Log.i(TAG, "Request: ${frameRequest.info.frameNumber}, ${frameRequest.info.modelConfig}")
         if (prevModelConfig != frameRequest.info.modelConfig) {
@@ -128,7 +131,7 @@ class NetworkAdapter {
         writeData(frameRequest.info.frameNumber, frameRequest.obj)
     }
 
-    @UseExperimental(UnstableDefault::class)
+    @UnstableDefault
     fun writeModelConfig(modelConfig: ModelConfig) {
         val jsonString = Json.stringify(ModelConfig.serializer(), modelConfig)
         // uploadStats.sendBytes(frameNumber, 6 + jsonString.length)
@@ -145,7 +148,7 @@ class NetworkAdapter {
         }
     }
 
-    @UseExperimental(UnstableDefault::class)
+    @UnstableDefault
     fun writeSample(frameRequest: FrameRequest<Sample>) {
         val sample = SerializableSample.fromSample(frameRequest.info.frameNumber, frameRequest.obj)
         val jsonString = Json.stringify(SerializableSample.serializer(), sample)
