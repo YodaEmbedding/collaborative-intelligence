@@ -292,19 +292,19 @@ class MainActivity : AppCompatActivity() {
         .observeOn(networkWriteScheduler)
         .doOnSuccess { networkAdapter!!.writeModelConfig(it) }
         .ignoreElement()
-        // TODO
-        .andThen(switchModelServerObtainResponse(modelConfig) ?: Completable.fromRunnable {})
+        .andThen(switchModelServerObtainResponse(modelConfig))
 
-    // TODO use !! instead of ?
-    private fun switchModelServerObtainResponse(modelConfig: ModelConfig) = networkRead
-        ?.filter { it is ModelReadyResponse }
-        ?.map { it as ModelReadyResponse }
-        ?.firstOrError()
-        ?.doOnSuccess {
-            if (it.modelConfig != modelConfig)
-                throw Exception("Model config on server ${it.modelConfig} different from expected $modelConfig ")
-        }
-        ?.ignoreElement()
+    private fun switchModelServerObtainResponse(modelConfig: ModelConfig) = Completable.defer {
+        networkRead!!
+            .filter { it is ModelReadyResponse }
+            .map { it as ModelReadyResponse }
+            .firstOrError()
+            .doOnSuccess {
+                if (it.modelConfig != modelConfig)
+                    throw Exception("Model config on server ${it.modelConfig} different from expected $modelConfig ")
+            }
+            .ignoreElement()
+    }
 
     private fun shouldProcessFrame(modelConfig: ModelConfig): Boolean {
         val stats = statistics[modelConfig]
@@ -462,3 +462,4 @@ class MainActivity : AppCompatActivity() {
 }
 
 // TODO Switch to using networkWrite.toSerialized()
+// TODO Late-bind variables in RxJava?
