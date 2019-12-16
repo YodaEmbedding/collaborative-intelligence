@@ -199,6 +199,8 @@ class UploadStats {
     @Synchronized
     fun confirmBytes(frameNumber: Int, count: Int) {
         confirmedBytes += count
+        if (!samples.containsKey(frameNumber))
+            return
         val sample = samples[frameNumber]!!
         sample.timeEnd = Instant.now()
         if (sample.bytes != count.toLong())
