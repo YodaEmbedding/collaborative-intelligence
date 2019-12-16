@@ -1,6 +1,7 @@
 package com.sicariusnoctis.collaborativeintelligence
 
 import kotlinx.serialization.PolymorphicSerializer
+import kotlinx.serialization.json.JSON
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
 import org.junit.Assert.assertEquals
@@ -25,11 +26,13 @@ class SerializationTest {
                 """{"name": "n04286575", "description": "spotlight", "score": 0.125}""" +
                 """]}"""
 
-        val expected = ResultResponse(0, 30, listOf(
-            Prediction("n01930112", "nematode", 0.5f),
-            Prediction("n03729826", "matchstick", 0.25f),
-            Prediction("n04286575", "spotlight", 0.125f)
-        ))
+        val expected = ResultResponse(
+            0, 30, listOf(
+                Prediction("n01930112", "nematode", 0.5f),
+                Prediction("n03729826", "matchstick", 0.25f),
+                Prediction("n04286575", "spotlight", 0.125f)
+            )
+        )
 
         // val s2 = jsonSerializer.stringify(PolymorphicSerializer(Response::class), expected)
         val notExpected = ConfirmationResponse(0, 42)
@@ -37,5 +40,21 @@ class SerializationTest {
 
         assertEquals(expected, actual)
         assertNotEquals(notExpected, actual)
+    }
+
+    @Test
+    fun modelConfig() {
+        val s = """{"model": "resnet18", "layer": "client", "encoder": "None", "decoder": "None"}"""
+        val mc = ModelConfig(
+            model = "resnet18",
+            layer = "client",
+            encoder = "None",
+            decoder = "None",
+            encoder_args = null,
+            decoder_args = null
+        )
+
+        assertEquals(mc, JSON.parse(ModelConfig.serializer(), s))
+        // assertEquals(s, JSON.stringify(ModelConfig.serializer(), mc))
     }
 }

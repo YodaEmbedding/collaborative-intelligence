@@ -15,6 +15,14 @@ class ModelConfig:
     def __hash__(self) -> int:
         return hash(json.dumps(asdict(self)))
 
+    def to_json_object(self) -> Dict[str, Any]:
+        d = dict(self.__dict__)
+        if len(self.encoder_args) == 0:
+            d.pop("encoder_args")
+        if len(self.decoder_args) == 0:
+            d.pop("decoder_args")
+        return d
+
     def to_path(self) -> str:
         enc = ModelConfig._encdec_str(self.encoder, self.encoder_args)
         dec = ModelConfig._encdec_str(self.decoder, self.decoder_args)

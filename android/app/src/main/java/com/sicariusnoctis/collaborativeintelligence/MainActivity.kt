@@ -7,10 +7,7 @@ import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import io.fotoapparat.parameter.Resolution
 import io.fotoapparat.preview.Frame
-import io.reactivex.Completable
-import io.reactivex.Flowable
-import io.reactivex.Observable
-import io.reactivex.Scheduler
+import io.reactivex.*
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.internal.schedulers.IoScheduler
@@ -99,9 +96,9 @@ class MainActivity : AppCompatActivity() {
             )
             .subscribeOn(IoScheduler())
             .andThen(initPostprocessor())
-            .andThen(switchModel(modelUiController.modelConfig))
             .andThen(subscribeNetworkIo())
             .andThen(subscribePingGenerator())
+            .andThen(switchModel(modelUiController.modelConfig))
             .andThen(subscribeFrameProcessor())
             .subscribeBy({ it.printStackTrace() })
     }
@@ -203,6 +200,13 @@ class MainActivity : AppCompatActivity() {
             .subscribeOn(IoScheduler())
             .publish()
 
+        val networkModelReadySubscription = networkRead!!
+            .filter { it is ModelReadyResponse }
+            .map { it as ModelReadyResponse }
+            .doOnNext { Log.i(TAG, "Model loaded on server: $it") }
+            .subscribeBy({ it.printStackTrace() })
+        subscriptions.add(networkModelReadySubscription)
+
         val networkPingResponsesSubscription = networkRead!!
             .filter { it is PingResponse }
             .map { it as PingResponse }
@@ -267,13 +271,40 @@ class MainActivity : AppCompatActivity() {
         subscriptions.add(frameProcessorSubscription)
     }
 
-    private fun switchModel(modelConfig: ModelConfig) = Completable.fromRunnable {
-        // TODO networkModelLoadedResponse, renderscriptLoaded?
-        Log.i(TAG, "Switching model begin")
+    private fun switchModel(modelConfig: ModelConfig) = Completable
+        .fromRunnable { Log.i(TAG, "Switching model begin") }
+        // .andThen(
+        //     Completable.mergeArray(
+        //         switchModelInference(modelConfig),
+        //         switchModelServer(modelConfig)
+        //     )
+        // )
+        .andThen(switchModelInference(modelConfig))
+        .andThen(switchModelServer(modelConfig))
+        .doOnComplete { Log.i(TAG, "Switching model end") }
+
+    private fun switchModelInference(modelConfig: ModelConfig) = Completable.fromRunnable {
         inference.switchModel(modelConfig)
-        Log.i(TAG, "Switching model end")
-    }
-        .subscribeOn(inferenceScheduler)
+    }.subscribeOn(inferenceScheduler)
+
+    private fun switchModelServer(modelConfig: ModelConfig) = Single
+        .just(modelConfig)
+        .observeOn(networkWriteScheduler)
+        .doOnSuccess { networkAdapter!!.writeModelConfig(it) }
+        .ignoreElement()
+        // TODO
+        .andThen(switchModelServerObtainResponse(modelConfig) ?: Completable.fromRunnable {})
+
+    // TODO use !! instead of ?
+    private fun switchModelServerObtainResponse(modelConfig: ModelConfig) = networkRead
+        ?.filter { it is ModelReadyResponse }
+        ?.map { it as ModelReadyResponse }
+        ?.firstOrError()
+        ?.doOnSuccess {
+            if (it.modelConfig != modelConfig)
+                throw Exception("Model config on server ${it.modelConfig} different from expected $modelConfig ")
+        }
+        ?.ignoreElement()
 
     private fun shouldProcessFrame(modelConfig: ModelConfig): Boolean {
         val stats = statistics[modelConfig]
@@ -429,3 +460,5 @@ class MainActivity : AppCompatActivity() {
         }
     }
 }
+
+// TODO Switch to using networkWrite.toSerialized()

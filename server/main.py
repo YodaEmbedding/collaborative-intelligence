@@ -240,6 +240,12 @@ def json_confirmation(frame_number: int, num_bytes: int) -> str:
     )
 
 
+def json_ready(model_config: ModelConfig) -> str:
+    return json.dumps(
+        {"type": "ready", "modelConfig": model_config.to_json_object()}
+    )
+
+
 def json_ping(id_) -> str:
     return json.dumps({"type": "ping", "id": id_})
 
@@ -428,6 +434,9 @@ def processor(work_distributor: WorkDistributor, monitor_stats: MonitorStats):
                 work_distributor.put(guid, None)
             elif request_type == "acquire":
                 model_manager.acquire(model_config)
+                ready = json_ready(model_config=model_config)
+                ready = f"{ready}\n".encode("utf8")
+                work_distributor.put(guid, ready)
             elif request_type == "release":
                 model_manager.release(model_config)
             elif request_type == "predict":
@@ -530,9 +539,10 @@ async def produce(reader: StreamReader, putter):
                 i, data = item
                 print(f"Produce: {i} {str_preview(data)}")
                 await putter((model_config, "predict", item))
+            # TODO why are all json input types handled in this way?
             elif input_type == "json":
-                print(f"Produce: {json}")
                 item = {k: v for k, v in item.items() if v is not None}
+                print(f"Produce: {item}")
                 next_model_config = ModelConfig(**item)
                 valid = model_config is not None
                 same = valid and model_config == next_model_config

@@ -21,11 +21,12 @@ class NetworkAdapter {
     private var outputStream: DataOutputStream? = null
     // private var outputStream: OutputStream? = null
     private var socket: Socket? = null
-    private var prevModelConfig: ModelConfig? = null
+    private var modelConfig: ModelConfig? = null
     private val jsonSerializer = Json(
         context = SerializersModule {
             polymorphic<Response> {
                 ConfirmationResponse::class with ConfirmationResponse.serializer()
+                ModelReadyResponse::class with ModelReadyResponse.serializer()
                 PingResponse::class with PingResponse.serializer()
                 ResultResponse::class with ResultResponse.serializer()
             }
@@ -121,12 +122,14 @@ class NetworkAdapter {
         }
     }
 
+    // TODO properly extract model config switching functionality...? switchModel() should call writeModelConfig...
+    // This is probably why there's a bug... writeModelConfig is not reliably called!
+
     @UnstableDefault
     fun writeFrameRequest(frameRequest: FrameRequest<ByteArray>) {
         Log.i(TAG, "Request: ${frameRequest.info.frameNumber}, ${frameRequest.info.modelConfig}")
-        if (prevModelConfig != frameRequest.info.modelConfig) {
-            writeModelConfig(frameRequest.info.modelConfig)
-            prevModelConfig = frameRequest.info.modelConfig
+        if (modelConfig != frameRequest.info.modelConfig) {
+            throw Exception("Frame request model config does not match last sent model config")
         }
         writeData(frameRequest.info.frameNumber, frameRequest.obj)
     }
@@ -138,6 +141,7 @@ class NetworkAdapter {
         writeJson(jsonString)
         // TODO wait until all traffic is flushed?
         switchModel()
+        this.modelConfig = modelConfig
     }
 
     fun writePingRequest(pingRequest: PingRequest) {
@@ -222,6 +226,12 @@ data class ConfirmationResponse(
 ) : Response()
 
 @Serializable
+@SerialName("ready")
+data class ModelReadyResponse(
+    val modelConfig: ModelConfig
+) : Response()
+
+@Serializable
 @SerialName("ping")
 data class PingResponse(
     val id: Int
@@ -243,8 +253,8 @@ data class ModelConfig(
     val layer: String,
     val encoder: String,
     val decoder: String,
-    val encoder_args: JsonObject?,
-    val decoder_args: JsonObject?
+    val encoder_args: JsonObject? = null,
+    val decoder_args: JsonObject? = null
 ) {
     fun toPath(): String = listOf(
         model,

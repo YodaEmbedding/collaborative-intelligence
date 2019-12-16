@@ -138,6 +138,7 @@ class ModelUiController(
         private fun <T> choicePosition(choices: List<T>, value: T?) =
             if (value == null) 0 else maxOf(choices.indexOf(value), 0)
 
+        // TODO use ModelConfig.serializer() directly...
         private fun jsonToModelConfig(jsonObject: JsonObject, model: String? = null) = ModelConfig(
             model = model ?: jsonObject["model"]!!.content,
             layer = jsonObject["layer"]!!.content,
