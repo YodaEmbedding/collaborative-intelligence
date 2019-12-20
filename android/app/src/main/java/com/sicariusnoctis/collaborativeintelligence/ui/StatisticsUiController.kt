@@ -88,15 +88,14 @@ class StatisticsUiController(
             "${formatPercentage(it.score)} ${it.description}"
         }
         fpsText.text = "FPS: ${String.format("%.1f", stats.fps)}"
-        uploadText.text = "Upload: ${sample.uploadBytes!! / 1024} KB/frame"
-        preprocessText.text = "1. Preprocess: ${sample.preprocess.toMillis()} ms"
-        clientInferenceText.text =
-            "2. Client infer: ${sample.clientInference.toMillis()} ms"
+        uploadText.text = "Upload: ${(sample.uploadBytes ?: 0) / 1024} KB/frame"
+        preprocessText.text = "1. Preprocess: ${toMillis(sample.preprocess)} ms"
+        clientInferenceText.text = "2. Client infer: ${toMillis(sample.clientInference)} ms"
         encodingText.text = "3. Encoding: N/A"
-        networkWriteText.text = "4. Network send: ${sample.networkWrite.toMillis()} ms"
-        serverInferenceText.text = "5. Server infer: ${sample.serverInference.toMillis()} ms"
-        networkReadText.text = "6. Network read: ${sample.networkRead.toMillis()} ms"
-        totalText.text = "Total: ${sample.total.toMillis()} ms"
+        networkWriteText.text = "4. Network send: ${toMillis(sample.networkWrite)} ms"
+        serverInferenceText.text = "5. Server infer: ${toMillis(sample.serverInference)} ms"
+        networkReadText.text = "6. Network read: ${toMillis(sample.networkRead)} ms"
+        totalText.text = "Total: ${toMillis(sample.total)} ms"
         framesProcessedText.text = "Processed: ${stats.framesProcessed}"
     }
 
@@ -104,8 +103,11 @@ class StatisticsUiController(
         if (!::epoch.isInitialized)
             epoch = sample.preprocessStart!!
 
+        if (sample.total == null || sample.uploadBytes == null)
+            return
+
         val t = Duration.between(epoch, sample.preprocessStart).toMillis() / 1000f
-        val y1 = sample.total.toMillis().toFloat()
+        val y1 = sample.total!!.toMillis().toFloat()
         val y2 = sample.uploadBytes!!.toFloat() / 1024
         totalLineDataset.addEntry(Entry(t, y1))
         uploadLineDataset.addEntry(Entry(t, y2))
@@ -127,9 +129,11 @@ class StatisticsUiController(
     }
 
     companion object {
-        fun formatPercentage(score: Float): String {
+        private fun formatPercentage(score: Float): String {
             val s = (score * 100).toInt().toString()
             return if (s.length == 1) " $s%" else "$s%"
         }
+
+        private fun toMillis(duration: Duration?) = duration?.toMillis() ?: 0
     }
 }

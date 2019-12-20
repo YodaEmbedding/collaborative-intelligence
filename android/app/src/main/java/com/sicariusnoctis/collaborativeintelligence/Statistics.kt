@@ -119,13 +119,13 @@ data class SerializableSample(
     companion object {
         fun fromSample(frameNumber: Int, sample: Sample) = SerializableSample(
             frameNumber,
-            sample.preprocess.toMillis(),
-            sample.clientInference.toMillis(),
-            sample.networkWrite.toMillis(),
-            sample.serverInference.toMillis(),
-            sample.networkRead.toMillis(),
-            sample.networkWait.toMillis(),
-            sample.total.toMillis()
+            sample.preprocess!!.toMillis(),
+            sample.clientInference!!.toMillis(),
+            sample.networkWrite!!.toMillis(),
+            sample.serverInference!!.toMillis(),
+            sample.networkRead!!.toMillis(),
+            sample.networkWait!!.toMillis(),
+            sample.total!!.toMillis()
         )
     }
 }
@@ -142,24 +142,15 @@ data class Sample(
     var uploadBytes: Int? = null,
     var resultResponse: ResultResponse? = null
 ) {
-    val preprocess: Duration
-        get() = Duration.between(preprocessStart, preprocessEnd)
-    val clientInference: Duration
-        get() = Duration.between(inferenceStart, inferenceEnd)
-    // val encoding: Duration
-    //     get() = Duration.between(encodingStart, encodingEnd)
-    val networkWrite: Duration
-        get() = Duration.between(networkWriteStart, networkWriteEnd)
-    val serverInference: Duration
-        get() = Duration.ofMillis(resultResponse!!.inferenceTime)
-    val networkRead: Duration
-        get() = Duration.between(networkReadStart, networkReadEnd)
-    val networkWait: Duration
-        get() = Duration.between(networkWriteStart, networkReadEnd)
-    val total: Duration
-        get() = Duration.between(preprocessStart, networkReadEnd)
-    val frameNumber: Int
-        get() = resultResponse!!.frameNumber
+    val preprocess get() = durationBetween(preprocessStart, preprocessEnd)
+    val clientInference get() = durationBetween(inferenceStart, inferenceEnd)
+    // val encoding get() = durationBetween(encodingStart, encodingEnd)
+    val networkWrite get() = durationBetween(networkWriteStart, networkWriteEnd)
+    val serverInference get() = resultResponse?.let { Duration.ofMillis(it.inferenceTime) }
+    val networkRead get() = durationBetween(networkReadStart, networkReadEnd)
+    val networkWait get() = durationBetween(networkWriteStart, networkReadEnd)
+    val total get() = durationBetween(preprocessStart, networkReadEnd)
+    val frameNumber get() = resultResponse!!.frameNumber
 
     override fun toString() = durations()
         .zip(durationDescriptions)
@@ -191,5 +182,9 @@ data class Sample(
             "Network Send",
             "Network Wait"
         )
+
+        private fun durationBetween(start: Instant?, end: Instant?): Duration? {
+            return if (start == null || end == null) null else Duration.between(start, end)
+        }
     }
 }
