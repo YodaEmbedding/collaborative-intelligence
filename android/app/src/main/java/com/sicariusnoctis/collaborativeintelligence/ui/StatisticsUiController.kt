@@ -1,4 +1,4 @@
-package com.sicariusnoctis.collaborativeintelligence
+package com.sicariusnoctis.collaborativeintelligence.ui
 
 import android.annotation.SuppressLint
 import android.graphics.Color
@@ -8,6 +8,9 @@ import com.github.mikephil.charting.charts.LineChart
 import com.github.mikephil.charting.data.Entry
 import com.github.mikephil.charting.data.LineData
 import com.github.mikephil.charting.data.LineDataSet
+import com.sicariusnoctis.collaborativeintelligence.RealtimeSortedEntryList
+import com.sicariusnoctis.collaborativeintelligence.Sample
+import com.sicariusnoctis.collaborativeintelligence.Statistics
 import java.time.Duration
 import java.time.Instant
 

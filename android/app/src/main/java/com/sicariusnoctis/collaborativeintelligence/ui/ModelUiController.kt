@@ -1,4 +1,4 @@
-package com.sicariusnoctis.collaborativeintelligence
+package com.sicariusnoctis.collaborativeintelligence.ui
 
 import android.os.Environment
 import android.view.View
@@ -6,6 +6,8 @@ import android.view.View.TEXT_ALIGNMENT_TEXT_END
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Spinner
+import com.sicariusnoctis.collaborativeintelligence.ModelConfig
+import com.sicariusnoctis.collaborativeintelligence.loadJsonFromDefaultFolder
 import com.warkiz.widget.IndicatorSeekBar
 import com.warkiz.widget.OnSeekChangeListener
 import com.warkiz.widget.SeekParams

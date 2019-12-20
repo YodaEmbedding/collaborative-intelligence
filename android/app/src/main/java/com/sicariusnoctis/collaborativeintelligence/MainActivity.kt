@@ -5,6 +5,8 @@ import android.os.Bundle
 import android.renderscript.RenderScript
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
+import com.sicariusnoctis.collaborativeintelligence.ui.ModelUiController
+import com.sicariusnoctis.collaborativeintelligence.ui.StatisticsUiController
 import io.fotoapparat.parameter.Resolution
 import io.fotoapparat.preview.Frame
 import io.reactivex.*
