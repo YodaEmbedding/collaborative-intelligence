@@ -57,193 +57,204 @@
             android:layout_marginVertical="6dp"
             android:background="@android:color/darker_gray" />
 
-        <TableLayout
+        <ScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:stretchColumns="*">
+            android:fillViewport="true">
 
-            <TableRow>
-
-                <TextView
-                    android:id="@+id/fpsText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginVertical="6dp"
-                    android:text="FPS: " />
-
-                <TextView
-                    android:id="@+id/framesProcessedText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginVertical="6dp"
-                    android:text="Processed: " />
-
-                <!--
-                <TextView
-                    android:id="@+id/framesDroppedText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginVertical="6dp"
-                    android:text="Dropped: " />
-                -->
-
-            </TableRow>
-
-            <TableRow>
-
-                <TextView
-                    android:id="@+id/preprocessText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginVertical="6dp"
-                    android:text="1. Preprocess: ms" />
-
-                <TextView
-                    android:id="@+id/clientInferenceText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginVertical="6dp"
-                    android:text="2. Client infer: ms" />
-
-            </TableRow>
-
-            <TableRow>
-
-                <TextView
-                    android:id="@+id/encodingText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginVertical="6dp"
-                    android:text="3. Encoding: ms" />
-
-                <TextView
-                    android:id="@+id/networkWriteText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginVertical="6dp"
-                    android:text="4. Network send: ms" />
-
-            </TableRow>
-
-            <TableRow>
-
-                <TextView
-                    android:id="@+id/serverInferenceText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginVertical="6dp"
-                    android:text="5. Server infer: ms" />
-
-                <TextView
-                    android:id="@+id/networkReadText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginVertical="6dp"
-                    android:text="6. Network read: ms" />
-
-            </TableRow>
-
-            <TableRow>
-
-                <TextView
-                    android:id="@+id/totalText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginVertical="6dp"
-                    android:text="Total: ms" />
-
-                <TextView
-                    android:id="@+id/uploadText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginVertical="6dp"
-                    android:text="Upload: KB/frame" />
-
-            </TableRow>
-
-        </TableLayout>
-
-        <com.github.mikephil.charting.charts.LineChart
-            android:id="@+id/lineChart"
-            android:layout_width="match_parent"
-            android:layout_height="180dp"
-            android:layout_marginVertical="6dp" />
-
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="2dp"
-            android:layout_marginVertical="6dp"
-            android:background="@android:color/darker_gray" />
-
-        <RelativeLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <TextView
-                android:id="@+id/modelText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_centerVertical="true"
-                android:layout_marginVertical="6dp"
-                android:text="Model:" />
-
-            <Spinner
-                android:id="@+id/modelSpinner"
-                android:layout_width="300dp"
-                android:layout_height="wrap_content"
-                android:layout_alignParentEnd="true"
-                android:layout_centerVertical="true"
-                android:entries="@array/model_choices"
-                android:textAlignment="textEnd" />
-        </RelativeLayout>
-
-        <RelativeLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/splitText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginVertical="6dp"
-                android:text="Split layer:" />
-
-            <com.warkiz.widget.IndicatorSeekBar
-                android:id="@+id/layerSeekBar"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_below="@+id/splitText"
-                android:layout_marginTop="6dp"
-                android:layout_marginBottom="12dp"
-                app:isb_progress="50"
-                app:isb_show_tick_marks_type="oval"
-                app:isb_show_tick_texts="true"
-                app:isb_tick_texts_array="@array/layer_choices"
-                app:isb_ticks_count="4" />
-        </RelativeLayout>
+                android:orientation="vertical">
 
-        <RelativeLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
+                <TableLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:stretchColumns="*">
 
-            <TextView
-                android:id="@+id/compressionText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginVertical="6dp"
-                android:text="Compression method:" />
+                    <TableRow>
 
-            <Spinner
-                android:id="@+id/compressionSpinner"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_below="@+id/compressionText"
-                android:entries="@array/compression_choices"
-                android:textAlignment="textEnd" />
-        </RelativeLayout>
+                        <TextView
+                            android:id="@+id/fpsText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginVertical="6dp"
+                            android:text="FPS: " />
 
+                        <TextView
+                            android:id="@+id/framesProcessedText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginVertical="6dp"
+                            android:text="Processed: " />
+
+                        <!--
+                        <TextView
+                            android:id="@+id/framesDroppedText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginVertical="6dp"
+                            android:text="Dropped: " />
+                        -->
+
+                    </TableRow>
+
+                    <TableRow>
+
+                        <TextView
+                            android:id="@+id/preprocessText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginVertical="6dp"
+                            android:text="1. Preprocess: ms" />
+
+                        <TextView
+                            android:id="@+id/clientInferenceText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginVertical="6dp"
+                            android:text="2. Client infer: ms" />
+
+                    </TableRow>
+
+                    <TableRow>
+
+                        <TextView
+                            android:id="@+id/encodingText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginVertical="6dp"
+                            android:text="3. Encoding: ms" />
+
+                        <TextView
+                            android:id="@+id/networkWriteText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginVertical="6dp"
+                            android:text="4. Network send: ms" />
+
+                    </TableRow>
+
+                    <TableRow>
+
+                        <TextView
+                            android:id="@+id/serverInferenceText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginVertical="6dp"
+                            android:text="5. Server infer: ms" />
+
+                        <TextView
+                            android:id="@+id/networkReadText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginVertical="6dp"
+                            android:text="6. Network read: ms" />
+
+                    </TableRow>
+
+                    <TableRow>
+
+                        <TextView
+                            android:id="@+id/totalText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginVertical="6dp"
+                            android:text="Total: ms" />
+
+                        <TextView
+                            android:id="@+id/uploadText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginVertical="6dp"
+                            android:text="Upload: KB/frame" />
+
+                    </TableRow>
+
+                </TableLayout>
+
+                <com.github.mikephil.charting.charts.LineChart
+                    android:id="@+id/lineChart"
+                    android:layout_width="match_parent"
+                    android:layout_height="180dp"
+                    android:layout_marginVertical="6dp" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="2dp"
+                    android:layout_marginVertical="6dp"
+                    android:background="@android:color/darker_gray" />
+
+                <RelativeLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/modelText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_centerVertical="true"
+                        android:layout_marginVertical="6dp"
+                        android:text="Model:" />
+
+                    <Spinner
+                        android:id="@+id/modelSpinner"
+                        android:layout_width="300dp"
+                        android:layout_height="wrap_content"
+                        android:layout_alignParentEnd="true"
+                        android:layout_centerVertical="true"
+                        android:entries="@array/model_choices"
+                        android:textAlignment="textEnd" />
+                </RelativeLayout>
+
+                <RelativeLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/splitText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginVertical="6dp"
+                        android:text="Split layer:" />
+
+                    <com.warkiz.widget.IndicatorSeekBar
+                        android:id="@+id/layerSeekBar"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_below="@+id/splitText"
+                        android:layout_marginTop="6dp"
+                        android:layout_marginBottom="12dp"
+                        app:isb_progress="50"
+                        app:isb_show_tick_marks_type="oval"
+                        app:isb_show_tick_texts="true"
+                        app:isb_tick_texts_array="@array/layer_choices"
+                        app:isb_ticks_count="4" />
+                </RelativeLayout>
+
+                <RelativeLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/compressionText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginVertical="6dp"
+                        android:text="Compression method:" />
+
+                    <Spinner
+                        android:id="@+id/compressionSpinner"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_below="@+id/compressionText"
+                        android:entries="@array/compression_choices"
+                        android:textAlignment="textEnd" />
+                </RelativeLayout>
+            </LinearLayout>
+        </ScrollView>
     </LinearLayout>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
