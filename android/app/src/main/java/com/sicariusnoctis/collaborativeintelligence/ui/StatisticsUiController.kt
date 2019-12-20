@@ -2,7 +2,6 @@ package com.sicariusnoctis.collaborativeintelligence.ui
 
 import android.annotation.SuppressLint
 import android.graphics.Color
-import android.util.Log
 import android.widget.TextView
 import com.github.mikephil.charting.charts.LineChart
 import com.github.mikephil.charting.data.Entry

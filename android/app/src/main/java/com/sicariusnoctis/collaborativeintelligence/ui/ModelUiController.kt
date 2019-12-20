@@ -1,6 +1,5 @@
 package com.sicariusnoctis.collaborativeintelligence.ui
 
-import android.os.Environment
 import android.view.View
 import android.view.View.TEXT_ALIGNMENT_TEXT_END
 import android.widget.AdapterView
@@ -12,12 +11,8 @@ import com.warkiz.widget.IndicatorSeekBar
 import com.warkiz.widget.OnSeekChangeListener
 import com.warkiz.widget.SeekParams
 import kotlinx.serialization.UnstableDefault
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonObjectSerializer
 import kotlinx.serialization.json.content
-import java.io.File
-import java.nio.file.Paths
 
 class ModelUiController(
     private val modelSpinner: Spinner,

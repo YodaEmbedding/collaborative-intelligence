@@ -55,7 +55,11 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         rs = RenderScript.create(this)
         camera = Camera(this, cameraView) { frame -> this.frameProcessor.onNext(frame) }
-        modelUiController = ModelUiController(modelSpinner, layerSeekBar, compressionSpinner)
+        modelUiController = ModelUiController(
+            modelSpinner,
+            layerSeekBar,
+            compressionSpinner
+        )
         statisticsUiController = StatisticsUiController(
             statistics,
             predictionsText,
