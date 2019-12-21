@@ -70,6 +70,7 @@ class MainActivity : AppCompatActivity() {
             predictionsText,
             fpsText,
             uploadText,
+            uploadAvgText,
             preprocessText,
             clientInferenceText,
             encodingText,
@@ -77,6 +78,7 @@ class MainActivity : AppCompatActivity() {
             serverInferenceText,
             networkWriteText,
             totalText,
+            totalAvgText,
             framesProcessedText,
             lineChart
         )

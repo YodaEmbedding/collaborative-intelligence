@@ -19,6 +19,7 @@ class StatisticsUiController(
     private val predictionsText: TextView,
     private val fpsText: TextView,
     private val uploadText: TextView,
+    private val uploadAvgText: TextView,
     private val preprocessText: TextView,
     private val clientInferenceText: TextView,
     private val encodingText: TextView,
@@ -26,6 +27,7 @@ class StatisticsUiController(
     private val serverInferenceText: TextView,
     private val networkWriteText: TextView,
     private val totalText: TextView,
+    private val totalAvgText: TextView,
     private val framesProcessedText: TextView,
     private val lineChart: LineChart
 ) {
@@ -90,6 +92,7 @@ class StatisticsUiController(
         }
         fpsText.text = "FPS: ${String.format("%.1f", stats.fps)}"
         uploadText.text = "Upload: ${(sample.uploadBytes ?: 0) / 1024} KB/frame"
+        uploadAvgText.text = "Upload avg: ${stats.uploadAverage / 1024} KB/frame"
         preprocessText.text = "1. Preprocess: ${toMillis(sample.preprocess)} ms"
         clientInferenceText.text = "2. Client infer: ${toMillis(sample.clientInference)} ms"
         encodingText.text = "3. Encoding: N/A"
@@ -97,6 +100,7 @@ class StatisticsUiController(
         serverInferenceText.text = "5. Server infer: ${toMillis(sample.serverInference)} ms"
         networkReadText.text = "6. Network read: ${toMillis(sample.networkRead)} ms"
         totalText.text = "Total: ${toMillis(sample.total)} ms"
+        totalAvgText.text = "Total avg: ${stats.totalAverage} ms"
         framesProcessedText.text = "Processed: ${stats.framesProcessed}"
     }
 
@@ -132,13 +136,33 @@ class StatisticsUiController(
     }
 
     private fun updateChartLimitLines(sample: Sample) {
+        val orange = Color.rgb(255, 128, 0)
+        val blue = Color.rgb(0, 255, 255)
         val stats = statistics[sample.frameNumber]
-        val limitLine = LimitLine(stats.totalAverage.toFloat())
-        limitLine.enableDashedLine(1.0f, 1.0f, 0.0f)
-        limitLine.lineColor = Color.rgb(255, 128, 0)
-        limitLine.lineWidth = 2f
+        val lineLength = 4.0f
+        val spaceLength = 8.0f
+
+        val y1 = stats.totalAverage.toFloat()
+        val totalLimitLine = LimitLine(y1)
+        totalLimitLine.enableDashedLine(lineLength, spaceLength, 0.0f)
+        totalLimitLine.lineColor = orange
+        totalLimitLine.lineWidth = 1f
+        totalLimitLine.label = "$y1 ms"
+        totalLimitLine.labelPosition = LimitLine.LimitLabelPosition.LEFT_TOP
+
+        val y2 = stats.uploadAverage.toFloat() / 1024
+        val uploadLimitLine = LimitLine(y2)
+        uploadLimitLine.enableDashedLine(lineLength, spaceLength, 0.0f)
+        uploadLimitLine.lineColor = blue
+        uploadLimitLine.lineWidth = 2f
+        // uploadLimitLine.label = "$y2 KB/frame"
+        // uploadLimitLine.labelPosition = LimitLine.LimitLabelPosition.RIGHT_TOP
+
         lineChart.axisLeft.removeAllLimitLines()
-        lineChart.axisLeft.addLimitLine(limitLine)
+        lineChart.axisLeft.addLimitLine(totalLimitLine)
+
+        lineChart.axisRight.removeAllLimitLines()
+        lineChart.axisRight.addLimitLine(uploadLimitLine)
     }
 
     companion object {
