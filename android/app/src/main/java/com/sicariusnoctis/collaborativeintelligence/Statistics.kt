@@ -155,7 +155,7 @@ data class Sample(
     override fun toString() = durations()
         .zip(durationDescriptions)
         .joinToString(separator = "\n") { (duration, description) ->
-            "%.3fs %s".format(duration.toMillis() / 1000.0, description)
+            "%.3fs %s".format(duration?.toMillis()?.div(1000.0), description)
         }
 
     val isValid get() = uploadBytes != null && instants().all { it != null }
@@ -166,7 +166,7 @@ data class Sample(
         Pair(networkWriteStart, networkWriteEnd),
         Pair(networkWriteEnd, networkReadEnd)
     )
-        .map { Duration.between(it.first, it.second) }
+        .map { durationBetween(it.first, it.second) }
 
     private fun instants() = listOf(
         preprocessStart, preprocessEnd,
