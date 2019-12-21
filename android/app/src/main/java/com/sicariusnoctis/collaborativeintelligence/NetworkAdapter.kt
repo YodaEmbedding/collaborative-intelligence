@@ -54,6 +54,9 @@ class NetworkAdapter {
         val portOverride = networkConfig?.get("port")?.intOrNull
         tryConnect(hostnameOverride + HOSTNAMES, portOverride ?: PORT)
 
+        // Fix freezing that occurs when sending large amounts of data
+        socket!!.sendBufferSize = 1024 * 64
+
         // Ensure write+flush turns into a packet by disabling Nagle
         socket!!.tcpNoDelay = true
 
