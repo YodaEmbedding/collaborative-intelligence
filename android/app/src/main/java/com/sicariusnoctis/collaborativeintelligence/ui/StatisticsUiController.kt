@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.graphics.Color
 import android.widget.TextView
 import com.github.mikephil.charting.charts.LineChart
+import com.github.mikephil.charting.components.LimitLine
 import com.github.mikephil.charting.data.Entry
 import com.github.mikephil.charting.data.LineData
 import com.github.mikephil.charting.data.LineDataSet
@@ -122,12 +123,22 @@ class StatisticsUiController(
 
     private fun updateChartRefresh(sample: Sample) {
         prevChartRefresh = Instant.now()
+        updateChartLimitLines(sample)
         lineData.notifyDataChanged()
         lineChart.notifyDataSetChanged()
         lineChart.xAxis.axisMinimum = totalLineDataset.xMax - 10f
         lineChart.xAxis.axisMaximum = totalLineDataset.xMax
         lineChart.invalidate()
+    }
 
+    private fun updateChartLimitLines(sample: Sample) {
+        val stats = statistics[sample.frameNumber]
+        val limitLine = LimitLine(stats.totalAverage.toFloat())
+        limitLine.enableDashedLine(1.0f, 1.0f, 0.0f)
+        limitLine.lineColor = Color.rgb(255, 128, 0)
+        limitLine.lineWidth = 2f
+        lineChart.axisLeft.removeAllLimitLines()
+        lineChart.axisLeft.addLimitLine(limitLine)
     }
 
     companion object {

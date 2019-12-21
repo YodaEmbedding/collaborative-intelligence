@@ -37,6 +37,8 @@ class ModelStatistics {
         @Synchronized get() = validSamples.size
     val fps
         @Synchronized get() = fps()
+    val totalAverage
+        @Synchronized get() = lastNValidSamples.map { it.total!!.toMillis() }.sum() / lastNValidSamples.size
     val sample: Sample
         @Synchronized get() = lastNValidSamples.last()
     val samples: Map<Int, Sample>
