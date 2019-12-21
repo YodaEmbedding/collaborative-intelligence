@@ -108,9 +108,6 @@ class NetworkAdapter {
     private fun writeData(frameNumber: Int, data: ByteArray) {
         uploadStats.sendBytes(frameNumber, frameHeaderSize + data.size)
         with(outputStream!!) {
-            // writer().write("frame\n")
-            // writer().write(frameNumber)
-            // writer().write(data.size)
             writeBytes("frame\n")
             writeInt(frameNumber)
             writeInt(data.size)
@@ -124,8 +121,6 @@ class NetworkAdapter {
         with(outputStream!!) {
             writeBytes("json\n")
             writeBytes("$jsonString\n")
-            // writer().write("json\n")
-            // writer().write("$jsonString\n")
             flush()
         }
     }
@@ -140,6 +135,7 @@ class NetworkAdapter {
             throw Exception("Frame request model config does not match last sent model config")
         }
         writeData(frameRequest.info.frameNumber, frameRequest.obj)
+        Log.i(TAG, "Request sent")
     }
 
     @UnstableDefault

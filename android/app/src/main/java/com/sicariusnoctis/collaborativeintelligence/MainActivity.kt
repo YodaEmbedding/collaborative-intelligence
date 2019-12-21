@@ -240,10 +240,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun subscribePingGenerator() = Completable.fromRunnable {
-        // val ids = Observable.fromIterable(generateSequence(0) { it + 1 }.asIterable())
-        // val times = Observable.interval(1, TimeUnit.SECONDS)
         subscriptions.add(Observable
-            .interval(1, TimeUnit.SECONDS)
+            .interval(10, TimeUnit.SECONDS)
             .observeOn(networkWriteScheduler, false, 1)
             .doOnNext { networkAdapter!!.writePingRequest(PingRequest(it.toInt())) }
             .doOnNext { Log.i(TAG, "Ping sent: $it") }
@@ -258,7 +256,6 @@ class MainActivity : AppCompatActivity() {
             .onBackpressureDrop()
             .observeOn(IoScheduler(), false, 1)
             .map { it to modelUiController.modelConfig }
-            .doOnNext { Log.d(TAG, "${it.second}") }
             .onBackpressureLimitRate(
                 onDrop = { statistics[it.second].frameDropped() },
                 limit = { shouldProcessFrame(it.second) }
@@ -285,14 +282,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun switchModel(modelConfig: ModelConfig) = Completable
         .fromRunnable { Log.i(TAG, "Switching model begin") }
-        // .andThen(
-        //     Completable.mergeArray(
-        //         switchModelInference(modelConfig),
-        //         switchModelServer(modelConfig)
-        //     )
-        // )
-        .andThen(switchModelInference(modelConfig))
-        .andThen(switchModelServer(modelConfig))
+        .andThen(
+            Completable.mergeArray(
+                switchModelInference(modelConfig),
+                switchModelServer(modelConfig)
+            )
+        )
         .doOnComplete { Log.i(TAG, "Switching model end") }
 
     private fun switchModelInference(modelConfig: ModelConfig) = Completable.fromRunnable {
@@ -355,7 +350,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (stats.currentSample?.networkReadEnd == null) {
-            Log.i(TAG, "Dropped frame because frame is currently being processed by server")
+            // Log.i(TAG, "Dropped frame because frame is currently being processed by server")
             return false
         }
 
