@@ -117,15 +117,17 @@ class StatisticsUiController(
         )
             return
 
-        prevChartRefresh = Instant.now()
+        updateChartRefresh(sample)
+    }
 
+    private fun updateChartRefresh(sample: Sample) {
+        prevChartRefresh = Instant.now()
         lineData.notifyDataChanged()
         lineChart.notifyDataSetChanged()
         lineChart.xAxis.axisMinimum = totalLineDataset.xMax - 10f
         lineChart.xAxis.axisMaximum = totalLineDataset.xMax
         lineChart.invalidate()
 
-        // TODO skip first sample whenever modelChange happens?
     }
 
     companion object {
