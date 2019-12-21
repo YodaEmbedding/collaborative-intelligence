@@ -260,10 +260,12 @@ class MainActivity : AppCompatActivity() {
                 onDrop = { statistics[it.second].frameDropped() },
                 limit = { shouldProcessFrame(it.second) }
             )
-            .doOnNext { prevFrameTime = Instant.now() }
-            .zipWith(Flowable.range(0, Int.MAX_VALUE)) { (frame, modelConfig), i ->
-                FrameRequest(frame, FrameRequestInfo(i, modelConfig))
+            .zipWith(Flowable.range(0, Int.MAX_VALUE)) { (frame, modelConfig), frameNumber ->
+                prevFrameTime = Instant.now()
+                statistics[modelConfig].makeSample(frameNumber)
+                FrameRequest(frame, FrameRequestInfo(frameNumber, modelConfig))
             }
+            .doOnNext { Log.i(TAG, "Started processing frame ${it.info.frameNumber}") }
             .mapTimed(ModelStatistics::setPreprocess) { it.map(postprocessor::process) }
             .observeOn(inferenceScheduler, false, 1)
             .mapTimed(ModelStatistics::setInference) { inference.run(it) }
@@ -318,8 +320,10 @@ class MainActivity : AppCompatActivity() {
 
         // Load new model if config changed
         if (modelConfig != inference.modelConfig) {
+            val prevStats = statistics[inference.modelConfig]
+
             // Wait till latest sample has been processed client-side first
-            if (stats.currentSample != null && stats.currentSample!!.inferenceEnd == null) {
+            if (prevStats.currentSample != null && prevStats.currentSample!!.networkWriteEnd == null) {
                 Log.i(TAG, "Dropped frame because waiting to switch models")
                 return false
             }
