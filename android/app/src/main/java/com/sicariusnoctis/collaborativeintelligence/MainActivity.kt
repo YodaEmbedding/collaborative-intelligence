@@ -6,6 +6,7 @@ import android.renderscript.RenderScript
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import com.sicariusnoctis.collaborativeintelligence.ui.ModelUiController
+import com.sicariusnoctis.collaborativeintelligence.ui.OptionsUiController
 import com.sicariusnoctis.collaborativeintelligence.ui.StatisticsUiController
 import io.fotoapparat.parameter.Resolution
 import io.fotoapparat.preview.Frame
@@ -39,6 +40,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var previewResolution: Resolution
     private lateinit var rs: RenderScript
     private lateinit var modelUiController: ModelUiController
+    private lateinit var optionsUiController: OptionsUiController
     private lateinit var statisticsUiController: StatisticsUiController
 
     private var networkAdapter: NetworkAdapter? = null
@@ -59,6 +61,9 @@ class MainActivity : AppCompatActivity() {
             modelSpinner,
             layerSeekBar,
             compressionSpinner
+        )
+        optionsUiController = OptionsUiController(
+            uploadRateLimitSeekBar
         )
         statisticsUiController = StatisticsUiController(
             statistics,
@@ -266,6 +271,7 @@ class MainActivity : AppCompatActivity() {
             .observeOn(inferenceScheduler, false, 1)
             .mapTimed(ModelStatistics::setInference) { inference.run(it) }
             .observeOn(networkWriteScheduler, false, 1)
+            .doOnNext { networkAdapter!!.uploadLimitRate = optionsUiController.uploadRateLimit }
             .doOnNextTimed(ModelStatistics::setNetworkWrite) {
                 networkAdapter!!.writeFrameRequest(it)
             }

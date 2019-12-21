@@ -12,6 +12,8 @@ import java.net.Socket
 import java.time.Duration
 import java.time.Instant
 import java.util.*
+import kotlin.math.max
+import kotlin.math.min
 
 class NetworkAdapter {
     private val TAG = NetworkAdapter::class.qualifiedName
@@ -32,9 +34,15 @@ class NetworkAdapter {
             }
         }
     )
+    private val rateLimiter = RateLimiter()
 
     lateinit var uploadStats: UploadStats
     val timeUntilWriteAvailable get() = uploadStats.timeUntilAvailable
+    var uploadLimitRate
+        get() = rateLimiter.rate?.div(1024)
+        set(value) {
+            rateLimiter.rate = value?.times(1024)
+        }
 
     @UnstableDefault
     fun connect() {
@@ -106,7 +114,7 @@ class NetworkAdapter {
             writeBytes("frame\n")
             writeInt(frameNumber)
             writeInt(data.size)
-            write(data)
+            rateLimiter.run(data, ::write)
             flush()
         }
     }
@@ -163,6 +171,48 @@ class NetworkAdapter {
     private fun switchModel() {
         uploadStats = UploadStats()
         // TODO maybe send ping here?
+    }
+}
+
+class RateLimiter {
+    var rate: Long? = null
+    private val timeStep = 100
+    private var lastWrite: Instant? = null
+    private var lastStep = 0
+
+    fun run(data: ByteArray, write: (ByteArray) -> Unit) {
+        if (rate == null) {
+            runStep(data, write, null)
+            return
+        }
+
+        var sent = 0
+
+        while (sent < data.size) {
+            val rate = this.rate
+            val remain = data.size - sent
+            val step = if (rate == null) remain else min(remain, rate.toInt() * timeStep / 1000)
+            val slice = data.sliceArray(sent until sent + step)
+            runStep(slice, write, rate)
+            sent += step
+        }
+    }
+
+    private fun runStep(data: ByteArray, write: (ByteArray) -> Unit, rate: Long?) {
+        if (rate != null && lastWrite != null) {
+            val now = Instant.now()
+            val dt = Duration.between(lastWrite!!, now).toMillis()
+            val wait = 1000 * lastStep / rate
+            Thread.sleep(max(0, wait - dt))
+        }
+
+        doWrite(data, write)
+    }
+
+    private fun doWrite(data: ByteArray, write: (ByteArray) -> Unit) {
+        lastStep = data.size
+        lastWrite = Instant.now()
+        write(data)
     }
 }
 

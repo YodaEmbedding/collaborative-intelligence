@@ -18,4 +18,20 @@
     <string-array name="compression_choices">
         <item>None</item>
     </string-array>
+    <string-array name="uploadRateLimit_choices">
+        <item>10</item>
+        <item>25</item>
+        <item>50</item>
+        <item>75</item>
+        <item>100</item>
+        <item>250</item>
+        <item>500</item>
+        <item>750</item>
+        <item>1000</item>
+        <item>2000</item>
+        <item>3000</item>
+        <item>4000</item>
+        <item>5000</item>
+        <item>∞</item>
+    </string-array>
 </resources>
