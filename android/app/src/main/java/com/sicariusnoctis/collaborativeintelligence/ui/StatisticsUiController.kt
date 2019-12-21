@@ -101,7 +101,8 @@ class StatisticsUiController(
         networkReadText.text = "6. Network read: ${toMillis(sample.networkRead)} ms"
         totalText.text = "Total: ${toMillis(sample.total)} ms"
         totalAvgText.text = "Total avg: ${stats.totalAverage} ms"
-        framesProcessedText.text = "Processed: ${stats.framesProcessed}"
+        framesProcessedText.text =
+            "Processed: ${stats.framesProcessed} / ${stats.framesProcessed + stats.framesDropped}"
     }
 
     private fun updateChart(sample: Sample) {
