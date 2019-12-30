@@ -100,12 +100,15 @@ class Inference : Closeable {
 
     @Throws(IOException::class)
     private fun loadModelFromFile(filename: String): MappedByteBuffer {
-        val folderRoot = "collaborative-intelligence"
-        val sdcard = getExternalStorageDirectory().toString()
-        val parent = Paths.get(sdcard, folderRoot).toString()
-        val file = File(parent, filename)
+        val file = File(parentDirectory(), filename)
         val channel = FileInputStream(file).channel
         return channel.map(READ_ONLY, 0, file.length())
+    }
+
+    private fun parentDirectory(): String {
+        val folderRoot = "collaborative-intelligence"
+        val sdcard = getExternalStorageDirectory().toString()
+        return Paths.get(sdcard, folderRoot).toString()
     }
 }
 
