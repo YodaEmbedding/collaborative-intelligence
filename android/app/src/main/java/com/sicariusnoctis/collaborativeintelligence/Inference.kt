@@ -1,19 +1,14 @@
 package com.sicariusnoctis.collaborativeintelligence
 
+import android.os.Environment.getExternalStorageDirectory
 import kotlinx.serialization.Serializable
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.GpuDelegate
 import java.io.Closeable
-import java.io.FileInputStream
-import java.io.IOException
+import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder.nativeOrder
-import java.nio.MappedByteBuffer
-import java.nio.channels.FileChannel.MapMode.READ_ONLY
-import android.os.Environment.getExternalStorageDirectory
-import java.io.File
 import java.nio.file.Paths
-
 
 class Inference : Closeable {
     private val TAG = Inference::class.qualifiedName
@@ -23,7 +18,6 @@ class Inference : Closeable {
     private lateinit var outputBuffer: ByteBuffer
     private var gpuDelegate: GpuDelegate? = null
     private var tflite: Interpreter? = null
-    private var tfliteModel: MappedByteBuffer? = null
 
     fun run(frameRequest: FrameRequest<ByteArray>): FrameRequest<ByteArray> {
         if (!::modelConfig.isInitialized || modelConfig != frameRequest.info.modelConfig) {
@@ -52,7 +46,6 @@ class Inference : Closeable {
     }
 
     override fun close() {
-        tfliteModel = null
         tflite?.close()
         tflite = null
         gpuDelegate?.close()
@@ -85,8 +78,8 @@ class Inference : Closeable {
             .addDelegate(gpuDelegate)
 
         val filename = "${modelConfig.toPath()}-client.tflite"
-        tfliteModel = loadModelFromFile(filename)
-        tflite = Interpreter(tfliteModel!!, tfliteOptions)
+        val file = File(parentDirectory(), filename)
+        tflite = Interpreter(file, tfliteOptions)
 
         val inputCapacity = tflite!!.getInputTensor(0).numBytes()
         val outputCapacity = tflite!!.getOutputTensor(0).numBytes()
@@ -96,13 +89,6 @@ class Inference : Closeable {
         // TODO byte order of outputBuffer? shouldn't this be set to ensure consistency across network?
         // outputBuffer = outputBuffer.order(nativeOrder())
         // outputBuffer = outputBuffer.order(LITTLE_ENDIAN)
-    }
-
-    @Throws(IOException::class)
-    private fun loadModelFromFile(filename: String): MappedByteBuffer {
-        val file = File(parentDirectory(), filename)
-        val channel = FileInputStream(file).channel
-        return channel.map(READ_ONLY, 0, file.length())
     }
 
     private fun parentDirectory(): String {
