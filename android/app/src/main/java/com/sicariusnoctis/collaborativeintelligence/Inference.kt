@@ -14,34 +14,32 @@ class Inference : Closeable {
     private val TAG = Inference::class.qualifiedName
 
     lateinit var modelConfig: ModelConfig; private set
-    private lateinit var inputBuffer: ByteBuffer
-    private lateinit var outputBuffer: ByteBuffer
+    private var inputBuffer: ByteBuffer? = null
+    private var outputBuffer: ByteBuffer? = null
     private var gpuDelegate: GpuDelegate? = null
     private var tflite: Interpreter? = null
 
     fun run(frameRequest: FrameRequest<ByteArray>): FrameRequest<ByteArray> {
         if (!::modelConfig.isInitialized || modelConfig != frameRequest.info.modelConfig) {
-            // modelConfig = frameRequest.info.modelConfig
-            // setTfliteModel(context)
             throw Exception("Current config $modelConfig differs from requested config ${frameRequest.info.modelConfig}")
         }
 
         return frameRequest.map { run(frameRequest.obj) }
     }
 
-    fun run(inputArray: ByteArray): ByteArray {
+    private fun run(inputArray: ByteArray): ByteArray {
         if (modelConfig.layer == "server")
             return inputArray.clone()
 
-        inputBuffer.rewind()
-        inputBuffer.put(inputArray)
+        inputBuffer!!.rewind()
+        inputBuffer!!.put(inputArray)
 
-        outputBuffer.rewind()
-        tflite!!.run(inputBuffer, outputBuffer)
+        outputBuffer!!.rewind()
+        tflite!!.run(inputBuffer!!, outputBuffer!!)
 
-        val outputArray = ByteArray(outputBuffer.limit())
-        outputBuffer.rewind()
-        outputBuffer.get(outputArray)
+        val outputArray = ByteArray(outputBuffer!!.limit())
+        outputBuffer!!.rewind()
+        outputBuffer!!.get(outputArray)
         return outputArray
     }
 
@@ -50,24 +48,19 @@ class Inference : Closeable {
         tflite = null
         gpuDelegate?.close()
         gpuDelegate = null
+        inputBuffer = null
+        outputBuffer = null
     }
 
     fun switchModel(modelConfig: ModelConfig) {
-        // TODO First 65 operations will run on the GPU, and the remaining 3 on the CPU.TfLiteGpuDelegate
-        // Invoke: Delegate should run on the same thread where it was initialized.Node number 68
-        // (TfLiteGpuDelegate) failed to invoke.
-        // TODO gpuDelegate.bindGlBufferToTensor(outputTensor, outputSsboId);
-
         close()
 
         this.modelConfig = modelConfig
 
-        if (modelConfig.layer == "server") {
-            inputBuffer = ByteBuffer.allocateDirect(0).order(nativeOrder())
-            outputBuffer = ByteBuffer.allocateDirect(0)
+        if (modelConfig.layer == "server")
             return
-        }
 
+        // TODO gpuDelegate.bindGlBufferToTensor(outputTensor, outputSsboId);
         gpuDelegate = GpuDelegate()
 
         // TODO NNAPI only faster than GPU/CPU on some devices/processors with certain models. Add UI switch?
@@ -85,10 +78,6 @@ class Inference : Closeable {
         val outputCapacity = tflite!!.getOutputTensor(0).numBytes()
         inputBuffer = ByteBuffer.allocateDirect(inputCapacity).order(nativeOrder())
         outputBuffer = ByteBuffer.allocateDirect(outputCapacity)
-
-        // TODO byte order of outputBuffer? shouldn't this be set to ensure consistency across network?
-        // outputBuffer = outputBuffer.order(nativeOrder())
-        // outputBuffer = outputBuffer.order(LITTLE_ENDIAN)
     }
 
     private fun parentDirectory(): String {
