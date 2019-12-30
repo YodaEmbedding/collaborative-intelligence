@@ -21,18 +21,9 @@ class Inference : Closeable {
     lateinit var modelConfig: ModelConfig; private set
     private lateinit var inputBuffer: ByteBuffer
     private lateinit var outputBuffer: ByteBuffer
-    private val gpuDelegate: GpuDelegate = GpuDelegate()
-    private val tfliteOptions = Interpreter.Options()
+    private var gpuDelegate: GpuDelegate? = null
     private var tflite: Interpreter? = null
     private var tfliteModel: MappedByteBuffer? = null
-
-    init {
-        // TODO NNAPI only faster than GPU/CPU on some devices/processors with certain models. Add UI switch?
-        tfliteOptions
-            .setNumThreads(1)
-            // .setUseNNAPI(true)
-            .addDelegate(gpuDelegate)
-    }
 
     fun run(frameRequest: FrameRequest<ByteArray>): FrameRequest<ByteArray> {
         if (!::modelConfig.isInitialized || modelConfig != frameRequest.info.modelConfig) {
@@ -61,8 +52,11 @@ class Inference : Closeable {
     }
 
     override fun close() {
+        tfliteModel = null
         tflite?.close()
-        gpuDelegate.close()
+        tflite = null
+        gpuDelegate?.close()
+        gpuDelegate = null
     }
 
     fun switchModel(modelConfig: ModelConfig) {
@@ -71,19 +65,27 @@ class Inference : Closeable {
         // (TfLiteGpuDelegate) failed to invoke.
         // TODO gpuDelegate.bindGlBufferToTensor(outputTensor, outputSsboId);
 
-        tflite?.close()
+        close()
 
         this.modelConfig = modelConfig
 
         if (modelConfig.layer == "server") {
-            tfliteModel = null
-            tflite = null
             inputBuffer = ByteBuffer.allocateDirect(0).order(nativeOrder())
             outputBuffer = ByteBuffer.allocateDirect(0)
             return
         }
 
-        tfliteModel = loadModelFromFile("${modelConfig.toPath()}-client.tflite")
+        gpuDelegate = GpuDelegate()
+
+        // TODO NNAPI only faster than GPU/CPU on some devices/processors with certain models. Add UI switch?
+        val tfliteOptions = Interpreter.Options()
+            .setNumThreads(1)
+            // .setUseNNAPI(true)
+            // .setAllowFp16PrecisionForFp32(true)
+            .addDelegate(gpuDelegate)
+
+        val filename = "${modelConfig.toPath()}-client.tflite"
+        tfliteModel = loadModelFromFile(filename)
         tflite = Interpreter(tfliteModel!!, tfliteOptions)
 
         val inputCapacity = tflite!!.getInputTensor(0).numBytes()
