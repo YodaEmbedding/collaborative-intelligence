@@ -18,19 +18,16 @@
 To generate the models, run:
 
 ```bash
-cd tools
-python main.py
+python generate_models.py
 ```
-
 
 Then, create the folder `sdcard/collaborative-intelligence` on the device, and
 copy `models.json` and the generated `*.tflite` models and into the folder:
 
 ```bash
-cd tools
 adb shell mkdir "sdcard/collaborative-intelligence/"
 adb push models.json "/sdcard/collaborative-intelligence/"
-adb push **/*.tflite "/sdcard/collaborative-intelligence/"
+adb push models/**/*.tflite "/sdcard/collaborative-intelligence/"
 ```
 
 ### Server
@@ -40,8 +37,7 @@ Please ensure that the ports 5678 and 5680 are open on the server.
 To start up the server, run:
 
 ```bash
-cd server
-python main.py
+python server.py
 ```
 
 ### Android Application
