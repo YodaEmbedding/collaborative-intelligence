@@ -38,20 +38,10 @@ from matplotlib.colors import Normalize
 from tensorflow import keras
 from tensorflow.keras.applications import imagenet_utils
 
-import monitor_client
-from monitor_client import MonitorStats
-
-spec = importlib.util.spec_from_file_location("layers", "../tools/layers.py")
-layers = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(layers)
-decoders = layers.decoders
-
-spec = importlib.util.spec_from_file_location(
-    "modelconfig", "../tools/modelconfig.py"
-)
-modelconfig = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(modelconfig)
-ModelConfig = modelconfig.ModelConfig
+from src import monitor_client
+from src.layers import decoders
+from src.modelconfig import ModelConfig
+from src.monitor_client import MonitorStats
 
 IP = "0.0.0.0"
 PORT = 5678
@@ -308,7 +298,7 @@ class ModelManager:
         model_name = model_config.model
         if model_config.layer == "server":
             return keras.models.load_model(
-                filepath=f"../tools/{model_name}/{model_name}-full.h5"
+                filepath=f"models/{model_name}/{model_name}-full.h5"
             )
         if model_config.layer == "client":
             return None
@@ -317,7 +307,7 @@ class ModelManager:
         if decoder != "None":
             custom_objects[decoder] = decoders[decoder]
         return keras.models.load_model(
-            filepath=f"../tools/{model_config.to_path()}-server.h5",
+            filepath=f"models/{model_config.to_path()}-server.h5",
             custom_objects=custom_objects,
         )
 

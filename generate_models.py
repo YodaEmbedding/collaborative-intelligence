@@ -18,8 +18,8 @@ from tensorflow.keras.applications import imagenet_utils
 from tensorflow.keras.preprocessing import image
 from tensorflow.keras.utils import plot_model
 
-from modelconfig import ModelConfig
-from split import split_model, copy_model
+from src.modelconfig import ModelConfig
+from src.split import split_model, copy_model
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
@@ -32,20 +32,19 @@ def convert_to_tflite_model(model: keras.Model, tflite_filename: str):
         f.write(tflite_model)
 
 
-def create_directory(directory: str):
-    """Create directory if it doesn't exist."""
-    try:
-        os.makedirs(directory)
-    except OSError as e:
-        if e.errno != errno.EEXIST:
-            raise
-
-
 def create_model(model_name: str) -> keras.Model:
     """Model factory."""
     shape = (224, 224, 3)
     model_creator, _ = Classifiers.get(model_name)
     return model_creator(shape, weights="imagenet")
+
+
+def prefix_of(model_config: ModelConfig) -> str:
+    return f"models/{model_config.to_path()}"
+
+
+def prefix_of_name(model_name: str) -> str:
+    return f"models/{model_name}/{model_name}"
 
 
 def cross_entropy(predictions, targets, epsilon=1e-12):
@@ -148,7 +147,7 @@ def write_video(filename: str, frames, width, height):
 
 
 def write_tensor_video(model_config: ModelConfig, model: keras.Model):
-    prefix = model_config.to_path()
+    prefix = prefix_of(model_config)
 
     preprocess_input = get_preprocessor(model_config.model)
     test_images = single_input_image("imgvideo.jpg", target_size=None)
@@ -176,7 +175,7 @@ def write_tensor_video(model_config: ModelConfig, model: keras.Model):
 
 
 def read_tensor_video(model_config: ModelConfig, model: keras.Model):
-    prefix = model_config.to_path()
+    prefix = prefix_of(model_config)
     prediction_decoder = imagenet_utils.decode_predictions
 
     cap = cv2.VideoCapture(f"{prefix}-encoder.mp4")
@@ -199,7 +198,7 @@ def run_analysis(
     test_inputs,
     targets,
 ):
-    prefix = model_config.to_path()
+    prefix = prefix_of(model_config)
 
     pred_analysis = model_analysis.predict(test_inputs)
     pred_split = pred_analysis[0]
@@ -266,7 +265,7 @@ def run_split(
 ):
     print(f"run_split({model_config})")
     assert model_name == model_config.model
-    prefix = model_config.to_path()
+    prefix = prefix_of(model_config)
 
     if model_config.layer == "server":
         return
@@ -323,7 +322,7 @@ def run_splits(
     graph_plot: bool = False,
 ):
     print(f"run_splits({model_name})\n")
-    prefix = f"{model_name}/{model_name}"
+    prefix = prefix_of_name(model_name)
 
     if clean_model:
         delete_file(f"{prefix}-full.h5")
@@ -337,7 +336,7 @@ def run_splits(
     try:
         model = keras.models.load_model(f"{prefix}-full.h5")
     except OSError:
-        create_directory(model_name)
+        os.makedirs(f"models/{model_name}", exist_ok=True)
         model = create_model(model_name)
         model.save(f"{prefix}-full.h5")
         # Force usage of tf.keras.Model which has Nodes linked correctly
@@ -385,6 +384,8 @@ def main():
         model: [ModelConfig(model=model, **x) for x in opt_list]
         for model, opt_list in models.items()
     }
+
+    os.makedirs("models", exist_ok=True)
 
     # Single test
     # model_name = "resnet34"

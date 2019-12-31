@@ -6,8 +6,8 @@ from tensorflow import keras
 from tensorflow.keras.layers import Layer
 from tensorflow.python.framework.ops import Tensor
 
-from layers import decoders, encoders
-from modelconfig import ModelConfig
+from .layers import decoders, encoders
+from .modelconfig import ModelConfig
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
