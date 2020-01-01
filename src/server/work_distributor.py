@@ -1,14 +1,6 @@
 import queue
 from itertools import count
-from typing import (
-    Awaitable,
-    Dict,
-    Generator,
-    Generic,
-    Tuple,
-    TypeVar,
-)
-
+from typing import Awaitable, Dict, Generator, Generic, Tuple, TypeVar
 
 import janus
 

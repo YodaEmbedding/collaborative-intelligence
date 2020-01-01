@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from typing import Dict, List, Sequence, Tuple, Union
 
 import tensorflow as tf

@@ -18,13 +18,13 @@ from tensorflow.keras.preprocessing import image
 from tensorflow.keras.utils import plot_model
 
 from src.modelconfig import ModelConfig
-from src.split import split_model, copy_model
+from src.split import copy_model, split_model
 from src.tile import (
-    tile,
-    detile,
-    determine_tile_layout,
     TensorLayout,
     TiledArrayLayout,
+    determine_tile_layout,
+    detile,
+    tile,
 )
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)

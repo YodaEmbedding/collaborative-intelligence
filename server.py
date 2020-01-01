@@ -11,31 +11,25 @@ import traceback
 from asyncio import StreamReader, StreamWriter
 from io import BytesIO
 from itertools import count
-from typing import (
-    Any,
-    Awaitable,
-    ByteString,
-    List,
-    Tuple,
-)
+from typing import Any, Awaitable, ByteString, List, Tuple
 
 import numpy as np
 import tensorflow as tf
-from PIL import Image
 from matplotlib import cm
 from matplotlib.colors import Normalize
+from PIL import Image
 from tensorflow import keras
 
 from src import monitor_client
-from src.server.model_manager import ModelManager
-from src.server.work_distributor import SmartProcessor, WorkDistributor
 from src.modelconfig import ModelConfig
 from src.monitor_client import MonitorStats
+from src.server.model_manager import ModelManager
+from src.server.work_distributor import SmartProcessor, WorkDistributor
 from src.tile import (
-    tile,
-    determine_tile_layout,
     TensorLayout,
     TiledArrayLayout,
+    determine_tile_layout,
+    tile,
 )
 
 IP = "0.0.0.0"
@@ -204,11 +198,6 @@ def processor(work_distributor: WorkDistributor, monitor_stats: MonitorStats):
             traceback.print_exc()
 
 
-# TODO honestly, the "eol"s are a bit pointless...
-async def read_eol(reader: StreamReader) -> Awaitable[bool]:
-    return await reader.readexactly(1) == b"\x00"
-
-
 async def read_int(reader: StreamReader) -> Awaitable[int]:
     return int.from_bytes(await reader.readexactly(4), byteorder="big")
 
@@ -217,14 +206,8 @@ async def read_tensor_frame(
     reader: StreamReader,
 ) -> Awaitable[Tuple[int, ByteString]]:
     frame_number = await read_int(reader)
-    # print(frame_number)
-    # await read_eol(reader)
     data_len = await read_int(reader)
-    # print(data_len)
-    # await read_eol(reader)
     data = await reader.readexactly(data_len)
-    # print(str_preview(data))
-    # await read_eol(reader)
     return frame_number, data
 
 

@@ -10,7 +10,6 @@ from typing import (
     TypeVar,
 )
 
-
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
