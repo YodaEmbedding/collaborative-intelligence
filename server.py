@@ -8,10 +8,16 @@ import time
 import traceback
 from asyncio import StreamReader, StreamWriter
 from itertools import count
-from typing import ByteString, List, Tuple
+from typing import ByteString
 
 from src.modelconfig import ModelConfig
 from src.server import monitor_client
+from src.server.comm import (
+    json_confirmation,
+    json_ping,
+    json_ready,
+    json_result,
+)
 from src.server.model_manager import ModelManager
 from src.server.monitor_client import MonitorStats, image_preview
 from src.server.reader import read_item
@@ -26,48 +32,6 @@ def str_preview(s: ByteString, max_len=16):
     if len(s) < max_len:
         return s.hex()
     return f"{s[:max_len - 6].hex()}...{s[-3:].hex()}"
-
-
-def json_result(
-    frame_number: int,
-    # read_time: int,
-    # feed_time: int,
-    inference_time: int,
-    predictions: List[Tuple[str, str, float]],
-) -> str:
-    return json.dumps(
-        {
-            "type": "result",
-            "frameNumber": frame_number,
-            # "readTime": read_time,  # TODO?
-            # "feedTime": feed_time,
-            "inferenceTime": inference_time,
-            "predictions": [
-                {"name": name, "description": desc, "score": score}
-                for name, desc, score in predictions
-            ],
-        }
-    )
-
-
-def json_confirmation(frame_number: int, num_bytes: int) -> str:
-    return json.dumps(
-        {
-            "type": "confirmation",
-            "frameNumber": frame_number,
-            "numBytes": num_bytes,
-        }
-    )
-
-
-def json_ready(model_config: ModelConfig) -> str:
-    return json.dumps(
-        {"type": "ready", "modelConfig": model_config.to_json_object()}
-    )
-
-
-def json_ping(id_) -> str:
-    return json.dumps({"type": "ping", "id": id_})
 
 
 # TODO Propogate exceptions back to client?
