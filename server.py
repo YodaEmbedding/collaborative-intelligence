@@ -3,34 +3,18 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 import json
-import math
 import time
 import traceback
 from asyncio import StreamReader, StreamWriter
-from io import BytesIO
 from itertools import count
 from typing import Any, Awaitable, ByteString, List, Tuple
 
-import numpy as np
-import tensorflow as tf
-from matplotlib import cm
-from matplotlib.colors import Normalize
-from PIL import Image
-from tensorflow import keras
-
 from src import monitor_client
 from src.modelconfig import ModelConfig
-from src.monitor_client import MonitorStats
+from src.monitor_client import MonitorStats, image_preview
 from src.server.model_manager import ModelManager
 from src.server.work_distributor import SmartProcessor, WorkDistributor
-from src.tile import (
-    TensorLayout,
-    TiledArrayLayout,
-    determine_tile_layout,
-    tile,
-)
 
 IP = "0.0.0.0"
 PORT = 5678
@@ -41,64 +25,6 @@ def str_preview(s: ByteString, max_len=16):
     if len(s) < max_len:
         return s.hex()
     return f"{s[:max_len - 6].hex()}...{s[-3:].hex()}"
-
-
-def tile_tensor(data_tensor: np.ndarray) -> np.ndarray:
-    data_tensor = data_tensor[0]
-    h, w, c = data_tensor.shape
-    tensor_layout = TensorLayout(c, h, w, "hwc")
-    tiled_layout = determine_tile_layout(tensor_layout)
-    return tile(data_tensor, tensor_layout, tiled_layout)
-
-
-def squarify_1d(data_tensor: np.ndarray) -> np.ndarray:
-    c = data_tensor.size
-    nrows = int(math.sqrt(c))
-    ncols = math.ceil(c / nrows)
-    t = data_tensor.reshape(-1).copy()
-    t.resize(nrows * ncols)
-    return t.reshape((nrows, ncols))
-
-
-def b64png_encode(arr: np.ndarray) -> ByteString:
-    img = Image.fromarray(arr)
-    with BytesIO() as buffer:
-        img.save(buffer, "png")
-        raw = base64.b64encode(buffer.getvalue()).decode("utf8")
-        return f"data:image/png;base64,{raw}"
-
-
-def image_preview(data_tensor: np.ndarray) -> ByteString:
-    def denorm(x):
-        return (x * 255.99).astype(dtype=np.uint8)
-
-    def colormap(x):
-        cmap = cm.viridis
-        rgba = cmap(x)
-        return denorm(rgba[:, :, :3])
-
-    # Handle softmax layer
-    if len(data_tensor.shape) <= 2:
-        return b64png_encode(denorm(squarify_1d(data_tensor)))
-
-    # Handle grayscale image case
-    if len(data_tensor.shape) <= 3:
-        return b64png_encode(data_tensor[0])
-
-    # Handle RGB image case
-    if data_tensor.shape[-1] <= 3:
-        return b64png_encode(data_tensor[0].astype(dtype=np.uint8))
-
-    # Handle non-uint8 types by clipping to min/max
-    if data_tensor.dtype != np.uint8:
-        a = np.min(data_tensor)
-        b = np.max(data_tensor)
-        arr = tile_tensor((data_tensor - a) / (b - a))
-        return b64png_encode(colormap(arr))
-
-    norm = Normalize(vmin=0, vmax=255)
-    arr = norm(tile_tensor(data_tensor))
-    return b64png_encode(colormap(arr))
 
 
 def json_result(
