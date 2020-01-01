@@ -5,7 +5,7 @@ import os
 import textwrap
 from contextlib import suppress
 from pprint import pprint
-from typing import Callable, Iterable, Tuple
+from typing import Callable, List, Iterable, Tuple
 
 import cv2
 import matplotlib.pyplot as plt
@@ -20,6 +20,13 @@ from tensorflow.keras.utils import plot_model
 
 from src.modelconfig import ModelConfig
 from src.split import split_model, copy_model
+from src.tile import (
+    tile,
+    detile,
+    determine_tile_layout,
+    TensorLayout,
+    TiledArrayLayout,
+)
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
@@ -85,42 +92,18 @@ def plot_histogram(prefix: str, arr: np.ndarray):
     fig.savefig(f"{prefix}-histogram.png", dpi=200)
 
 
-def plot_featuremap(prefix: str, arr: np.ndarray):
-    return
-
-    # TODO
+def plot_featuremap(prefix: str, arr: np.ndarray, order: str = "hwc"):
+    arr = arr[0]
+    tensor_layout = TensorLayout.from_shape(arr.shape, order)
+    tiled_layout = determine_tile_layout(tensor_layout)
+    tiled = tile(arr, tensor_layout, tiled_layout)
 
     title = textwrap.fill(prefix.replace("&", " "), 70)
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
-    # ax.matshow(arr[0, :, :, 0], cmap='viridis')
-    ax.matshow(arr, cmap="viridis")
-    # TODO plot [..., 0:255] in tiled grid?
+    ax.matshow(tiled, cmap="viridis")
     ax.set_title(title, fontsize="xx-small")
     fig.savefig(f"{prefix}-featuremap.png", dpi=200)
-
-
-def tile_arr(pred):
-    n, h, w, c = pred.shape
-    assert n == 1
-    num_tiles = int(np.ceil(np.sqrt(c)))
-    width = w * num_tiles
-    height = h * num_tiles
-    frame = np.empty(width * height, dtype=np.uint8).reshape(-1)
-    frame[: h * w * c] = np.moveaxis(pred[0], (0, 1, 2), (1, 2, 0)).reshape(-1)
-    frame[h * w * c :] = 0
-    frame = frame.reshape((height, width))
-    return frame
-
-
-def untile_arr(frame, shape):
-    n, h, w, c = shape
-    # assert n == 1
-    # num_tiles = int(np.ceil(np.sqrt(c)))
-    frame = frame.reshape(-1)[: h * w * c].reshape((c, h, w))
-    frame = np.moveaxis(frame, (1, 2, 0), (0, 1, 2))
-    frame = frame.reshape(shape)  # TODO err.. n = 1? idk what you're tryna do
-    return frame
 
 
 def write_video(filename: str, frames, width, height):
@@ -146,7 +129,12 @@ def write_video(filename: str, frames, width, height):
     writer.release()
 
 
-def write_tensor_video(model_config: ModelConfig, model: keras.Model):
+def write_tensor_video(
+    model_config: ModelConfig,
+    model: keras.Model,
+    tensor_layout: TensorLayout,
+    tiled_layout: TiledArrayLayout,
+):
     prefix = prefix_of(model_config)
 
     preprocess_input = get_preprocessor(model_config.model)
@@ -161,8 +149,8 @@ def write_tensor_video(model_config: ModelConfig, model: keras.Model):
         for x in range(100):
             inputs = test_inputs[..., :, x : x + w, :]
             preds = model.predict(inputs)
-            pred = preds[1]
-            frame = tile_arr(pred)
+            pred = preds[analysis_client_final(model_config)]
+            frame = tile(pred[0], tensor_layout, tiled_layout)
             height, width = frame.shape
             if x == 0:
                 yield width, height
@@ -174,7 +162,12 @@ def write_tensor_video(model_config: ModelConfig, model: keras.Model):
     write_video(f"{prefix}-encoder.mp4", frames, width, height)
 
 
-def read_tensor_video(model_config: ModelConfig, model: keras.Model):
+def read_tensor_video(
+    model_config: ModelConfig,
+    model: keras.Model,
+    tensor_layout: TensorLayout,
+    tiled_layout: TiledArrayLayout,
+):
     prefix = prefix_of(model_config)
     prediction_decoder = imagenet_utils.decode_predictions
 
@@ -182,13 +175,19 @@ def read_tensor_video(model_config: ModelConfig, model: keras.Model):
 
     # while cap.isOpened():
     for i in range(100):
-        ret, frame = cap.read()
+        _, frame = cap.read()
         frame = frame[:, :, 0]
-        frame = untile_arr(frame, (1, *model.input_shape[1:]))
-        pred = model.predict(frame)
+        tensor = detile(frame, tiled_layout, tensor_layout)
+        tensor = np.expand_dims(tensor, axis=0)
+        pred = model.predict(tensor)
         print(i, prediction_decoder(pred))
 
     cap.release()
+
+
+def analysis_client_final(model_config: ModelConfig) -> int:
+    """Index of final client output tensor."""
+    return 0 if model_config.encoder == "None" else 1
 
 
 def run_analysis(
@@ -231,8 +230,13 @@ def run_analysis(
     plot_featuremap(f"{prefix}-encoder", pred_encoder)
     plot_featuremap(f"{prefix}-decoder", pred_decoder)
 
-    write_tensor_video(model_config, model_analysis)
-    # read_tensor_video(model_config, model_server)
+    client_final_idx = analysis_client_final(model_config)
+    _, h, w, c = model_analysis.output_shape[client_final_idx]
+    tensor_layout = TensorLayout(c, h, w, "hwc")
+    tiled_layout = determine_tile_layout(tensor_layout)
+    layouts = tensor_layout, tiled_layout
+    write_tensor_video(model_config, model_analysis, *layouts)
+    read_tensor_video(model_config, model_server, *layouts)
 
     # TODO extract to "analysis.py" or similar
 

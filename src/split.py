@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict, Sequence, Tuple, Union
+from typing import Dict, List, Sequence, Tuple, Union
 
 import tensorflow as tf
 from tensorflow import keras
@@ -14,7 +14,7 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 def split_model(
     model: keras.Model, model_config: ModelConfig
-) -> Tuple[keras.Model, keras.Model]:
+) -> Tuple[keras.Model, keras.Model, keras.Model]:
     """Split model by given layer index.
 
     Attaches encoder layer to end of client model. Attaches decoder
@@ -30,31 +30,52 @@ def split_model(
     first_layer = layers[0]
     split_layer = layers[split_idx]
     last_layer = layers[-1]
+    x_dict = {}
 
-    outputs3 = []
+    # NOTE
+    # model1 == model_client
+    # model2 == model_server
+    # model3 == model_analysis
 
-    # Client-side (with encoder)
-    inputs1 = keras.Input(_input_shape(first_layer))
-    inputs3 = inputs1
-    outputs1 = _copy_graph(split_layer, {first_layer.name: inputs1})
-    outputs3.append(outputs1)
+    # Client-side (input)
+    x = keras.Input(_input_shape(first_layer))
+    inputs3 = inputs1 = x
+
+    # Client-side (first half of model)
+    x = _copy_graph(split_layer, {first_layer.name: x})
+    x_dict["client_result"] = x
+
+    # Client-side (encoder)
     if model_config.encoder != "None":
         encoder = encoders[model_config.encoder](**model_config.encoder_args)
-        outputs1 = encoder(outputs1)
-        outputs3.append(outputs1)
-    x = outputs1
+        x = encoder(x)
+        x_dict["client_encoded"] = x
 
-    # Server-side (with decoder)
-    inputs2 = keras.Input(_output_shape(split_layer), dtype=outputs1.dtype)
-    inputs2_ = inputs2
+    # Client-side (final client-side output)
+    outputs1 = x
+
+    # Server-side (input)
+    # Create new graph for model_server, bound to x2
+    x2 = keras.Input(_output_shape(split_layer), dtype=x.dtype)
+    inputs2 = x2
+
+    # Server-side (decoder)
     if model_config.decoder != "None":
         decoder = decoders[model_config.decoder](**model_config.decoder_args)
-        inputs2_ = decoder(inputs2_)
         x = decoder(x)
-        outputs3.append(x)
-    outputs2 = _copy_graph(last_layer, {split_layer.name: inputs2_})
+        x2 = decoder(x2)
+        x_dict["server_decoded"] = x
+
+    # Server-side (second half of model)
     x = _copy_graph(last_layer, {split_layer.name: x})
-    outputs3.append(x)
+    x2 = _copy_graph(last_layer, {split_layer.name: x2})
+    x_dict["server_result"] = x
+
+    # Server-side (final server-side output)
+    outputs2 = x2
+
+    # Analysis model outputs
+    outputs3 = _analysis_outputs(x_dict)
 
     model1 = keras.Model(inputs=inputs1, outputs=outputs1)
     model2 = keras.Model(inputs=inputs2, outputs=outputs2)
@@ -101,6 +122,22 @@ def _get_layer_idx_by_name(model: keras.Model, name: str) -> int:
     return next(
         i for i, layer in enumerate(model.layers) if layer.name == name
     )
+
+
+def _analysis_outputs(d: Dict[str, Tensor]) -> List[Tensor]:
+    outputs = []
+
+    outputs.append(d["client_result"])
+
+    if "client_encoded" in d:
+        outputs.append(d["client_encoded"])
+
+    if "server_decoded" in d:
+        outputs.append(d["server_decoded"])
+
+    outputs.append(d["server_result"])
+
+    return outputs
 
 
 def _input_shape(layer: Layer) -> Tuple[int, ...]:

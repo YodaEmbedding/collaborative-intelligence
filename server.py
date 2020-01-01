@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import functools
 import importlib.util
 import json
 import math
@@ -42,6 +41,12 @@ from src import monitor_client
 from src.layers import decoders
 from src.modelconfig import ModelConfig
 from src.monitor_client import MonitorStats
+from src.tile import (
+    tile,
+    determine_tile_layout,
+    TensorLayout,
+    TiledArrayLayout,
+)
 
 IP = "0.0.0.0"
 PORT = 5678
@@ -74,78 +79,12 @@ def decode_data(model: keras.Model, data: ByteString) -> np.ndarray:
     return np.frombuffer(data, dtype=dtype).reshape((-1, *input_shape))
 
 
-@functools.lru_cache()
-def primes(n: int) -> List[int]:
-    xs = [2]
-    for i in range(3, n, 2):
-        if all(i % x != 0 for x in xs):
-            xs.append(i)
-    return xs
-
-
-@functools.lru_cache()
-def factorize(n: int) -> List[Tuple[int, int]]:
-    ps = primes(int(math.sqrt(n)))
-    xs = []
-    for p in ps:
-        count = 0
-        while n % p == 0:
-            n /= p
-            count += 1
-        xs.append((p, count))
-    return xs
-
-
-def tile(arr: np.ndarray, nrows: int, ncols: int) -> np.ndarray:
-    """
-    Args:
-        arr: HWC format array
-        nrows: number of tiled rows
-        ncols: number of tiled columns
-    """
-    h, w, c = arr.shape
-    out_height = nrows * h
-    out_width = ncols * w
-    chw = np.moveaxis(arr, (0, 1, 2), (1, 2, 0))
-
-    if c < nrows * ncols:
-        chw = chw.reshape(-1).copy()
-        chw.resize(nrows * ncols * h * w)
-
-    return (
-        chw.reshape(nrows, ncols, h, w)
-        .swapaxes(1, 2)
-        .reshape(out_height, out_width)
-    )
-
-
-def detile(
-    arr: np.ndarray, nrows: int, ncols: int, c: int, h: int, w: int
-) -> np.ndarray:
-    """
-    Args:
-        arr: tiled array
-        nrows: number of tiled rows
-        ncols: number of tiled columns
-        c: channels (number of tiles to keep)
-        h: height of tile
-        w: width of tile
-    """
-    chw = (
-        arr.reshape(nrows, h, ncols, w)
-        .swapaxes(1, 2)
-        .reshape(-1)[: c * h * w]
-        .reshape(c, h, w)
-    )
-
-    return np.moveaxis(chw, (0, 1, 2), (2, 0, 1)).reshape(h, w, c)
-
-
 def tile_tensor(data_tensor: np.ndarray) -> np.ndarray:
-    h, w, c = data_tensor.shape[-3:]
-    # nrows = np.product([p ** (k // 2) for p, k in factorize(c)])
-    nrows = int(math.sqrt(c))
-    return tile(data_tensor[0], nrows=nrows, ncols=math.ceil(c / nrows))
+    data_tensor = data_tensor[0]
+    h, w, c = data_tensor.shape
+    tensor_layout = TensorLayout(c, h, w, "hwc")
+    tiled_layout = determine_tile_layout(tensor_layout)
+    return tile(data_tensor, tensor_layout, tiled_layout)
 
 
 def squarify_1d(data_tensor: np.ndarray) -> np.ndarray:
