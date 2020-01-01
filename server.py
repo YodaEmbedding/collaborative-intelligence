@@ -8,12 +8,13 @@ import time
 import traceback
 from asyncio import StreamReader, StreamWriter
 from itertools import count
-from typing import Any, Awaitable, ByteString, List, Tuple
+from typing import ByteString, List, Tuple
 
 from src.modelconfig import ModelConfig
 from src.server import monitor_client
 from src.server.model_manager import ModelManager
 from src.server.monitor_client import MonitorStats, image_preview
+from src.server.reader import read_item
 from src.server.work_distributor import SmartProcessor, WorkDistributor
 
 IP = "0.0.0.0"
@@ -122,43 +123,6 @@ def processor(work_distributor: WorkDistributor, monitor_stats: MonitorStats):
                 work_distributor.put(guid, response)
         except Exception:
             traceback.print_exc()
-
-
-async def read_int(reader: StreamReader) -> Awaitable[int]:
-    return int.from_bytes(await reader.readexactly(4), byteorder="big")
-
-
-async def read_tensor_frame(
-    reader: StreamReader,
-) -> Awaitable[Tuple[int, ByteString]]:
-    frame_number = await read_int(reader)
-    data_len = await read_int(reader)
-    data = await reader.readexactly(data_len)
-    return frame_number, data
-
-
-async def read_json(reader: StreamReader) -> Awaitable[dict]:
-    return json.loads(await reader.readline())
-
-
-async def read_ping(reader: StreamReader) -> Awaitable:
-    id_ = await read_int(reader)
-    return id_
-
-
-# TODO form protocol on json and binary data
-async def read_item(reader: StreamReader) -> Awaitable[Tuple[str, Any]]:
-    """Retrieve single item of various types from stream."""
-    input_type = (await reader.readline()).decode("utf8").rstrip("\n")
-    print(input_type)
-    if len(input_type) == 0:
-        return "terminate", None
-    reader_func = {
-        "frame": read_tensor_frame,
-        "json": read_json,
-        "ping": read_ping,
-    }[input_type]
-    return input_type, await reader_func(reader)
 
 
 async def produce(reader: StreamReader, putter):
