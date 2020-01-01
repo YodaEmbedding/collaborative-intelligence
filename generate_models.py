@@ -100,8 +100,9 @@ def plot_featuremap(prefix: str, arr: np.ndarray, order: str = "hwc"):
     title = textwrap.fill(prefix.replace("&", " "), 70)
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
-    ax.matshow(tiled, cmap="viridis")
+    cax = ax.matshow(tiled, cmap="viridis")
     ax.set_title(title, fontsize="xx-small")
+    fig.colorbar(cax)
     fig.savefig(f"{prefix}-featuremap.png", dpi=200)
 
 
