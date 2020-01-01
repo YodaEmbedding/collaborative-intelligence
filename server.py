@@ -4,16 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import importlib.util
 import json
 import math
-import os
 import queue
 import time
 import traceback
 from asyncio import StreamReader, StreamWriter
-from dataclasses import asdict, dataclass
-from datetime import datetime
+from dataclasses import dataclass
 from io import BytesIO
 from itertools import count
 from typing import (
@@ -464,7 +461,7 @@ async def produce(reader: StreamReader, putter):
                 break
             # TODO instead of always passing model_config, why not make class?
             # TODO merge with processor()?
-            elif input_type == "frame":
+            if input_type == "frame":
                 i, data = item
                 print(f"Produce: {i} {str_preview(data)}")
                 await putter((model_config, "predict", item))

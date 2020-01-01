@@ -1,11 +1,10 @@
-import errno
 import gc
 import json
 import os
 import textwrap
 from contextlib import suppress
 from pprint import pprint
-from typing import Callable, List, Iterable, Tuple
+from typing import Iterable
 
 import cv2
 import matplotlib.pyplot as plt
