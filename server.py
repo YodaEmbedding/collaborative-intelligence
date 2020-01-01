@@ -10,10 +10,10 @@ from asyncio import StreamReader, StreamWriter
 from itertools import count
 from typing import Any, Awaitable, ByteString, List, Tuple
 
-from src import monitor_client
 from src.modelconfig import ModelConfig
-from src.monitor_client import MonitorStats, image_preview
+from src.server import monitor_client
 from src.server.model_manager import ModelManager
+from src.server.monitor_client import MonitorStats, image_preview
 from src.server.work_distributor import SmartProcessor, WorkDistributor
 
 IP = "0.0.0.0"
