@@ -49,3 +49,26 @@ fun <T> Flowable<T>.onBackpressureLimitRate(
             }
         }
 }
+
+fun <T> Flowable<FrameRequest<T>>.doOnNextTimed(
+    statistics: Statistics,
+    timeFunc: (ModelStatistics, Int, Instant, Instant) -> Unit,
+    onNext: (FrameRequest<T>) -> Unit
+): Flowable<FrameRequest<T>> {
+    return this.doOnNext { x ->
+        val (_, start, end) = timed { onNext(x) }
+        timeFunc(statistics[x.info.modelConfig], x.info.frameNumber, start, end)
+    }
+}
+
+fun <R, T> Flowable<FrameRequest<T>>.mapTimed(
+    statistics: Statistics,
+    timeFunc: (ModelStatistics, Int, Instant, Instant) -> Unit,
+    mapper: (FrameRequest<T>) -> FrameRequest<R>
+): Flowable<FrameRequest<R>> {
+    return this.map { x ->
+        val (result, start, end) = timed { mapper(x) }
+        timeFunc(statistics[x.info.modelConfig], x.info.frameNumber, start, end)
+        result
+    }
+}

@@ -143,16 +143,16 @@ class MainActivity : AppCompatActivity() {
                 FrameRequest(frame, FrameRequestInfo(frameNumber, modelConfig))
             }
             .doOnNext { Log.i(TAG, "Started processing frame ${it.info.frameNumber}") }
-            .mapTimed(ModelStatistics::setPreprocess) {
+            .mapTimed(statistics, ModelStatistics::setPreprocess) {
                 it.map(clientProcessor.postprocessor::process)
             }
             .observeOn(clientProcessor.inferenceScheduler, false, 1)
-            .mapTimed(ModelStatistics::setInference) {
+            .mapTimed(statistics, ModelStatistics::setInference) {
                 clientProcessor.inference!!.run(it)
             }
             .observeOn(networkManager.networkWriteScheduler, false, 1)
             .doOnNext { networkManager.uploadLimitRate = optionsUiController.uploadRateLimit }
-            .doOnNextTimed(ModelStatistics::setNetworkWrite) {
+            .doOnNextTimed(statistics, ModelStatistics::setNetworkWrite) {
                 networkManager.writeFrameRequest(it)
             }
             .doOnNext {
@@ -238,26 +238,5 @@ class MainActivity : AppCompatActivity() {
         }
 
         return true
-    }
-
-    private fun <T> Flowable<FrameRequest<T>>.doOnNextTimed(
-        timeFunc: (ModelStatistics, Int, Instant, Instant) -> Unit,
-        onNext: (FrameRequest<T>) -> Unit
-    ): Flowable<FrameRequest<T>> {
-        return this.doOnNext { x ->
-            val (_, start, end) = timed { onNext(x) }
-            timeFunc(statistics[x.info.modelConfig], x.info.frameNumber, start, end)
-        }
-    }
-
-    private fun <R, T> Flowable<FrameRequest<T>>.mapTimed(
-        timeFunc: (ModelStatistics, Int, Instant, Instant) -> Unit,
-        mapper: (FrameRequest<T>) -> FrameRequest<R>
-    ): Flowable<FrameRequest<R>> {
-        return this.map { x ->
-            val (result, start, end) = timed { mapper(x) }
-            timeFunc(statistics[x.info.modelConfig], x.info.frameNumber, start, end)
-            result
-        }
     }
 }
