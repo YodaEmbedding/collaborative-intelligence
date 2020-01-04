@@ -1,6 +1,7 @@
 package com.sicariusnoctis.collaborativeintelligence
 
 import android.os.Environment
+import io.reactivex.Flowable
 import kotlinx.serialization.UnstableDefault
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -32,4 +33,20 @@ fun <R> timed(
     val result = func()
     val end = Instant.now()
     return Triple(result, start, end)
+}
+
+fun <T> Flowable<T>.onBackpressureLimitRate(
+    onDrop: (T) -> Unit,
+    limit: (T) -> Boolean
+): Flowable<T> {
+    return this
+        // .onBackpressureDrop(onDrop)
+        .filter {
+            if (limit(it)) {
+                true
+            } else {
+                onDrop(it)
+                false
+            }
+        }
 }

@@ -236,22 +236,6 @@ class MainActivity : AppCompatActivity() {
         return true
     }
 
-    private fun <T> Flowable<T>.onBackpressureLimitRate(
-        onDrop: (T) -> Unit,
-        limit: (T) -> Boolean
-    ): Flowable<T> {
-        return this
-            // .onBackpressureDrop(onDrop)
-            .filter {
-                if (limit(it)) {
-                    true
-                } else {
-                    onDrop(it)
-                    false
-                }
-            }
-    }
-
     private fun <T> Flowable<FrameRequest<T>>.doOnNextTimed(
         timeFunc: (ModelStatistics, Int, Instant, Instant) -> Unit,
         onNext: (FrameRequest<T>) -> Unit
