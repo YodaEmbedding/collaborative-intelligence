@@ -21,7 +21,6 @@ class NetworkAdapter {
     private val frameHeaderSize = 6 + 4 + 4
     private var inputStream: BufferedReader? = null
     private var outputStream: DataOutputStream? = null
-    // private var outputStream: OutputStream? = null
     private var socket: Socket? = null
     private var modelConfig: ModelConfig? = null
     private val jsonSerializer = Json(
@@ -60,11 +59,8 @@ class NetworkAdapter {
         // Ensure write+flush turns into a packet by disabling Nagle
         socket!!.tcpNoDelay = true
 
-        // TODO BufferedInputStream for byte data?
-        // https://stackoverflow.com/questions/15538509/dealing-with-end-of-file-using-bufferedreader-read
         inputStream = BufferedReader(InputStreamReader(socket!!.inputStream))
-        outputStream = DataOutputStream(socket!!.outputStream)
-        // outputStream = BufferedOutputStream(socket!!.outputStream)
+        outputStream = DataOutputStream(BufferedOutputStream(socket!!.outputStream))
     }
 
     private fun tryConnect(hostnames: List<String>, port: Int) {
