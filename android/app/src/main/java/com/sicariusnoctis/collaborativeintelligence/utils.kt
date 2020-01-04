@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonObjectSerializer
 import java.io.File
 import java.io.FileNotFoundException
 import java.nio.file.Paths
+import java.time.Instant
 
 @UnstableDefault
 fun loadJsonFromDefaultFolder(filename: String): JsonObject? {
@@ -22,4 +23,13 @@ fun loadJsonFromDefaultFolder(filename: String): JsonObject? {
     catch (e: FileNotFoundException) {
         null
     }
+}
+
+fun <R> timed(
+    func: () -> R
+): Triple<R, Instant, Instant> {
+    val start = Instant.now()
+    val result = func()
+    val end = Instant.now()
+    return Triple(result, start, end)
 }

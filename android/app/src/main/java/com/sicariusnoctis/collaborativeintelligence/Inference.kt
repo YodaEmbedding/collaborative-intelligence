@@ -20,9 +20,11 @@ class Inference : Closeable {
     private var tflite: Interpreter? = null
 
     fun run(frameRequest: FrameRequest<ByteArray>): FrameRequest<ByteArray> {
-        if (!::modelConfig.isInitialized || modelConfig != frameRequest.info.modelConfig) {
+        if (!::modelConfig.isInitialized)
+            throw Exception("No modelConfig loaded")
+
+        if (modelConfig != frameRequest.info.modelConfig)
             throw Exception("Current config $modelConfig differs from requested config ${frameRequest.info.modelConfig}")
-        }
 
         return frameRequest.map { run(frameRequest.obj) }
     }
@@ -54,7 +56,10 @@ class Inference : Closeable {
 
     fun switchModel(modelConfig: ModelConfig) {
         close()
+        loadModel(modelConfig)
+    }
 
+    private fun loadModel(modelConfig: ModelConfig) {
         this.modelConfig = modelConfig
 
         if (modelConfig.layer == "server")

@@ -10,47 +10,34 @@ import com.sicariusnoctis.collaborativeintelligence.ui.OptionsUiController
 import com.sicariusnoctis.collaborativeintelligence.ui.StatisticsUiController
 import io.fotoapparat.parameter.Resolution
 import io.fotoapparat.preview.Frame
-import io.reactivex.*
-import io.reactivex.android.schedulers.AndroidSchedulers
+import io.reactivex.Completable
+import io.reactivex.Flowable
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.internal.schedulers.IoScheduler
-import io.reactivex.observables.ConnectableObservable
 import io.reactivex.processors.PublishProcessor
 import io.reactivex.rxkotlin.subscribeBy
 import io.reactivex.rxkotlin.zipWith
-import io.reactivex.schedulers.Schedulers
 import kotlinx.android.synthetic.main.activity_main.*
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
     private val TAG = MainActivity::class.qualifiedName
 
     private lateinit var camera: Camera
-    private lateinit var inference: Inference
-    private lateinit var inferenceExecutor: ExecutorService
-    private lateinit var inferenceScheduler: Scheduler
-    private lateinit var networkWriteExecutor: ExecutorService
-    private lateinit var networkWriteScheduler: Scheduler
-    private lateinit var postprocessor: CameraPreviewPostprocessor
+    private lateinit var clientProcessor: ClientProcessor
+    private lateinit var networkManager: NetworkManager
     private lateinit var previewResolution: Resolution
     private lateinit var rs: RenderScript
     private lateinit var modelUiController: ModelUiController
     private lateinit var optionsUiController: OptionsUiController
     private lateinit var statisticsUiController: StatisticsUiController
 
-    private var networkAdapter: NetworkAdapter? = null
     private var prevFrameTime: Instant? = null
     private val frameProcessor: PublishProcessor<Frame> = PublishProcessor.create()
     private val statistics = Statistics()
     private val subscriptions = CompositeDisposable()
-
-    private var networkRead: Observable<Response>? = null
-    private var networkWrite: PublishProcessor<Any>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,10 +74,8 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
 
-        inferenceExecutor = Executors.newSingleThreadExecutor()
-        inferenceScheduler = Schedulers.from(inferenceExecutor)
-        networkWriteExecutor = Executors.newSingleThreadExecutor()
-        networkWriteScheduler = Schedulers.from(networkWriteExecutor)
+        clientProcessor = ClientProcessor(rs)
+        networkManager = NetworkManager(statistics, statisticsUiController)
 
         val cameraReady = CompletableFuture<Unit>()
         camera.start()
@@ -99,18 +84,16 @@ class MainActivity : AppCompatActivity() {
             cameraReady.complete(Unit)
         }
 
-        networkAdapter = NetworkAdapter()
-
         Completable
             .mergeArray(
                 Completable.fromFuture(cameraReady),
-                initInference(),
-                connectNetworkAdapter()
+                clientProcessor.initInference(),
+                networkManager.connectNetworkAdapter()
             )
             .subscribeOn(IoScheduler())
             .andThen(initPostprocessor())
-            .andThen(subscribeNetworkIo())
-            .andThen(subscribePingGenerator())
+            .andThen(networkManager.subscribeNetworkIo())
+            .andThen(networkManager.subscribePingGenerator())
             .andThen(switchModel(modelUiController.modelConfig))
             .andThen(subscribeFrameProcessor())
             .subscribeBy({ it.printStackTrace() })
@@ -119,10 +102,9 @@ class MainActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         camera.stop()
-        // TODO shouldn't this be part of "doFinally" for frameProcessor?
-        inferenceExecutor.submit { inference.close() }
-        // TODO release inferenceExecutor?
-        networkAdapter?.close()
+        clientProcessor.close()
+        networkManager.close()
+        networkManager.dispose()
     }
 
     override fun onDestroy() {
@@ -130,129 +112,22 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    private fun initInference() = Completable.fromRunnable {
-        inference = Inference()
-    }
-        .subscribeOn(inferenceScheduler)
-
     private fun initPostprocessor() = Completable.fromRunnable {
-        // TODO this kind of doesn't work nice when you onStop/onStart the app
-        if (::postprocessor.isInitialized)
-            return@fromRunnable
-
-        val width = previewResolution.width
-        val height = previewResolution.height
         val rotationCompensation = CameraPreviewPostprocessor.getRotationCompensation(
             this, CameraCharacteristics.LENS_FACING_BACK
         )
 
-        postprocessor =
-            CameraPreviewPostprocessor(rs, width, height, 224, 224, rotationCompensation)
-    }
-
-    private fun connectNetworkAdapter() = Completable.fromRunnable {
-        networkAdapter!!.connect()
-    }
-        .subscribeOn(IoScheduler())
-
-    // TODO Prevent duplicate subscriptions! (e.g. if onStart called multiple times); unsubscribe?
-    // TODO .onTerminateDetach()
-    private fun subscribeNetworkIo() = Completable.fromRunnable {
-        // TODO don't really NEED a networkWrite observable... if we make a single executor thread
-        networkWrite = PublishProcessor.create()
-        val networkWriteRequests = networkWrite!!
-            .subscribeOn(networkWriteScheduler)
-            .onBackpressureBuffer()
-            .share()
-
-        // TODO collapse all these into single function...
-
-        val networkWriteModelConfigSubscription = networkWriteRequests
-            .filter { it is ModelConfig }
-            .doOnNext { networkAdapter!!.writeModelConfig(it as ModelConfig) }
-            .subscribeBy({ it.printStackTrace() })
-        subscriptions.add(networkWriteModelConfigSubscription)
-
-        val networkWriteFrameRequestSubscription = networkWriteRequests
-            .filter { it is FrameRequest<*> && it.obj is ByteArray }
-            .doOnNext { networkAdapter!!.writeFrameRequest(it as FrameRequest<ByteArray>) }
-            .subscribeBy({ it.printStackTrace() })
-        subscriptions.add(networkWriteFrameRequestSubscription)
-
-        val networkWriteSampleSubscription = networkWriteRequests
-            .filter { it is FrameRequest<*> && it.obj is Sample }
-            .doOnNext { networkAdapter!!.writeSample(it as FrameRequest<Sample>) }
-            .subscribeBy({ it.printStackTrace() })
-        subscriptions.add(networkWriteSampleSubscription)
-
-        val networkWritePingSubscription = networkWriteRequests
-            .filter { it is PingRequest }
-            .doOnNext { networkAdapter!!.writePingRequest(it as PingRequest) }
-            .subscribeBy({ it.printStackTrace() })
-        subscriptions.add(networkWritePingSubscription)
-
-        networkRead = Observable.fromIterable(Iterable {
-            iterator {
-                // TODO Wait until thread is alive using CountDownLatch?
-                // TODO thread.isAlive()? socket.isOpen? volatile boolean flag?
-                while (true) {
-                    val (result, start, end) = timed { networkAdapter!!.readResponse() }
-                    if (result == null) break
-                    val response = result!!
-                    if (response is ResultResponse) {
-                        // TODO does this even make sense?
-                        // TODO Also, have a "ping"/ack return when all data is received
-                        val stats = statistics[response.frameNumber]
-                        stats.setNetworkRead(response.frameNumber, start, end)
-                        stats.setResultResponse(response.frameNumber, response)
-                    }
-                    yield(response)
-                }
-            }
-        })
-            .subscribeOn(IoScheduler())
-            .publish()
-
-        val networkModelReadySubscription = networkRead!!
-            .filter { it is ModelReadyResponse }
-            .map { it as ModelReadyResponse }
-            .doOnNext { Log.i(TAG, "Model loaded on server: $it") }
-            .subscribeBy({ it.printStackTrace() })
-        subscriptions.add(networkModelReadySubscription)
-
-        val networkPingResponsesSubscription = networkRead!!
-            .filter { it is PingResponse }
-            .map { it as PingResponse }
-            .doOnNext { Log.i(TAG, "Ping received: ${it.id}") }
-            .subscribeBy({ it.printStackTrace() })
-        subscriptions.add(networkPingResponsesSubscription)
-
-        // val networkResultResponses = networkRead!!
-        val networkResultResponsesSubscription = networkRead!!
-            .filter { it is ResultResponse }
-            .map { it as ResultResponse }
-            .map { statistics[it.frameNumber].sample }
-            .observeOn(AndroidSchedulers.mainThread())
-            .doOnNext { Log.i(TAG, "Finished processing frame ${it.frameNumber}") }
-            .doOnNext { sample -> statisticsUiController.addSample(sample) }
-            .subscribeBy({ it.printStackTrace() })
-        subscriptions.add(networkResultResponsesSubscription)
-
-        (networkRead!! as ConnectableObservable).connect()
-    }
-
-    private fun subscribePingGenerator() = Completable.fromRunnable {
-        subscriptions.add(Observable
-            .interval(10, TimeUnit.SECONDS)
-            .observeOn(networkWriteScheduler, false, 1)
-            .doOnNext { networkAdapter!!.writePingRequest(PingRequest(it.toInt())) }
-            .doOnNext { Log.i(TAG, "Ping sent: $it") }
-            .subscribeBy({ it.printStackTrace() })
+        clientProcessor.initPostprocessor(
+            previewResolution.width,
+            previewResolution.height,
+            rotationCompensation
         )
     }
 
-    // TODO Reduce requests if connection speed is not fast enough? (Backpressure here too!!!!!)
+    // TODO this is kind of using references to things that stop existing after onStop
     private fun subscribeFrameProcessor() = Completable.fromRunnable {
+        // clientProcessor.subscribeFrameProcessor(frameProcessor)
+
         val frameProcessorSubscription = frameProcessor
             .subscribeOn(IoScheduler())
             .onBackpressureDrop()
@@ -268,13 +143,13 @@ class MainActivity : AppCompatActivity() {
                 FrameRequest(frame, FrameRequestInfo(frameNumber, modelConfig))
             }
             .doOnNext { Log.i(TAG, "Started processing frame ${it.info.frameNumber}") }
-            .mapTimed(ModelStatistics::setPreprocess) { it.map(postprocessor::process) }
-            .observeOn(inferenceScheduler, false, 1)
-            .mapTimed(ModelStatistics::setInference) { inference.run(it) }
-            .observeOn(networkWriteScheduler, false, 1)
-            .doOnNext { networkAdapter!!.uploadLimitRate = optionsUiController.uploadRateLimit }
+            .mapTimed(ModelStatistics::setPreprocess) { it.map(clientProcessor.postprocessor::process) }
+            .observeOn(clientProcessor.inferenceScheduler, false, 1)
+            .mapTimed(ModelStatistics::setInference) { clientProcessor.inference!!.run(it) }
+            .observeOn(networkManager.networkWriteScheduler, false, 1)
+            .doOnNext { networkManager.uploadLimitRate = optionsUiController.uploadRateLimit }
             .doOnNextTimed(ModelStatistics::setNetworkWrite) {
-                networkAdapter!!.writeFrameRequest(it)
+                networkManager.writeFrameRequest(it)
             }
             .doOnNext {
                 statistics[it.info.modelConfig].setUpload(it.info.frameNumber, it.obj.size)
@@ -288,41 +163,18 @@ class MainActivity : AppCompatActivity() {
         .fromRunnable { Log.i(TAG, "Switching model begin") }
         .andThen(
             Completable.mergeArray(
-                switchModelInference(modelConfig),
-                switchModelServer(modelConfig)
+                clientProcessor.switchModelInference(modelConfig),
+                networkManager.switchModelServer(modelConfig)
             )
         )
         .doOnComplete { Log.i(TAG, "Switching model end") }
-
-    private fun switchModelInference(modelConfig: ModelConfig) = Completable.fromRunnable {
-        inference.switchModel(modelConfig)
-    }.subscribeOn(inferenceScheduler)
-
-    private fun switchModelServer(modelConfig: ModelConfig) = Single
-        .just(modelConfig)
-        .observeOn(networkWriteScheduler)
-        .doOnSuccess { networkAdapter!!.writeModelConfig(it) }
-        .ignoreElement()
-        .andThen(switchModelServerObtainResponse(modelConfig))
-
-    private fun switchModelServerObtainResponse(modelConfig: ModelConfig) = Completable.defer {
-        networkRead!!
-            .filter { it is ModelReadyResponse }
-            .map { it as ModelReadyResponse }
-            .firstOrError()
-            .doOnSuccess {
-                if (it.modelConfig != modelConfig)
-                    throw Exception("Model config on server ${it.modelConfig} different from expected $modelConfig ")
-            }
-            .ignoreElement()
-    }
 
     private fun shouldProcessFrame(modelConfig: ModelConfig): Boolean {
         val stats = statistics[modelConfig]
 
         // Load new model if config changed
-        if (modelConfig != inference.modelConfig) {
-            val prevStats = statistics[inference.modelConfig]
+        if (modelConfig != clientProcessor.modelConfig) {
+            val prevStats = statistics[clientProcessor.modelConfig]
 
             // Wait till latest sample has been processed client-side first
             if (prevStats.currentSample != null && prevStats.currentSample!!.networkWriteEnd == null) {
@@ -381,7 +233,7 @@ class MainActivity : AppCompatActivity() {
         // val preWriteTime = Duration.between(sample.preprocessStart, sample.inferenceEnd)
         // val enoughTime = preWriteTime.multipliedBy(2).dividedBy(3) + Duration.ofMillis(20)
         val enoughTime = Duration.ofMillis(0)
-        if (networkAdapter!!.timeUntilWriteAvailable > enoughTime) {
+        if (networkManager.timeUntilWriteAvailable > enoughTime) {
             Log.i(TAG, "Dropped frame because of slow upload speed!")
             return false
         }
@@ -459,17 +311,6 @@ class MainActivity : AppCompatActivity() {
             val (result, start, end) = timed { mapper(x) }
             timeFunc(statistics[x.info.modelConfig], x.info.frameNumber, start, end)
             result
-        }
-    }
-
-    companion object {
-        private fun <R> timed(
-            func: () -> R
-        ): Triple<R, Instant, Instant> {
-            val start = Instant.now()
-            val result = func()
-            val end = Instant.now()
-            return Triple(result, start, end)
         }
     }
 }
