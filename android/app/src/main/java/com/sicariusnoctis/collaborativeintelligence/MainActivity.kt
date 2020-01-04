@@ -143,9 +143,13 @@ class MainActivity : AppCompatActivity() {
                 FrameRequest(frame, FrameRequestInfo(frameNumber, modelConfig))
             }
             .doOnNext { Log.i(TAG, "Started processing frame ${it.info.frameNumber}") }
-            .mapTimed(ModelStatistics::setPreprocess) { it.map(clientProcessor.postprocessor::process) }
+            .mapTimed(ModelStatistics::setPreprocess) {
+                it.map(clientProcessor.postprocessor::process)
+            }
             .observeOn(clientProcessor.inferenceScheduler, false, 1)
-            .mapTimed(ModelStatistics::setInference) { clientProcessor.inference!!.run(it) }
+            .mapTimed(ModelStatistics::setInference) {
+                clientProcessor.inference!!.run(it)
+            }
             .observeOn(networkManager.networkWriteScheduler, false, 1)
             .doOnNext { networkManager.uploadLimitRate = optionsUiController.uploadRateLimit }
             .doOnNextTimed(ModelStatistics::setNetworkWrite) {

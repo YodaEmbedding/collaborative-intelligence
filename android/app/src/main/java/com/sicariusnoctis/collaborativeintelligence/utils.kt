@@ -20,8 +20,7 @@ fun loadJsonFromDefaultFolder(filename: String): JsonObject? {
         val inputStream = File(parent, filename)
         val jsonString = inputStream.bufferedReader().use { it.readText() }
         Json.parse(JsonObjectSerializer, jsonString)
-    }
-    catch (e: FileNotFoundException) {
+    } catch (e: FileNotFoundException) {
         null
     }
 }

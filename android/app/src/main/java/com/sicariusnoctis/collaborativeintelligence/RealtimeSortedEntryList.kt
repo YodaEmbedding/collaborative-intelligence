@@ -24,7 +24,9 @@ class RealtimeSortedEntryList : ArrayList<Entry>() {
     }
 
     override fun add(index: Int, element: Entry) = throw Exception(unsupported)
-    override fun addAll(index: Int, elements: Collection<Entry>): Boolean = throw Exception(unsupported)
+    override fun addAll(index: Int, elements: Collection<Entry>): Boolean =
+        throw Exception(unsupported)
+
     override fun retainAll(elements: Collection<Entry>): Boolean = throw Exception(unsupported)
     override fun set(index: Int, element: Entry): Entry = throw Exception(unsupported)
 }

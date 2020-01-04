@@ -9,12 +9,9 @@ import io.fotoapparat.log.loggers
 import io.fotoapparat.parameter.FpsRange
 import io.fotoapparat.parameter.Resolution
 import io.fotoapparat.parameter.ScaleType
-import io.fotoapparat.parameter.camera.CameraParameters
-import io.fotoapparat.result.ParametersResult
-import io.fotoapparat.util.FrameProcessor
 import io.fotoapparat.selector.*
+import io.fotoapparat.util.FrameProcessor
 import io.fotoapparat.view.CameraView
-import java.util.concurrent.Future
 
 class Camera(context: Context, cameraView: CameraView, frameProcessor: FrameProcessor) {
     private val TAG = Camera::class.qualifiedName
