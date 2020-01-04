@@ -1,12 +1,17 @@
 package com.sicariusnoctis.collaborativeintelligence
 
+import android.R
 import android.os.Environment
+import android.view.View
+import android.widget.ArrayAdapter
+import android.widget.Spinner
 import com.sicariusnoctis.collaborativeintelligence.processor.FrameRequest
 import io.reactivex.Flowable
 import kotlinx.serialization.UnstableDefault
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectSerializer
+import kotlinx.serialization.json.content
 import java.io.File
 import java.io.FileNotFoundException
 import java.nio.file.Paths
@@ -25,6 +30,30 @@ fun loadJsonFromDefaultFolder(filename: String): JsonObject? {
         null
     }
 }
+
+// @UnstableDefault
+// fun loadModelConfig(filename: String): List<ModelConfig> {
+//     return loadJsonFromDefaultFolder(filename)!!.flatMap { (k, v) ->
+//         v.jsonArray.map { x -> jsonToModelConfig(x.jsonObject, k) }
+//     }
+// }
+
+@UnstableDefault
+fun loadModelConfigMap(filename: String): LinkedHashMap<String, List<ModelConfig>> {
+    return loadJsonFromDefaultFolder(filename)!!.map { (k, v) ->
+        k to v.jsonArray.map { x -> jsonToModelConfig(x.jsonObject, k) }
+    }.toMap() as LinkedHashMap
+}
+
+// TODO use ModelConfig.serializer() directly...
+private fun jsonToModelConfig(jsonObject: JsonObject, model: String? = null) = ModelConfig(
+    model = model ?: jsonObject["model"]!!.content,
+    layer = jsonObject["layer"]!!.content,
+    encoder = jsonObject["encoder"]!!.content,
+    decoder = jsonObject["decoder"]!!.content,
+    encoder_args = jsonObject["encoder_args"]?.jsonObject,
+    decoder_args = jsonObject["decoder_args"]?.jsonObject
+)
 
 fun <R> timed(
     func: () -> R
@@ -72,4 +101,13 @@ fun <R, T> Flowable<FrameRequest<T>>.mapTimed(
         timeFunc(statistics[x.info.modelConfig], x.info.frameNumber, start, end)
         result
     }
+}
+
+fun updateSpinner(spinner: Spinner, choices: List<String>) {
+    spinner.textAlignment = View.TEXT_ALIGNMENT_TEXT_END
+    val adapter = ArrayAdapter<String>(
+        spinner.context, R.layout.simple_spinner_item, choices
+    )
+    adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+    spinner.adapter = adapter
 }

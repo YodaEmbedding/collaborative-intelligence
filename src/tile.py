@@ -2,53 +2,11 @@ from __future__ import annotations
 
 import functools
 import math
-from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
 import numpy as np
 
-
-@dataclass(eq=True, frozen=True)
-class TensorLayout:
-    c: int
-    h: int
-    w: int
-    order: str
-
-    @property
-    def shape(self) -> Tuple[int, int, int]:
-        return self.shape_in_order(self.order)
-
-    def shape_in_order(self, order: str) -> Tuple[int, int, int]:
-        return _shape_in_order(self.__dict__, order)
-
-    @staticmethod
-    def from_shape(shape: Tuple[int, int, int], order: str) -> TensorLayout:
-        assert len(order) == 3
-        kwargs = {k: shape[i] for i, k in enumerate(order)}
-        kwargs["order"] = order
-        return TensorLayout(**kwargs)
-
-
-@dataclass(eq=True, frozen=True)
-class TiledArrayLayout:
-    c: int
-    h: int
-    w: int
-    nrows: int
-    ncols: int
-
-    @property
-    def shape(self) -> Tuple[int, int]:
-        return (self.nrows * self.h, self.ncols * self.w)
-
-    def orig_shape_in_order(self, order: str) -> Tuple[int, int, int]:
-        return _shape_in_order(self.__dict__, order)
-
-
-def _shape_in_order(d: Dict[str, int], order: str) -> Tuple[int, int, int]:
-    assert len(order) == 3
-    return tuple(d[x] for x in order)
+from src.layouts import TensorLayout, TiledArrayLayout
 
 
 def tile(
@@ -118,7 +76,7 @@ def detile(
 
 
 def _detile_chw(
-    arr: np.ndarray, c: int, h: int, w: int, nrows: int, ncols: int
+    arr: np.ndarray, c: int, h: int, w: int, nrows: int, ncols: int, **kwargs
 ) -> np.ndarray:
     """
     Args:
@@ -170,9 +128,9 @@ def determine_tile_layout(tensor_layout: TensorLayout) -> TiledArrayLayout:
     """Determine reasonable tile layout from given tensor layout."""
     c, h, w = tensor_layout.shape_in_order("chw")
     # nrows = np.product([p ** (k // 2) for p, k in factorize(c)])
-    nrows = int(math.sqrt(c))
+    nrows = math.ceil(math.sqrt(c))
     ncols = math.ceil(c / nrows)
-    return TiledArrayLayout(c, h, w, nrows, ncols)
+    return TiledArrayLayout(tensor_layout.dtype, c, h, w, nrows, ncols)
 
 
 @functools.lru_cache()

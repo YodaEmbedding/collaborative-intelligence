@@ -18,3 +18,11 @@ void RS_KERNEL rgba2rgbFloat(uchar4 in, uint32_t x, uint32_t y) {
     rsSetElementAt_float(output, in.g, pos + 1);
     rsSetElementAt_float(output, in.b, pos + 2);
 }
+
+void RS_KERNEL rgba2argb(uchar4 in, uint32_t x, uint32_t y) {
+    uint32_t pos = 4 * (x + width * y);
+    rsSetElementAt_uchar(output, 0, pos);
+    rsSetElementAt_uchar(output, in.r, pos + 1);
+    rsSetElementAt_uchar(output, in.g, pos + 2);
+    rsSetElementAt_uchar(output, in.b, pos + 3);
+}

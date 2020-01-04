@@ -61,11 +61,11 @@ class NetworkManager(
 
         // TODO collapse all these into single function...
 
-        val networkWriteModelConfigSubscription = networkWriteRequests
-            .filter { it is ModelConfig }
-            .doOnNext { networkAdapter.writeModelConfig(it as ModelConfig) }
+        val networkWriteProcessorConfigSubscription = networkWriteRequests
+            .filter { it is ProcessorConfig }
+            .doOnNext { networkAdapter.writeProcessorConfig(it as ProcessorConfig) }
             .subscribeBy({ it.printStackTrace() })
-        subscriptions.add(networkWriteModelConfigSubscription)
+        subscriptions.add(networkWriteProcessorConfigSubscription)
 
         val networkWriteFrameRequestSubscription = networkWriteRequests
             .filter { it is FrameRequest<*> && it.obj is ByteArray }
@@ -141,24 +141,26 @@ class NetworkManager(
         )
     }
 
-    fun switchModelServer(modelConfig: ModelConfig): Completable = Single
-        .just(modelConfig)
+    fun switchModelServer(processorConfig: ProcessorConfig): Completable = Single
+        .just(processorConfig)
         .observeOn(networkWriteScheduler)
-        .doOnSuccess { networkAdapter.writeModelConfig(it) }
+        .doOnSuccess { networkAdapter.writeProcessorConfig(it) }
         .ignoreElement()
-        .andThen(switchModelServerObtainResponse(modelConfig))
+        .andThen(switchModelServerObtainResponse(processorConfig))
 
-    private fun switchModelServerObtainResponse(modelConfig: ModelConfig) = Completable.defer {
-        networkRead!!
-            .filter { it is ModelReadyResponse }
-            .map { it as ModelReadyResponse }
-            .firstOrError()
-            .doOnSuccess {
-                if (it.modelConfig != modelConfig)
-                    throw Exception("Model config on server ${it.modelConfig} different from expected $modelConfig ")
-            }
-            .ignoreElement()
-    }
+    // TODO check postprocessor too...
+    private fun switchModelServerObtainResponse(processorConfig: ProcessorConfig) =
+        Completable.defer {
+            networkRead!!
+                .filter { it is ModelReadyResponse }
+                .map { it as ModelReadyResponse }
+                .firstOrError()
+                .doOnSuccess {
+                    if (it.modelConfig != processorConfig.modelConfig)
+                        throw Exception("""Model config on server ${it.modelConfig} different from expected ${processorConfig.modelConfig}""")
+                }
+                .ignoreElement()
+        }
 
     fun writeFrameRequest(frameRequest: FrameRequest<ByteArray>) {
         networkAdapter.writeFrameRequest(frameRequest)

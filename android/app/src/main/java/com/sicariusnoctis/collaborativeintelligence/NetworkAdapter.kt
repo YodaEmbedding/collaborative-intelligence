@@ -26,7 +26,7 @@ class NetworkAdapter {
     private var inputStream: BufferedReader? = null
     private var outputStream: DataOutputStream? = null
     private var socket: Socket? = null
-    private var modelConfig: ModelConfig? = null
+    private var processorConfig: ProcessorConfig? = null
     private val jsonSerializer = Json(
         context = SerializersModule {
             polymorphic<Response> {
@@ -131,20 +131,23 @@ class NetworkAdapter {
     @UnstableDefault
     fun writeFrameRequest(frameRequest: FrameRequest<ByteArray>) {
         Log.i(TAG, "Request: ${frameRequest.info.frameNumber}, ${frameRequest.info.modelConfig}")
-        if (modelConfig != frameRequest.info.modelConfig) {
-            throw Exception("Frame request model config does not match last sent model config")
+        val processorConfigFrameRequest = ProcessorConfig(
+            frameRequest.info.modelConfig, frameRequest.info.postencoderConfig
+        )
+        if (processorConfig != processorConfigFrameRequest) {
+            throw Exception("Frame request model config does not match last sent processor config")
         }
         writeData(frameRequest.info.frameNumber, frameRequest.obj)
         Log.i(TAG, "Request sent")
     }
 
     @UnstableDefault
-    fun writeModelConfig(modelConfig: ModelConfig) {
-        val jsonString = Json.stringify(ModelConfig.serializer(), modelConfig)
+    fun writeProcessorConfig(processorConfig: ProcessorConfig) {
+        val jsonString = Json.stringify(ProcessorConfig.serializer(), processorConfig)
         // uploadStats.sendBytes(frameNumber, 6 + jsonString.length)
         writeJson(jsonString)
         switchModel()
-        this.modelConfig = modelConfig
+        this.processorConfig = processorConfig
     }
 
     fun writePingRequest(pingRequest: PingRequest) {
@@ -315,3 +318,12 @@ data class ModelConfig(
             "$name(${args.jsonObject.map { (k, v) -> "$k=$v" }.joinToString(", ")})"
         }
 }
+
+@Serializable
+data class PostencoderConfig(val type: String)
+
+@Serializable
+data class ProcessorConfig(
+    @SerialName("model_config") val modelConfig: ModelConfig,
+    @SerialName("postencoder_config") val postencoderConfig: PostencoderConfig
+)

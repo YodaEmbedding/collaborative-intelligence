@@ -1,29 +1,32 @@
 package com.sicariusnoctis.collaborativeintelligence.ui
 
 import android.view.View
-import android.view.View.TEXT_ALIGNMENT_TEXT_END
 import android.widget.AdapterView
-import android.widget.ArrayAdapter
 import android.widget.Spinner
 import com.sicariusnoctis.collaborativeintelligence.ModelConfig
-import com.sicariusnoctis.collaborativeintelligence.loadJsonFromDefaultFolder
+import com.sicariusnoctis.collaborativeintelligence.loadModelConfigMap
+import com.sicariusnoctis.collaborativeintelligence.updateSpinner
 import com.warkiz.widget.IndicatorSeekBar
 import com.warkiz.widget.OnSeekChangeListener
 import com.warkiz.widget.SeekParams
-import kotlinx.serialization.UnstableDefault
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.content
+import io.reactivex.subjects.PublishSubject
 
 class ModelUiController(
     private val modelSpinner: Spinner,
     private val layerSeekBar: IndicatorSeekBar,
     private val compressionSpinner: Spinner
 ) {
-    val modelConfig: ModelConfig
+    var modelConfig: ModelConfig
         @Synchronized get() = _modelConfig
+        private set(value) {
+            _modelConfig = value
+            modelConfigEvents.onNext(value)
+        }
+
+    val modelConfigEvents = PublishSubject.create<ModelConfig>()
 
     private lateinit var _modelConfig: ModelConfig
-    private val modelConfigMap = loadModelConfigs("models.json")
+    private val modelConfigMap = loadModelConfigMap("models.json")
     private val model
         get() = modelSpinner.getItemAtPosition(modelSpinner.selectedItemPosition).toString()
     private val layer
@@ -47,20 +50,15 @@ class ModelUiController(
 
     private fun initUiChoices() {
         updateChoices(updateModel = true, updateLayer = true, updateCompression = true)
-        updateModelConfig()
     }
 
     private fun initUiHandlers() {
         modelSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(
-                parent: AdapterView<*>?,
-                view: View?,
-                position: Int,
-                id: Long
+                parent: AdapterView<*>?, view: View?, position: Int, id: Long
             ) {
                 choiceHistory.set(model)
                 updateChoices(updateModel = false, updateLayer = true, updateCompression = true)
-                updateModelConfig()
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) {}
@@ -74,16 +72,12 @@ class ModelUiController(
             override fun onStopTrackingTouch(seekBar: IndicatorSeekBar) {
                 choiceHistory.set(model, layer)
                 updateChoices(updateModel = false, updateLayer = false, updateCompression = true)
-                updateModelConfig()
             }
         }
 
         compressionSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(
-                parent: AdapterView<*>?,
-                view: View?,
-                position: Int,
-                id: Long
+                parent: AdapterView<*>?, view: View?, position: Int, id: Long
             ) {
                 choiceHistory.set(model, layer, compression)
                 updateModelConfig()
@@ -124,42 +118,18 @@ class ModelUiController(
             val default = choiceHistory.get(model, layer)
             compressionSpinner.setSelection(choicePosition(choices, default))
         }
+
+        updateModelConfig()
     }
 
     private fun updateModelConfig() {
-        _modelConfig = modelConfigMap.filter { it.key == model }.flatMap { it.value }
+        modelConfig = modelConfigMap.filter { it.key == model }.flatMap { it.value }
             .first { it.layer == layer && it.encoder == compression }
     }
 
     companion object {
         private fun <T> choicePosition(choices: List<T>, value: T?) =
             if (value == null) 0 else maxOf(choices.indexOf(value), 0)
-
-        // TODO use ModelConfig.serializer() directly...
-        private fun jsonToModelConfig(jsonObject: JsonObject, model: String? = null) = ModelConfig(
-            model = model ?: jsonObject["model"]!!.content,
-            layer = jsonObject["layer"]!!.content,
-            encoder = jsonObject["encoder"]!!.content,
-            decoder = jsonObject["decoder"]!!.content,
-            encoder_args = jsonObject["encoder_args"]?.jsonObject,
-            decoder_args = jsonObject["decoder_args"]?.jsonObject
-        )
-
-        @UnstableDefault
-        private fun loadModelConfigs(filename: String): LinkedHashMap<String, List<ModelConfig>> {
-            return loadJsonFromDefaultFolder(filename)!!.map { (k, v) ->
-                k to v.jsonArray.map { x -> jsonToModelConfig(x.jsonObject, k) }
-            }.toMap() as LinkedHashMap
-        }
-
-        private fun updateSpinner(spinner: Spinner, choices: List<String>) {
-            spinner.textAlignment = TEXT_ALIGNMENT_TEXT_END
-            val adapter = ArrayAdapter<String>(
-                spinner.context, android.R.layout.simple_spinner_item, choices
-            )
-            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-            spinner.adapter = adapter
-        }
     }
 }
 

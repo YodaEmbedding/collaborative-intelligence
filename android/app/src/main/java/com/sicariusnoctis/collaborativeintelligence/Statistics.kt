@@ -87,6 +87,12 @@ class ModelStatistics {
     }
 
     @Synchronized
+    fun setPostencode(frameNumber: Int, start: Instant, end: Instant) {
+        allSamples[frameNumber]!!.postencodeStart = start
+        allSamples[frameNumber]!!.postencodeEnd = end
+    }
+
+    @Synchronized
     fun setNetworkWrite(frameNumber: Int, start: Instant, end: Instant) {
         allSamples[frameNumber]!!.networkWriteStart = start
         allSamples[frameNumber]!!.networkWriteEnd = end
@@ -122,6 +128,7 @@ data class SerializableSample(
     val frameNumber: Int,
     val preprocess: Long,
     val clientInference: Long,
+    val postencode: Long,
     val networkWrite: Long,
     val serverInference: Long,
     val networkRead: Long,
@@ -133,6 +140,7 @@ data class SerializableSample(
             frameNumber,
             sample.preprocess!!.toMillis(),
             sample.clientInference!!.toMillis(),
+            sample.postencode!!.toMillis(),
             sample.networkWrite!!.toMillis(),
             sample.serverInference!!.toMillis(),
             sample.networkRead!!.toMillis(),
@@ -147,6 +155,8 @@ data class Sample(
     var preprocessEnd: Instant? = null,
     var inferenceStart: Instant? = null,
     var inferenceEnd: Instant? = null,
+    var postencodeStart: Instant? = null,
+    var postencodeEnd: Instant? = null,
     var networkWriteStart: Instant? = null,
     var networkWriteEnd: Instant? = null,
     var networkReadStart: Instant? = null,
@@ -156,7 +166,7 @@ data class Sample(
 ) {
     val preprocess get() = durationBetween(preprocessStart, preprocessEnd)
     val clientInference get() = durationBetween(inferenceStart, inferenceEnd)
-    // val encoding get() = durationBetween(encodingStart, encodingEnd)
+    val postencode get() = durationBetween(postencodeStart, postencodeEnd)
     val networkWrite get() = durationBetween(networkWriteStart, networkWriteEnd)
     val serverInference get() = resultResponse?.let { Duration.ofMillis(it.inferenceTime) }
     val networkRead get() = durationBetween(networkReadStart, networkReadEnd)
@@ -175,6 +185,7 @@ data class Sample(
     private fun durations() = listOf(
         Pair(preprocessStart, preprocessEnd),
         Pair(inferenceStart, inferenceEnd),
+        Pair(postencodeStart, postencodeEnd),
         Pair(networkWriteStart, networkWriteEnd),
         Pair(networkWriteEnd, networkReadEnd)
     )
@@ -183,6 +194,7 @@ data class Sample(
     private fun instants() = listOf(
         preprocessStart, preprocessEnd,
         inferenceStart, inferenceEnd,
+        postencodeStart, postencodeEnd,
         networkWriteStart, networkWriteEnd,
         networkReadStart, networkReadEnd
     )
@@ -191,6 +203,7 @@ data class Sample(
         private val durationDescriptions = listOf(
             "Preprocess",
             "Inference",
+            "Postencode",
             "Network Send",
             "Network Wait"
         )

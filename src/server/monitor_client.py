@@ -97,8 +97,7 @@ def image_preview(data_tensor: np.ndarray) -> ByteString:
 
 def _tile_tensor(data_tensor: np.ndarray) -> np.ndarray:
     data_tensor = data_tensor[0]
-    h, w, c = data_tensor.shape
-    tensor_layout = TensorLayout(c, h, w, "hwc")
+    tensor_layout = TensorLayout.from_tensor(data_tensor, "hwc")
     tiled_layout = determine_tile_layout(tensor_layout)
     return tile(data_tensor, tensor_layout, tiled_layout)
 

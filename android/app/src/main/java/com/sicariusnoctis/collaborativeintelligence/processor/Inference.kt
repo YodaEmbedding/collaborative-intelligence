@@ -1,7 +1,10 @@
 package com.sicariusnoctis.collaborativeintelligence.processor
 
 import android.os.Environment.getExternalStorageDirectory
+import android.util.Log
 import com.sicariusnoctis.collaborativeintelligence.ModelConfig
+import com.sicariusnoctis.collaborativeintelligence.PostencoderConfig
+import com.sicariusnoctis.collaborativeintelligence.TensorLayout
 import kotlinx.serialization.Serializable
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.GpuDelegate
@@ -19,6 +22,13 @@ class Inference : Closeable {
     private var outputBuffer: ByteBuffer? = null
     private var gpuDelegate: GpuDelegate? = null
     private var tflite: Interpreter? = null
+
+    private var shape: IntArray? = null
+    val outputTensorLayout
+        get() = when {
+            shape?.size == 4 -> TensorLayout(shape!![3], shape!![1], shape!![2], "hwc")
+            else -> null
+        }
 
     fun run(frameRequest: FrameRequest<ByteArray>): FrameRequest<ByteArray> {
         if (!::modelConfig.isInitialized)
@@ -53,11 +63,14 @@ class Inference : Closeable {
         gpuDelegate = null
         inputBuffer = null
         outputBuffer = null
+        shape = null
     }
 
     fun switchModel(modelConfig: ModelConfig) {
+        Log.i(TAG, "switchModel start")
         close()
         loadModel(modelConfig)
+        Log.i(TAG, "switchModel end")
     }
 
     private fun loadModel(modelConfig: ModelConfig) {
@@ -80,6 +93,7 @@ class Inference : Closeable {
         val file = File(parentDirectory(), filename)
         tflite = Interpreter(file, tfliteOptions)
 
+        shape = tflite!!.getOutputTensor(0).shape()
         val inputCapacity = tflite!!.getInputTensor(0).numBytes()
         val outputCapacity = tflite!!.getOutputTensor(0).numBytes()
         inputBuffer = ByteBuffer.allocateDirect(inputCapacity).order(nativeOrder())
@@ -93,15 +107,16 @@ class Inference : Closeable {
     }
 }
 
-data class FrameRequest<T>(
-    val obj: T,
-    val info: FrameRequestInfo
-) {
+data class FrameRequest<T>(val obj: T, val info: FrameRequestInfo) {
     inline fun <R> map(func: (T) -> R): FrameRequest<R> = FrameRequest(func(obj), info)
 }
 
 @Serializable
 data class FrameRequestInfo(
     val frameNumber: Int,
-    val modelConfig: ModelConfig
-)
+    val modelConfig: ModelConfig,
+    val postencoderConfig: PostencoderConfig
+) {
+    fun replace(frameNumber: Int) =
+        FrameRequestInfo(frameNumber, modelConfig, postencoderConfig)
+}

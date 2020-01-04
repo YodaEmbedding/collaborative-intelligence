@@ -8,6 +8,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.sicariusnoctis.collaborativeintelligence.processor.*
 import com.sicariusnoctis.collaborativeintelligence.ui.ModelUiController
 import com.sicariusnoctis.collaborativeintelligence.ui.OptionsUiController
+import com.sicariusnoctis.collaborativeintelligence.ui.PostencoderUiController
 import com.sicariusnoctis.collaborativeintelligence.ui.StatisticsUiController
 import io.fotoapparat.parameter.Resolution
 import io.fotoapparat.preview.Frame
@@ -33,6 +34,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var rs: RenderScript
     private lateinit var modelUiController: ModelUiController
     private lateinit var optionsUiController: OptionsUiController
+    private lateinit var postencoderUiController: PostencoderUiController
     private lateinit var statisticsUiController: StatisticsUiController
 
     private var prevFrameTime: Instant? = null
@@ -52,6 +54,12 @@ class MainActivity : AppCompatActivity() {
         )
         optionsUiController = OptionsUiController(
             uploadRateLimitSeekBar
+        )
+        postencoderUiController = PostencoderUiController(
+            postencoderSpinner,
+            modelUiController.modelConfig,
+            modelUiController.modelConfigEvents
+            // modelUiController.modelConfigEvents.startWith(modelUiController.modelConfig)
         )
         statisticsUiController = StatisticsUiController(
             statistics,
@@ -95,7 +103,12 @@ class MainActivity : AppCompatActivity() {
             .andThen(initPreprocessor())
             .andThen(networkManager.subscribeNetworkIo())
             .andThen(networkManager.subscribePingGenerator())
-            .andThen(switchModel(modelUiController.modelConfig))
+            .andThen(
+                switchModel(
+                    modelUiController.modelConfig,
+                    postencoderUiController.postencoderConfig
+                )
+            )
             .andThen(subscribeFrameProcessor())
             .subscribeBy({ it.printStackTrace() })
     }
@@ -136,15 +149,22 @@ class MainActivity : AppCompatActivity() {
             .subscribeOn(IoScheduler())
             .onBackpressureDrop()
             .observeOn(IoScheduler(), false, 1)
-            .map { it to modelUiController.modelConfig }
+            .map {
+                val info = FrameRequestInfo(
+                    -1,
+                    modelUiController.modelConfig,
+                    postencoderUiController.postencoderConfig
+                )
+                FrameRequest(it, info)
+            }
             .onBackpressureLimitRate(
-                onDrop = { statistics[it.second].frameDropped() },
-                limit = { shouldProcessFrame(it.second) }
+                onDrop = { statistics[it.info.modelConfig].frameDropped() },
+                limit = { shouldProcessFrame(it.info.modelConfig, it.info.postencoderConfig) }
             )
-            .zipWith(Flowable.range(0, Int.MAX_VALUE)) { (frame, modelConfig), frameNumber ->
+            .zipWith(Flowable.range(0, Int.MAX_VALUE)) { (frame, info), frameNumber ->
                 prevFrameTime = Instant.now()
-                statistics[modelConfig].makeSample(frameNumber)
-                FrameRequest(frame, FrameRequestInfo(frameNumber, modelConfig))
+                statistics[info.modelConfig].makeSample(frameNumber)
+                FrameRequest(frame, info.replace(frameNumber))
             }
 
         val clientRequests = clientProcessor.mapFrameRequests(frameRequests)
@@ -165,17 +185,36 @@ class MainActivity : AppCompatActivity() {
         subscriptions.add(clientRequestsSubscription)
     }
 
-    private fun switchModel(modelConfig: ModelConfig) = Completable
-        .fromRunnable { Log.i(TAG, "Switching model begin") }
-        .andThen(
-            Completable.mergeArray(
-                clientProcessor.switchModelInference(modelConfig),
-                networkManager.switchModelServer(modelConfig)
+    // TODO deal with unnecessary ProcessorConfig constructions...
+    // TODO rename to switchProcessor? meh...
+    // TODO clean up using .log() extension method
+    private fun switchModel(modelConfig: ModelConfig, postencoderConfig: PostencoderConfig) =
+        Completable
+            .fromRunnable { Log.i(TAG, "Switching model begin") }
+            .andThen(
+                Completable.mergeArray(
+                    clientProcessor.switchModelInference(ProcessorConfig(modelConfig, postencoderConfig)),
+                    networkManager.switchModelServer(ProcessorConfig(modelConfig, postencoderConfig))
+                )
             )
-        )
-        .doOnComplete { Log.i(TAG, "Switching model end") }
+            .doOnComplete { Log.i(TAG, "Switching model end") }
 
-    private fun shouldProcessFrame(modelConfig: ModelConfig): Boolean {
+    // private fun switchPostencoder(postencoderConfig: PostencoderConfig) =
+    //     Completable
+    //         .fromRunnable { Log.i(TAG, "Switching postencoder begin") }
+    //         .andThen(
+    //             Completable.mergeArray(
+    //                 clientProcessor.switchPostencoder(postencoderConfig),
+    //                 networkManager.switchPostencoderServer(postencoderConfig)
+    //             )
+    //         )
+    //         .doOnComplete { Log.i(TAG, "Switching postencoder end") }
+
+    // TODO extract gate... maybe split into two filters (second half handled by stats only)
+    private fun shouldProcessFrame(
+        modelConfig: ModelConfig,
+        postencoderConfig: PostencoderConfig
+    ): Boolean {
         val stats = statistics[modelConfig]
 
         // Load new model if config changed
@@ -187,9 +226,24 @@ class MainActivity : AppCompatActivity() {
             }
 
             // TODO remove blockingAwait by setting a mutex?
-            switchModel(modelConfig).blockingAwait()
+            switchModel(modelConfig, postencoderConfig).blockingAwait()
             statistics[modelConfig] = ModelStatistics()
             Log.i(TAG, "Dropped frame after switching model")
+            return false
+        }
+
+        // Load new postencoder if config changed
+        if (postencoderConfig != clientProcessor.postencoderConfig) {
+            // Wait till latest sample has been processed client-side first
+            if (clientProcessor.state == ClientProcessorState.BusyReconfigure) {
+                Log.i(TAG, "Dropped frame because waiting to switch postencoders")
+                return false
+            }
+
+            // switchPostencoder(postencoderConfig).blockingAwait()
+            switchModel(modelConfig, postencoderConfig).blockingAwait()
+            statistics[modelConfig] = ModelStatistics()
+            Log.i(TAG, "Dropped frame after switching postencoder")
             return false
         }
 

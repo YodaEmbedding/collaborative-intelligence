@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict
@@ -43,3 +45,30 @@ class ModelConfig:
     @staticmethod
     def _stringify(x):
         return json.dumps(x, separators=(",", "="))
+
+    @staticmethod
+    def from_json_dict(d: Dict[str, Any]) -> ModelConfig:
+        d = {k: v for k, v in d.items() if v is not None}
+        return ModelConfig(**d)
+
+
+@dataclass(eq=True, frozen=True)
+class PostencoderConfig:
+    type: str
+
+    @staticmethod
+    def from_json_dict(d: Dict[str, Any]) -> PostencoderConfig:
+        return PostencoderConfig(**d)
+
+
+@dataclass(eq=True, frozen=True)
+class ProcessorConfig:
+    model_config: ModelConfig
+    postencoder_config: PostencoderConfig
+
+    @staticmethod
+    def from_json_dict(d: Dict[str, Any]) -> ProcessorConfig:
+        return ProcessorConfig(
+            ModelConfig.from_json_dict(d["model_config"]),
+            PostencoderConfig.from_json_dict(d["postencoder_config"]),
+        )

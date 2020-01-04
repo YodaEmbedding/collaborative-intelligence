@@ -44,7 +44,7 @@ class NetworkAdapterTest {
 
         val networkAdapter = NetworkAdapter()
         networkAdapter.connect()
-        networkAdapter.writeModelConfig(modelConfig)
+        networkAdapter.writeProcessorConfig(modelConfig)
 
         for (i in 0..1000) {
             val t1 = Instant.now()

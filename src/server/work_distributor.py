@@ -88,7 +88,7 @@ class SmartProcessor(Generic[T, R]):
         items = list(self.work_distributor.get_many(min_items=min_items))
         idxs = (
             len(items) - i - 1
-            for i, (_, (_, request_type, _)) in enumerate(reversed(items))
+            for i, (_, (request_type, _)) in enumerate(reversed(items))
             if request_type == "release"
         )
         idx = next(idxs, None)

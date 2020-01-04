@@ -18,6 +18,11 @@
     <string-array name="compression_choices">
         <item>None</item>
     </string-array>
+    <string-array name="postencoder_choices">
+        <item>None</item>
+        <item>jpeg</item>
+        <item>h264</item>
+    </string-array>
     <string-array name="uploadRateLimit_choices">
         <item>10</item>
         <item>25</item>

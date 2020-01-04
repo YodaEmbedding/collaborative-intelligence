@@ -16,6 +16,8 @@ import io.fotoapparat.preview.Frame
 import java.lang.Math.floorMod
 
 class CameraPreviewPreprocessor {
+    var dataType: String = ""
+
     private val rs: RenderScript
     private val width: Int
     private val height: Int
@@ -28,7 +30,9 @@ class CameraPreviewPreprocessor {
     private val cropAllocation: Allocation
     private val resizeAllocation: Allocation
     private val rotateAllocation: Allocation
-    private val outputAllocation: Allocation
+    private val outputFloatAllocation: Allocation
+    private val outputUcharAllocation: Allocation
+    private val outputArgbAllocation: Allocation
 
     private val yuvToRGB: ScriptIntrinsicYuvToRGB
     private val resize: ScriptIntrinsicResize
@@ -61,22 +65,24 @@ class CameraPreviewPreprocessor {
 
         val side = minOf(width, height)
         val yuvType = Type.Builder(rs, Element.YUV(rs))
-            .setX(width)
-            .setY(height)
-            .setYuvFormat(ImageFormat.NV21)
-            .create()
+            .setX(width).setY(height)
+            .setYuvFormat(ImageFormat.NV21).create()
         val rgbaType = Type.createXY(rs, Element.RGBA_8888(rs), width, height)
         val cropType = Type.createXY(rs, Element.RGBA_8888(rs), side, side)
         val resizeType = Type.createXY(rs, Element.RGBA_8888(rs), outWidth, outHeight)
         val rotateType = Type.createXY(rs, Element.RGBA_8888(rs), outWidth, outHeight)
-        val outputType = Type.createX(rs, Element.U8_4(rs), outWidth * outHeight * 3)
+        val outputFloatType = Type.createX(rs, Element.U8_4(rs), outWidth * outHeight * 3)
+        val outputUcharType = Type.createX(rs, Element.U8(rs), outWidth * outHeight * 3)
+        val outputArgbType = Type.createX(rs, Element.U8_4(rs), outWidth * outHeight)
 
         inputAllocation = Allocation.createTyped(rs, yuvType, Allocation.USAGE_SCRIPT)
         rgbaAllocation = Allocation.createTyped(rs, rgbaType, Allocation.USAGE_SCRIPT)
         cropAllocation = Allocation.createTyped(rs, cropType, Allocation.USAGE_SCRIPT)
         resizeAllocation = Allocation.createTyped(rs, resizeType, Allocation.USAGE_SCRIPT)
         rotateAllocation = Allocation.createTyped(rs, rotateType, Allocation.USAGE_SCRIPT)
-        outputAllocation = Allocation.createTyped(rs, outputType, Allocation.USAGE_SCRIPT)
+        outputFloatAllocation = Allocation.createTyped(rs, outputFloatType, Allocation.USAGE_SCRIPT)
+        outputUcharAllocation = Allocation.createTyped(rs, outputUcharType, Allocation.USAGE_SCRIPT)
+        outputArgbAllocation = Allocation.createTyped(rs, outputArgbType, Allocation.USAGE_SCRIPT)
 
         yuvToRGB = ScriptIntrinsicYuvToRGB.create(rs, Element.U8_4(rs))
         crop = ScriptC_crop(rs)
@@ -91,7 +97,6 @@ class CameraPreviewPreprocessor {
         resize.setInput(cropAllocation)
         rotate._input = resizeAllocation
         rotateUpdateParams()
-        convert._output = outputAllocation
         convert._width = outWidth.toLong()
     }
 
@@ -102,12 +107,42 @@ class CameraPreviewPreprocessor {
         crop.forEach_crop(cropAllocation)
         resize.forEach_bicubic(resizeAllocation)
         applyRotationCompensation(rotateAllocation)
-        convert.forEach_rgba2rgbFloat(rotateAllocation)
+        val outputAllocation = applyConversion(rotateAllocation)
 
         val byteArray = ByteArray(outputAllocation.bytesSize)
         outputAllocation.copyTo(byteArray)
         return byteArray
     }
+
+    private fun applyConversion(allocation: Allocation): Allocation {
+        when (dataType) {
+            "float" -> {
+                convert._output = outputFloatAllocation
+                convert.forEach_rgba2rgbFloat(allocation)
+                return outputFloatAllocation
+            }
+            "uchar" -> {
+                convert._output = outputUcharAllocation
+                convert.forEach_rgba2rgb(allocation)
+                return outputUcharAllocation
+            }
+            "argb" -> {
+                convert._output = outputArgbAllocation
+                convert.forEach_rgba2argb(allocation)
+                return outputArgbAllocation
+            }
+            else -> throw Exception()
+        }
+    }
+
+    // fun convertRgbToArgb(inputArray: ByteArray): ByteArray {
+    //     outputUcharAllocation.copyFrom(inputArray)
+    //     convert._output = outputArgbAllocation
+    //     convert.forEach_rgb2argb(outputUcharAllocation)
+    //     val byteArray = ByteArray(outputArgbAllocation.bytesSize)
+    //     outputArgbAllocation.copyTo(byteArray)
+    //     return byteArray
+    // }
 
     private fun applyRotationCompensation(aout: Allocation) {
         when (rotationCompensation) {

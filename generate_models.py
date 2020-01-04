@@ -93,7 +93,7 @@ def plot_histogram(prefix: str, arr: np.ndarray):
 
 def plot_featuremap(prefix: str, arr: np.ndarray, order: str = "hwc"):
     arr = arr[0]
-    tensor_layout = TensorLayout.from_shape(arr.shape, order)
+    tensor_layout = TensorLayout.from_tensor(order)
     tiled_layout = determine_tile_layout(tensor_layout)
     tiled = tile(arr, tensor_layout, tiled_layout)
 

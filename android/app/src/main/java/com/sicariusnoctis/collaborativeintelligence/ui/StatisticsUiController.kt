@@ -95,7 +95,7 @@ class StatisticsUiController(
         uploadAvgText.text = "Upload avg: ${stats.uploadAverage / 1024} KB/frame"
         preprocessText.text = "1. Preprocess: ${toMillis(sample.preprocess)} ms"
         clientInferenceText.text = "2. Client infer: ${toMillis(sample.clientInference)} ms"
-        encodingText.text = "3. Encoding: N/A"
+        encodingText.text = "3. Encoding: ${toMillis(sample.postencode)} ms"
         networkWriteText.text = "4. Network send: ${toMillis(sample.networkWrite)} ms"
         serverInferenceText.text = "5. Server infer: ${toMillis(sample.serverInference)} ms"
         networkReadText.text = "6. Network read: ${toMillis(sample.networkRead)} ms"

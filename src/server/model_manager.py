@@ -12,11 +12,19 @@ from typing import (
 
 import numpy as np
 import tensorflow as tf
+from PIL import Image
 from tensorflow import keras
 from tensorflow.keras.applications import imagenet_utils
 
 from src.layers import decoders
 from src.modelconfig import ModelConfig
+from src.predecode import to_np_dtype
+from src.tile import (
+    TensorLayout,
+    TiledArrayLayout,
+    determine_tile_layout,
+    detile,
+)
 
 
 @dataclass
@@ -50,36 +58,54 @@ class ModelManager:
             # del self.models[model_config]
             print(f"Released model {model_config}")
 
-    def decode_data(
-        self, model_config: ModelConfig, data: ByteString
-    ) -> np.ndarray:
+    # TODO remove
+    # def decode_data(
+    #     self, model_config: ModelConfig, data: ByteString
+    # ) -> np.ndarray:
+    #     model = self.models[model_config].model
+    #     # Check if client-side inference
+    #     if model is None:
+    #         # TODO np.float32? should probably store more info about model
+    #         return np.frombuffer(data, dtype=np.float32)[None, ...]
+    #     # data_tensor = _decode_data(model, data)
+    #     input_shape = model.layers[1].input_shape[1:]
+    #     input_type = model.layers[0].dtype
+    #     dtype = _to_np_dtype(input_type)
+    #     h, w, c = input_shape
+    #     tensor_layout = TensorLayout(c, h, w, "hwc")
+    #     data_tensor = predecoder.run(data)
+    #     return np.expand_dims(data_tensor.astype(dtype=dtype), axis=0)
+
+    def input_tensor_layout(self, model_config: ModelConfig) -> TensorLayout:
         model = self.models[model_config].model
-        data_tensor = _decode_data(model, data)
-        return data_tensor
+        # Check if client-side inference
+        if model is None:
+            return None
+        input_dtype = to_np_dtype(model.layers[0].dtype)
+        # TODO why is this layer[1]?
+        input_shape = model.layers[1].input_shape[1:]
+        h, w, c = input_shape
+        return TensorLayout(input_dtype, c, h, w, "hwc")
 
     # @synchronized
     def predict(
         self, model_config: ModelConfig, data_tensor: np.ndarray
     ) -> List[Tuple[str, str, float]]:
         model = self.models[model_config].model
-        predictions = (
-            model.predict(data_tensor) if model is not None else data_tensor
-        )
-        return _decode_predictions(predictions)
+        if model is None:
+            return data_tensor
+        return model.predict(data_tensor)
+
+    def decode_predictions(
+        self,
+        model_config: ModelConfig,
+        predictions: np.ndarray,
+        num_preds: int = 3,
+    ) -> List[Tuple[str, str, float]]:
+        return _decode_predictions_imagenet(predictions, num_preds)
 
 
-def _decode_data(model: keras.Model, data: ByteString) -> np.ndarray:
-    # Handle client side
-    if model is None:
-        # TODO np.float32? should probably store more info about model
-        return np.frombuffer(data, dtype=np.float32)[None, ...]
-    input_shape = model.layers[1].input_shape[1:]
-    input_type = model.layers[0].dtype  # TODO verify
-    dtype = _to_np_dtype(input_type)
-    return np.frombuffer(data, dtype=dtype).reshape((-1, *input_shape))
-
-
-def _decode_predictions(
+def _decode_predictions_imagenet(
     predictions: np.ndarray, num_preds: int = 3
 ) -> List[Tuple[str, str, float]]:
     pred = imagenet_utils.decode_predictions(predictions)[0][:num_preds]
@@ -102,12 +128,3 @@ def _load_model(model_config: ModelConfig) -> keras.Model:
         filepath=f"models/{model_config.to_path()}-server.h5",
         custom_objects=custom_objects,
     )
-
-
-def _to_np_dtype(dtype):
-    return {
-        "float32": np.float32,
-        "uint8": np.uint8,
-        tf.float32: np.float32,
-        tf.uint8: np.uint8,
-    }[dtype]
