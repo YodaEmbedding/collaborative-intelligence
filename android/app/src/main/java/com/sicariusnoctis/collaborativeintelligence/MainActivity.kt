@@ -236,9 +236,6 @@ class MainActivity : AppCompatActivity() {
         return true
     }
 
-    // TODO nullify prevFrameTime onModelConfigChanged? (for smoother transition)
-    // TODO immediately send onModelConfigChanged request to server, instead of waiting for response?
-    // no, because server doesn't cancel inferences... yet
     private fun <T> Flowable<T>.onBackpressureLimitRate(
         onDrop: (T) -> Unit,
         limit: (T) -> Boolean
@@ -276,6 +273,3 @@ class MainActivity : AppCompatActivity() {
         }
     }
 }
-
-// TODO Switch to using networkWrite.toSerialized()
-// TODO Late-bind variables in RxJava?

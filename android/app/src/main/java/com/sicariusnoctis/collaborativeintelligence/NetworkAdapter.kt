@@ -128,9 +128,6 @@ class NetworkAdapter {
         }
     }
 
-    // TODO properly extract model config switching functionality...? switchModel() should call writeModelConfig...
-    // This is probably why there's a bug... writeModelConfig is not reliably called!
-
     @UnstableDefault
     fun writeFrameRequest(frameRequest: FrameRequest<ByteArray>) {
         Log.i(TAG, "Request: ${frameRequest.info.frameNumber}, ${frameRequest.info.modelConfig}")
@@ -146,7 +143,6 @@ class NetworkAdapter {
         val jsonString = Json.stringify(ModelConfig.serializer(), modelConfig)
         // uploadStats.sendBytes(frameNumber, 6 + jsonString.length)
         writeJson(jsonString)
-        // TODO wait until all traffic is flushed?
         switchModel()
         this.modelConfig = modelConfig
     }
@@ -169,7 +165,6 @@ class NetworkAdapter {
 
     private fun switchModel() {
         uploadStats = UploadStats()
-        // TODO maybe send ping here?
     }
 }
 
@@ -224,7 +219,6 @@ class UploadStats {
 
     // TODO exponential geometric average may be more accurate
     // TODO though confirmation may not be received after long time, bytesPerSecond remains same...
-    // TODO subtract ping? or is that only for first frame? nah for all frames
     val bytesPerSecond
         @Synchronized get() = 1000.0 * lastConfirmedSample.bytes / Duration.between(
             lastConfirmedSample.timeStart,

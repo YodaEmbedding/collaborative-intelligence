@@ -142,7 +142,6 @@ def write_tensor_video(
     test_inputs = preprocess_input(test_images)
 
     def frame_gen():
-        # TODO batches?
         prediction_decoder = imagenet_utils.decode_predictions
         _, _, w, _ = model.input_shape
 
@@ -239,18 +238,14 @@ def run_analysis(
     read_tensor_video(model_config, model_server, *layouts)
 
     # TODO extract to "analysis.py" or similar
-
-    # TODO plot "feature map"?  reshape?
-    # TODO video of feature maps
-    # TODO YUV video tiling
-    # TODO static component + dynamic component... try to separate?
-    # TODO take mean + std of various random images in data set, and see how feature map responds (neuron by neuron)
-    # TODO see if turning on/off neurons has effect
-    # TODO see how rotation affects things
-
-    # TODO reconstruction error from encoder/decoder
-    # TODO sensitivity analysis (perturb input, see how client tensor changes)
-    # TODO top-k accuracy on data set
+    # TODO analysis/experiments:
+    # static component + dynamic component... try to separate?
+    # take mean + std of various random images in data set, and see how feature map responds (neuron by neuron)
+    # see if turning on/off neurons has effect
+    # see how rotation affects things
+    # reconstruction error from encoder/decoder
+    # sensitivity analysis (perturb input, see how client tensor changes)
+    # top-k accuracy on data set
 
 
 def delete_file(filename: str):
@@ -404,7 +399,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-# TODO plot analysis (e.g. histogram, tensor data file save, n-bit compression accuracies, etc)
-# TODO delete resnet-keras-split

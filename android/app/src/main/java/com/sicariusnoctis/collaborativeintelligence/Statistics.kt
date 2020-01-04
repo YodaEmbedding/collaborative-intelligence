@@ -7,8 +7,6 @@ import java.time.Instant
 import java.util.*
 import kotlin.collections.HashMap
 
-// TODO reduce spaghetti...
-
 class Statistics {
     private val modelStats = HashMap<ModelConfig, ModelStatistics>()
 

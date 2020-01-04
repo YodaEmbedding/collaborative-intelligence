@@ -25,21 +25,18 @@ export class Client extends stream.Duplex {
     // });
     // this.pipe(process.stdout);
 
-    // TODO how is read...
-
     // this.socket.on('data', this.onReceiveData);
     this.socket.connect(port, addr);
   }
 
   close() {
-    // TODO rl.close();
+    // rl.close();
   }
 
   recv() {
     // err... isn't this handled by on(data)?
   }
 
-  // TODO write?
   send(buffer: Uint8Array | string) {
     console.log(`Send ${buffer}`);
     this.socket.write(buffer);
@@ -47,7 +44,5 @@ export class Client extends stream.Duplex {
 
   // private onReceiveData(data: Buffer) {
   //   console.log(`Receive ${data}`);
-  //   // TODO append to internal buffer until a complete message
-  //   // then, fire that message off to some other listener
   // }
 }

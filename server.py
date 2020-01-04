@@ -34,7 +34,6 @@ def str_preview(s: ByteString, max_len=16):
     return f"{s[:max_len - 6].hex()}...{s[-3:].hex()}"
 
 
-# TODO Propogate exceptions back to client?
 def processor(work_distributor: WorkDistributor, monitor_stats: MonitorStats):
     """Process work items received from work distributor."""
     model_manager = ModelManager()
@@ -100,7 +99,6 @@ async def produce(reader: StreamReader, putter):
             print("Read end")
             if input_type == "terminate":
                 break
-            # TODO instead of always passing model_config, why not make class?
             # TODO merge with processor()?
             if input_type == "frame":
                 i, data = item
@@ -138,13 +136,11 @@ async def consume(writer: StreamWriter, getter):
             item_d.pop("predictions", None)
             print(f"Consume {i}: {item_d}")
             # print(json.dumps(item_d, indent=4))
-            # TODO is this correct? await drain?
             print("Write begin")
             writer.write(item)
             print("Drain...")
             await writer.drain()
             print("Write end")
-    # TODO what does close even do? do we need the finally?
     finally:
         print("Closing client...")
         writer.close()
@@ -182,27 +178,4 @@ if __name__ == "__main__":
     asyncio.run(main())
 
 
-# TODO
-# HTTP binary data
-# How do we want to design this? One model, multithread? Model manager? Etc?
-# RxPy?
-# Switch models by JSON (client tells us what model to serve)
-# { "model": "resnet34", "splitLayer": "add_8", "encoder": "uniquant", "decoder": "uniquant", "encoderArgs": [-2, 2], "decoderArgs": [-2, 2] }
-# For now, single requests/model...
-# print statements...? or update a TUI?
-# Multiple clients, scarce resources (GPU)
-# Deal with overload of requests from clients (skip outdated requests)
-# More resources: load multiple instances of model
-# Handle client reconnection attempts gracefully
-# Signal loss from client -> timeout on recv
-# Exception handling: https://docs.python.org/3/library/socket.html#example
-
-
-# TODO how to deal with reconfigure_request received at same time as inference_request? or is that a problem only if using more than one thread... but how to deal with starvation then? HMMMM or backpressure/buffers
-# TODO try with time.sleep()
 # TODO read, inference, write in parallel, no? (multiprocess.executorpool)
-# TODO switch to asyncio based server? Or with StreamReader/StreamWriter
-# TODO finally on drop connection: release()
-# NOTE single threaded inference is probably better to prevent starvation anyways...!
-# TODO batch scheduling?
-# TODO Tensorflow Serving? run on localhost if want additional functionality (like stats)

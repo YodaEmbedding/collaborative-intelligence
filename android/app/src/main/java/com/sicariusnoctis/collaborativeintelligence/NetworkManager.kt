@@ -51,8 +51,6 @@ class NetworkManager(
     }
         .subscribeOn(IoScheduler())
 
-    // TODO Prevent duplicate subscriptions! (e.g. if onStart called multiple times); unsubscribe?
-    // TODO .onTerminateDetach()
     fun subscribeNetworkIo() = Completable.fromRunnable {
         // TODO don't really NEED a networkWrite observable... if we make a single executor thread
         networkWrite = PublishProcessor.create()
@@ -89,15 +87,11 @@ class NetworkManager(
 
         networkRead = Observable.fromIterable(Iterable {
             iterator {
-                // TODO Wait until thread is alive using CountDownLatch?
-                // TODO thread.isAlive()? socket.isOpen? volatile boolean flag?
                 while (true) {
                     val (result, start, end) = timed { networkAdapter.readResponse() }
                     if (result == null) break
                     val response = result!!
                     if (response is ResultResponse) {
-                        // TODO does this even make sense?
-                        // TODO Also, have a "ping"/ack return when all data is received
                         val stats = statistics[response.frameNumber]
                         stats.setNetworkRead(response.frameNumber, start, end)
                         stats.setResultResponse(response.frameNumber, response)

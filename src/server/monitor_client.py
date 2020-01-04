@@ -19,7 +19,6 @@ from src.tile import (
 )
 
 
-# TODO synchronize add()/json_dict()? or actually, we're using async anyways...
 class MonitorStats:
     def __init__(self):
         self.add(-1, -1, [], b"")

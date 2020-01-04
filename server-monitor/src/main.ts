@@ -38,7 +38,6 @@ app.on("ready", () => {
       // through2({ objectMode: true, allowHalfOpen: false }, ...)
       through2(function(chunk, _encoding, next) {
         const json = JSON.parse(chunk) as string;
-        // TODO intermediate processing? or push non-serialized data in IPC?
         this.push(JSON.stringify(json));
         // this.push(json);
         next();
