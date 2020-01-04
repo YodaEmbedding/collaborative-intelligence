@@ -197,6 +197,7 @@ class MainActivity : AppCompatActivity() {
             return false
         }
 
+        // TODO watch out for encoding time...
         if (stats.currentSample?.inferenceEnd == null) {
             Log.i(TAG, "Dropped frame because frame is currently being processed")
             return false
@@ -212,52 +213,13 @@ class MainActivity : AppCompatActivity() {
             return false
         }
 
-        // TODO imagine we had the current upload bytes or bandwidth... then what?
-        // maybe use the total upload bytes to subtract from what has currently been sent?
-        // that tells us how much remains in the buffer...
-        // if it's greater than an average frame size, we probably shouldn't send more...
-
-        // val remainingBytes = totalSent - currSent
-        // vs uploadSpeed???? that should roughly predict how much time needed before remaining frame is completely sent... and if that time is "negative", speed up!
-        // remainingBytes
-
-        // but how do we ramp up to "max" capacity? actually, we don't really because we decide using the above candidates whether or not to drop frame...
-        // do we even need to phrase it in terms of "limits", actually?
-        // sort of... because clientInference might take longer than network sometimes.
-
-        // OK, but how to ramp up? Maybe leave a little gap? Or perhaps pre-measure network upload speed (and have user "reset" automatically?) sure
-
         val sample = stats.sample
 
-        // TODO watch out for encoding time...
-        // val preWriteTime = Duration.between(sample.preprocessStart, sample.inferenceEnd)
-        // val enoughTime = preWriteTime.multipliedBy(2).dividedBy(3) + Duration.ofMillis(20)
         val enoughTime = Duration.ofMillis(0)
         if (networkManager.timeUntilWriteAvailable > enoughTime) {
             Log.i(TAG, "Dropped frame because of slow upload speed!")
             return false
         }
-        // val extrapolatedBytes = networkAdapter!!.uploadBytesPerSecond * t.toMillis() / 1000
-        // val s = "${(networkAdapter!!.uploadBytesPerSecond / 1024).toInt()}KB/s, " +
-        //         "remaining: ${networkAdapter!!.uploadRemainingBytes}B, " +
-        //         "uploaded: ${networkAdapter!!.uploadStats.uploadedBytes}, " +
-        //         "goal: ${networkAdapter!!.uploadStats.goalBytes}"
-        //         Log.i(TAG, s)
-        // if (networkAdapter!!.uploadRemainingBytes > extrapolatedBytes) {
-        //     Log.i(TAG, "Dropped frame because of slow upload speed!")
-        //     return false
-        // }
-
-        // TODO app-test network bandwidth uploaded accuracy, max bandwidth, see if it ramps correctly, etc
-
-        // TODO also, make sure it's app bandwidth (this can be fixed later, though! just use TrafficStats for now)
-
-        // TODO this maintains reasonable FPS, but doesn't help much with latency (which can accumulate)
-        // TODO rate limit upload in a smarter way... maybe subtract ping and check upload? idk
-        // val fpsLimit = Duration.ofMillis((1000 / stats.fps / 1.3).toLong())
-        // val fpsLimit = stats.sample.total.multipliedBy(7).dividedBy(10)
-        // val networkLimit = minOf(sample.networkWrite, Duration.ofMillis(50))
-        // TODO watch out for encoding time...
 
         val timeSinceLastFrameRequest = Duration.between(prevFrameTime, Instant.now())
 
