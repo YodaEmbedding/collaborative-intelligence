@@ -74,7 +74,7 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
 
-        clientProcessor = ClientProcessor(rs)
+        clientProcessor = ClientProcessor(rs, statistics)
         networkManager = NetworkManager(statistics, statisticsUiController)
 
         val cameraReady = CompletableFuture<Unit>()
@@ -128,7 +128,10 @@ class MainActivity : AppCompatActivity() {
     private fun subscribeFrameProcessor() = Completable.fromRunnable {
         // clientProcessor.subscribeFrameProcessor(frameProcessor)
 
-        val frameProcessorSubscription = frameProcessor
+        // TODO why does FrameRequestInfo NEED modelConfig? does it need other options too?
+        // TODO are we going to handle post processor switching somewhere? where?
+
+        val frameRequests = frameProcessor
             .subscribeOn(IoScheduler())
             .onBackpressureDrop()
             .observeOn(IoScheduler(), false, 1)
@@ -142,16 +145,14 @@ class MainActivity : AppCompatActivity() {
                 statistics[modelConfig].makeSample(frameNumber)
                 FrameRequest(frame, FrameRequestInfo(frameNumber, modelConfig))
             }
-            .doOnNext { Log.i(TAG, "Started processing frame ${it.info.frameNumber}") }
-            .mapTimed(statistics, ModelStatistics::setPreprocess) {
-                it.map(clientProcessor.postprocessor::process)
-            }
-            .observeOn(clientProcessor.inferenceScheduler, false, 1)
-            .mapTimed(statistics, ModelStatistics::setInference) {
-                clientProcessor.inference!!.run(it)
-            }
+
+        val clientRequests = clientProcessor.mapFrameRequests(frameRequests)
+
+        val clientRequestsSubscription = clientRequests
             .observeOn(networkManager.networkWriteScheduler, false, 1)
-            .doOnNext { networkManager.uploadLimitRate = optionsUiController.uploadRateLimit }
+            .doOnNext {
+                networkManager.uploadLimitRate = optionsUiController.uploadRateLimit
+            }
             .doOnNextTimed(statistics, ModelStatistics::setNetworkWrite) {
                 networkManager.writeFrameRequest(it)
             }
@@ -160,7 +161,7 @@ class MainActivity : AppCompatActivity() {
             }
             .subscribeBy({ it.printStackTrace() })
 
-        subscriptions.add(frameProcessorSubscription)
+        subscriptions.add(clientRequestsSubscription)
     }
 
     private fun switchModel(modelConfig: ModelConfig) = Completable

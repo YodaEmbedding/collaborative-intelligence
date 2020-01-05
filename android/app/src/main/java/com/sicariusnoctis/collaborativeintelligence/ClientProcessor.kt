@@ -1,13 +1,17 @@
 package com.sicariusnoctis.collaborativeintelligence
 
 import android.renderscript.RenderScript
+import android.util.Log
+import io.fotoapparat.preview.Frame
 import io.reactivex.Completable
+import io.reactivex.Flowable
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
 import java.io.Closeable
 import java.util.concurrent.Executors
 
-class ClientProcessor(private val rs: RenderScript) : Closeable {
+class ClientProcessor(private val rs: RenderScript, private val statistics: Statistics) :
+    Closeable {
     private val TAG = ClientProcessor::class.qualifiedName
 
     var inference: Inference? = null
@@ -39,6 +43,18 @@ class ClientProcessor(private val rs: RenderScript) : Closeable {
     fun switchModelInference(modelConfig: ModelConfig) = Completable.fromRunnable {
         inference!!.switchModel(modelConfig)
     }.subscribeOn(inferenceScheduler)
+
+    fun mapFrameRequests(frameRequests: Flowable<FrameRequest<Frame>>) = frameRequests
+        .doOnNext {
+            Log.i(TAG, "Started processing frame ${it.info.frameNumber}")
+        }
+        .mapTimed(statistics, ModelStatistics::setPreprocess) {
+            it.map(postprocessor::process)
+        }
+        .observeOn(inferenceScheduler, false, 1)
+        .mapTimed(statistics, ModelStatistics::setInference) {
+            inference!!.run(it)
+        }
 }
 
 // It might make sense to have "contexts" to manage the time-variant resources
