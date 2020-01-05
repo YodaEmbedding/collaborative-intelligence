@@ -179,14 +179,13 @@ class MainActivity : AppCompatActivity() {
 
         // Load new model if config changed
         if (modelConfig != clientProcessor.modelConfig) {
-            val prevStats = statistics[clientProcessor.modelConfig]
-
             // Wait till latest sample has been processed client-side first
-            if (prevStats.currentSample != null && prevStats.currentSample!!.networkWriteEnd == null) {
+            if (clientProcessor.state == ClientProcessorState.BusyReconfigure) {
                 Log.i(TAG, "Dropped frame because waiting to switch models")
                 return false
             }
 
+            // TODO remove blockingAwait by setting a mutex?
             switchModel(modelConfig).blockingAwait()
             statistics[modelConfig] = ModelStatistics()
             Log.i(TAG, "Dropped frame after switching model")
