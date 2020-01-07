@@ -17,7 +17,7 @@ class ClientProcessor(private val rs: RenderScript, private val statistics: Stat
     private var inference: Inference? = null
     private val inferenceExecutor = Executors.newSingleThreadExecutor()
     private val inferenceScheduler = Schedulers.from(inferenceExecutor)
-    private var postprocessor: CameraPreviewPostprocessor? = null
+    private var preprocessor: CameraPreviewPreprocessor? = null
     private val subscriptions = CompositeDisposable()
 
     val modelConfig get() = inference!!.modelConfig
@@ -29,13 +29,13 @@ class ClientProcessor(private val rs: RenderScript, private val statistics: Stat
         _state = ClientProcessorState.Stopped
         inferenceExecutor.submit { inference?.close() }
         inferenceExecutor.shutdown()
-        // postprocessor.close() // TODO
+        // preprocessor.close() // TODO
         subscriptions.dispose()
     }
 
-    fun initPostprocessor(width: Int, height: Int, rotationCompensation: Int) {
-        postprocessor =
-            CameraPreviewPostprocessor(rs, width, height, 224, 224, rotationCompensation)
+    fun initPreprocesor(width: Int, height: Int, rotationCompensation: Int) {
+        preprocessor =
+            CameraPreviewPreprocessor(rs, width, height, 224, 224, rotationCompensation)
         setStateIfReady()
     }
 
@@ -60,7 +60,7 @@ class ClientProcessor(private val rs: RenderScript, private val statistics: Stat
             Log.i(TAG, "Started processing frame ${it.info.frameNumber}")
         }
         .mapTimed(statistics, ModelStatistics::setPreprocess) {
-            it.map(postprocessor!!::process)
+            it.map(preprocessor!!::process)
         }
         .observeOn(inferenceScheduler, false, 1)
         .mapTimed(statistics, ModelStatistics::setInference) {
@@ -71,7 +71,7 @@ class ClientProcessor(private val rs: RenderScript, private val statistics: Stat
         }
 
     private fun setStateIfReady() {
-        if (inference == null || postprocessor == null)
+        if (inference == null || preprocessor == null)
             return
         _state = ClientProcessorState.Ready
     }

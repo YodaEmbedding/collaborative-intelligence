@@ -12,7 +12,7 @@ import android.view.WindowManager
 import io.fotoapparat.preview.Frame
 import java.lang.Math.floorMod
 
-class CameraPreviewPostprocessor {
+class CameraPreviewPreprocessor {
     private val rs: RenderScript
     private val width: Int
     private val height: Int

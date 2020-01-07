@@ -91,7 +91,7 @@ class MainActivity : AppCompatActivity() {
                 networkManager.connectNetworkAdapter()
             )
             .subscribeOn(IoScheduler())
-            .andThen(initPostprocessor())
+            .andThen(initPreprocessor())
             .andThen(networkManager.subscribeNetworkIo())
             .andThen(networkManager.subscribePingGenerator())
             .andThen(switchModel(modelUiController.modelConfig))
@@ -112,12 +112,12 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    private fun initPostprocessor() = Completable.fromRunnable {
-        val rotationCompensation = CameraPreviewPostprocessor.getRotationCompensation(
+    private fun initPreprocessor() = Completable.fromRunnable {
+        val rotationCompensation = CameraPreviewPreprocessor.getRotationCompensation(
             this, CameraCharacteristics.LENS_FACING_BACK
         )
 
-        clientProcessor.initPostprocessor(
+        clientProcessor.initPreprocesor(
             previewResolution.width,
             previewResolution.height,
             rotationCompensation
