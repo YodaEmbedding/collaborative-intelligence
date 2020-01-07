@@ -1,6 +1,8 @@
 package com.sicariusnoctis.collaborativeintelligence
 
 import androidx.test.runner.AndroidJUnit4
+import com.sicariusnoctis.collaborativeintelligence.processor.FrameRequest
+import com.sicariusnoctis.collaborativeintelligence.processor.FrameRequestInfo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

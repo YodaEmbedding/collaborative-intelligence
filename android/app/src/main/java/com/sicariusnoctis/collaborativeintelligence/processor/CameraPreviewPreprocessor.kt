@@ -1,4 +1,4 @@
-package com.sicariusnoctis.collaborativeintelligence
+package com.sicariusnoctis.collaborativeintelligence.processor
 
 import android.content.Context
 import android.content.Context.CAMERA_SERVICE
@@ -9,6 +9,9 @@ import android.hardware.camera2.CameraManager
 import android.renderscript.*
 import android.view.Surface.*
 import android.view.WindowManager
+import com.sicariusnoctis.collaborativeintelligence.ScriptC_convert
+import com.sicariusnoctis.collaborativeintelligence.ScriptC_crop
+import com.sicariusnoctis.collaborativeintelligence.ScriptC_rotate
 import io.fotoapparat.preview.Frame
 import java.lang.Math.floorMod
 

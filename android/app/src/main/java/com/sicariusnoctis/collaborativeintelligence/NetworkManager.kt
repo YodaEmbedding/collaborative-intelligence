@@ -1,6 +1,7 @@
 package com.sicariusnoctis.collaborativeintelligence
 
 import android.util.Log
+import com.sicariusnoctis.collaborativeintelligence.processor.FrameRequest
 import com.sicariusnoctis.collaborativeintelligence.ui.StatisticsUiController
 import io.reactivex.Completable
 import io.reactivex.Observable

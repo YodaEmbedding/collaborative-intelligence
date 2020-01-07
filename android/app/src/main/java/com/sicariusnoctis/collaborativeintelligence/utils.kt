@@ -1,6 +1,7 @@
 package com.sicariusnoctis.collaborativeintelligence
 
 import android.os.Environment
+import com.sicariusnoctis.collaborativeintelligence.processor.FrameRequest
 import io.reactivex.Flowable
 import kotlinx.serialization.UnstableDefault
 import kotlinx.serialization.json.Json

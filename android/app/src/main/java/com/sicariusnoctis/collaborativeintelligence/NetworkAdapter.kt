@@ -1,6 +1,7 @@
 package com.sicariusnoctis.collaborativeintelligence
 
 import android.util.Log
+import com.sicariusnoctis.collaborativeintelligence.processor.FrameRequest
 import kotlinx.serialization.PolymorphicSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

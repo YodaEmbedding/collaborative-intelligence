@@ -1,7 +1,11 @@
-package com.sicariusnoctis.collaborativeintelligence
+package com.sicariusnoctis.collaborativeintelligence.processor
 
 import android.renderscript.RenderScript
 import android.util.Log
+import com.sicariusnoctis.collaborativeintelligence.ModelConfig
+import com.sicariusnoctis.collaborativeintelligence.ModelStatistics
+import com.sicariusnoctis.collaborativeintelligence.Statistics
+import com.sicariusnoctis.collaborativeintelligence.mapTimed
 import io.fotoapparat.preview.Frame
 import io.reactivex.Completable
 import io.reactivex.Flowable

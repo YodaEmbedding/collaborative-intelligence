@@ -1,6 +1,7 @@
-package com.sicariusnoctis.collaborativeintelligence
+package com.sicariusnoctis.collaborativeintelligence.processor
 
 import android.os.Environment.getExternalStorageDirectory
+import com.sicariusnoctis.collaborativeintelligence.ModelConfig
 import kotlinx.serialization.Serializable
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.GpuDelegate
