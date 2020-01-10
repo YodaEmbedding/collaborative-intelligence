@@ -55,6 +55,7 @@ class ModelConfig:
 @dataclass(eq=True, frozen=True)
 class PostencoderConfig:
     type: str
+    quality: int
 
     @staticmethod
     def from_json_dict(d: Dict[str, Any]) -> PostencoderConfig:

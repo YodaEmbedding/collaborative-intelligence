@@ -9,8 +9,10 @@ import java.io.ByteArrayOutputStream
 
 class JpegPostencoder(inLayout: TensorLayout) : Postencoder {
     private val TAG = JpegPostencoder::class.qualifiedName
-    private val mbuSize = 16
 
+    var quality: Int = 20
+
+    private val mbuSize = 16
     private val tiler = Tiler(inLayout, inLayout.squarishTiling(), mbuSize)
     private val uvData = ByteArray(tiler.height * tiler.width / 2) { -128 }
 
@@ -29,7 +31,7 @@ class JpegPostencoder(inLayout: TensorLayout) : Postencoder {
         // TODO quality level?
         // TODO NV21? quality? tile with non-zero uvData?
         val yuvImage = YuvImage(yuvData, ImageFormat.NV21, width, height, null)
-        yuvImage.compressToJpeg(Rect(0, 0, width, height), 70, outStream)
+        yuvImage.compressToJpeg(Rect(0, 0, width, height), quality, outStream)
 
         return outStream.toByteArray()
     }

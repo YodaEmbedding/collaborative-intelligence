@@ -135,7 +135,7 @@ class NetworkAdapter {
             frameRequest.info.modelConfig, frameRequest.info.postencoderConfig
         )
         if (processorConfig != processorConfigFrameRequest) {
-            throw Exception("Frame request model config does not match last sent processor config")
+            throw Exception("Frame request model config $processorConfigFrameRequest does not match last sent processor config $processorConfig")
         }
         writeData(frameRequest.info.frameNumber, frameRequest.obj)
         Log.i(TAG, "Request sent")
@@ -320,7 +320,10 @@ data class ModelConfig(
 }
 
 @Serializable
-data class PostencoderConfig(val type: String)
+data class PostencoderConfig(
+    val type: String,
+    val quality: Int
+)
 
 @Serializable
 data class ProcessorConfig(

@@ -7,15 +7,19 @@ import com.sicariusnoctis.collaborativeintelligence.ModelConfig
 import com.sicariusnoctis.collaborativeintelligence.PostencoderConfig
 import com.sicariusnoctis.collaborativeintelligence.loadModelConfigMap
 import com.sicariusnoctis.collaborativeintelligence.updateSpinner
+import com.warkiz.widget.IndicatorSeekBar
+import com.warkiz.widget.OnSeekChangeListener
+import com.warkiz.widget.SeekParams
 import io.reactivex.Observable
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.subjects.PublishSubject
 
 // TODO history
 class PostencoderUiController(
-    private val postencoderSpinner: Spinner,
     modelConfig: ModelConfig,
-    modelConfigEvents: Observable<ModelConfig>
+    modelConfigEvents: Observable<ModelConfig>,
+    private val postencoderSpinner: Spinner,
+    private val postencoderQualitySeekBar: IndicatorSeekBar
 ) {
     var postencoderConfig: PostencoderConfig
         @Synchronized get() = _postencoderConfig
@@ -35,6 +39,9 @@ class PostencoderUiController(
             postencoderSpinner.selectedItemPosition
         ).toString()
 
+    private val quality
+        get() = postencoderQualitySeekBar.progress
+
     init {
         initUiHandlers()
         updateChoices(modelConfig)
@@ -51,6 +58,16 @@ class PostencoderUiController(
 
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
+
+        postencoderQualitySeekBar.onSeekChangeListener = object : OnSeekChangeListener {
+            override fun onSeeking(seekParams: SeekParams) {}
+
+            override fun onStartTrackingTouch(seekBar: IndicatorSeekBar) {}
+
+            override fun onStopTrackingTouch(seekBar: IndicatorSeekBar) {
+                updatePostencoderConfig()
+            }
+        }
     }
 
     private fun updateChoices(modelConfig: ModelConfig) {
@@ -61,7 +78,7 @@ class PostencoderUiController(
     }
 
     private fun updatePostencoderConfig() {
-        postencoderConfig = PostencoderConfig(type)
+        postencoderConfig = PostencoderConfig(type, quality)
     }
 
     private fun makeConfigMap() = loadModelConfigMap("models.json").flatMap { it.value }.map {

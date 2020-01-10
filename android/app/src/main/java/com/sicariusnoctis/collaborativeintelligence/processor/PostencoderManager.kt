@@ -6,7 +6,6 @@ import com.sicariusnoctis.collaborativeintelligence.TensorLayout
 import com.sicariusnoctis.collaborativeintelligence.processor.postencoders.JpegPostencoder
 import com.sicariusnoctis.collaborativeintelligence.processor.postencoders.JpegRgbPostencoder
 import com.sicariusnoctis.collaborativeintelligence.processor.postencoders.Postencoder
-import java.lang.IllegalArgumentException
 
 // TODO factor out preprocessor? or maybe rename CameraPreviewPreprocessor to something else...
 class PostencoderManager {
@@ -22,10 +21,22 @@ class PostencoderManager {
         return postencoder?.run(inputArray) ?: inputArray
     }
 
-    // TODO If preprocessor runs on multiple threads, uh oh
     fun switch(processorConfig: ProcessorConfig, inLayout: TensorLayout?) {
         this.postencoderConfig = processorConfig.postencoderConfig
-        postencoder = when (processorConfig.postencoderConfig.type) {
+        postencoder = makePostencoder(processorConfig, inLayout)
+        // TODO This should be delegated via polymorphism, not runtime casting...
+        when (postencoder) {
+            is JpegPostencoder -> {
+                (postencoder as JpegPostencoder).quality = postencoderConfig.quality
+            }
+            is JpegRgbPostencoder -> {
+                (postencoder as JpegRgbPostencoder).quality = postencoderConfig.quality
+            }
+        }
+    }
+
+    private fun makePostencoder(processorConfig: ProcessorConfig, inLayout: TensorLayout?) =
+        when (processorConfig.postencoderConfig.type) {
             "None" -> null
             "jpeg" -> when (processorConfig.modelConfig.layer) {
                 "client" -> throw IllegalArgumentException()
@@ -35,7 +46,6 @@ class PostencoderManager {
             "h264" -> throw NotImplementedError()
             else -> throw NotImplementedError()
         }
-    }
 
     // TODO switch? or how to utilize models.json?
 

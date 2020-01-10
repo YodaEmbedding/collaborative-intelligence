@@ -56,10 +56,11 @@ class MainActivity : AppCompatActivity() {
             uploadRateLimitSeekBar
         )
         postencoderUiController = PostencoderUiController(
-            postencoderSpinner,
             modelUiController.modelConfig,
-            modelUiController.modelConfigEvents
+            modelUiController.modelConfigEvents,
             // modelUiController.modelConfigEvents.startWith(modelUiController.modelConfig)
+            postencoderSpinner,
+            postencoderQualitySeekBar
         )
         statisticsUiController = StatisticsUiController(
             statistics,
@@ -193,8 +194,18 @@ class MainActivity : AppCompatActivity() {
             .fromRunnable { Log.i(TAG, "Switching model begin") }
             .andThen(
                 Completable.mergeArray(
-                    clientProcessor.switchModelInference(ProcessorConfig(modelConfig, postencoderConfig)),
-                    networkManager.switchModelServer(ProcessorConfig(modelConfig, postencoderConfig))
+                    clientProcessor.switchModelInference(
+                        ProcessorConfig(
+                            modelConfig,
+                            postencoderConfig
+                        )
+                    ),
+                    networkManager.switchModelServer(
+                        ProcessorConfig(
+                            modelConfig,
+                            postencoderConfig
+                        )
+                    )
                 )
             )
             .doOnComplete { Log.i(TAG, "Switching model end") }

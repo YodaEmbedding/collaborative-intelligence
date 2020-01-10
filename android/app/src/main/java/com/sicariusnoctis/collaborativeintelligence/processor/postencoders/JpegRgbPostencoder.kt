@@ -10,9 +10,9 @@ import java.nio.IntBuffer
 class JpegRgbPostencoder(private val inLayout: TensorLayout) : Postencoder {
     private val TAG = JpegRgbPostencoder::class.qualifiedName
 
-    override fun run(argb: ByteArray): ByteArray {
-        // val argb = preprocessor.convertRgbToArgb(rgb)
+    var quality: Int = 70
 
+    override fun run(argb: ByteArray): ByteArray {
         val byteBuffer = ByteBuffer.wrap(argb)
         val intBuffer = byteBuffer.asIntBuffer()
 
@@ -23,7 +23,7 @@ class JpegRgbPostencoder(private val inLayout: TensorLayout) : Postencoder {
         bitmap.copyPixelsFromBuffer(IntBuffer.wrap(argbInt))
 
         val outStream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 70, outStream)
+        bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outStream)
         return outStream.toByteArray()
     }
 }
