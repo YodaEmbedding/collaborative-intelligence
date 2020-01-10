@@ -93,7 +93,7 @@ def plot_histogram(prefix: str, arr: np.ndarray):
 
 def plot_featuremap(prefix: str, arr: np.ndarray, order: str = "hwc"):
     arr = arr[0]
-    tensor_layout = TensorLayout.from_tensor(order)
+    tensor_layout = TensorLayout.from_tensor(arr, order)
     tiled_layout = determine_tile_layout(tensor_layout)
     tiled = tile(arr, tensor_layout, tiled_layout)
 
@@ -231,9 +231,12 @@ def run_analysis(
 
     client_final_idx = analysis_client_final(model_config)
     _, h, w, c = model_analysis.output_shape[client_final_idx]
-    tensor_layout = TensorLayout(c, h, w, "hwc")
+    dtype = model_server.layers[0].dtype
+    tensor_layout = TensorLayout(dtype, c, h, w, "hwc")
     tiled_layout = determine_tile_layout(tensor_layout)
     layouts = tensor_layout, tiled_layout
+    return
+
     write_tensor_video(model_config, model_analysis, *layouts)
     read_tensor_video(model_config, model_server, *layouts)
 
@@ -298,8 +301,8 @@ def run_split(
     if graph_plot:
         plot_model(model_client, to_file=f"{prefix}-client.png")
         plot_model(model_server, to_file=f"{prefix}-server.png")
-    write_summary_to_file(model, f"{prefix}-client.txt")
-    write_summary_to_file(model, f"{prefix}-server.txt")
+    write_summary_to_file(model_client, f"{prefix}-client.txt")
+    write_summary_to_file(model_server, f"{prefix}-server.txt")
     run_analysis(
         model_config, model_analysis, model_server, test_inputs, targets
     )

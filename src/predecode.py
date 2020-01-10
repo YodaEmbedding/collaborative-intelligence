@@ -138,7 +138,7 @@ def to_np_dtype(dtype: type) -> type:
     }[dtype]
 
 
-def _decode_raw_img( buf: ByteString) -> Image.Image:
+def _decode_raw_img(buf: ByteString) -> Image.Image:
     with BytesIO(buf) as stream:
         img = Image.open(stream)
         img.load()

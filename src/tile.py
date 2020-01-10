@@ -68,6 +68,7 @@ def detile(
         np.ndarray: tensor
     """
     assert out_layout.shape == in_layout.orig_shape_in_order(out_layout.order)
+    print(arr.shape, in_layout.shape)
     assert arr.shape == in_layout.shape
     arr = _detile_chw(arr, **in_layout.__dict__)
     arr = _as_order(arr, "chw", out_layout.order)
