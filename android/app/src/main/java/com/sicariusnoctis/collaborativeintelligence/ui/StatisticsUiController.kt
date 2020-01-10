@@ -23,9 +23,9 @@ class StatisticsUiController(
     private val preprocessText: TextView,
     private val clientInferenceText: TextView,
     private val encodingText: TextView,
-    private val networkReadText: TextView,
+    // private val networkReadText: TextView,
     private val serverInferenceText: TextView,
-    private val networkWriteText: TextView,
+    // private val networkWriteText: TextView,
     private val totalText: TextView,
     private val totalAvgText: TextView,
     private val framesProcessedText: TextView,
@@ -96,9 +96,9 @@ class StatisticsUiController(
         preprocessText.text = "1. Preprocess: ${toMillis(sample.preprocess)} ms"
         clientInferenceText.text = "2. Client infer: ${toMillis(sample.clientInference)} ms"
         encodingText.text = "3. Encoding: ${toMillis(sample.postencode)} ms"
-        networkWriteText.text = "4. Network send: ${toMillis(sample.networkWrite)} ms"
-        serverInferenceText.text = "5. Server infer: ${toMillis(sample.serverInference)} ms"
-        networkReadText.text = "6. Network read: ${toMillis(sample.networkRead)} ms"
+        // networkWriteText.text = "4. Network send: ${toMillis(sample.networkWrite)} ms"
+        serverInferenceText.text = "4. Server infer: ${toMillis(sample.serverInference)} ms"
+        // networkReadText.text = "6. Network read: ${toMillis(sample.networkRead)} ms"
         totalText.text = "Total: ${toMillis(sample.total)} ms"
         totalAvgText.text = "Total avg: ${stats.totalAverage} ms"
         framesProcessedText.text =
