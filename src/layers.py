@@ -1,6 +1,4 @@
-import tensorflow as tf
 import tensorflow.keras.backend as K  # pylint: disable=import-error
-from tensorflow import keras
 from tensorflow.keras.layers import Layer
 
 

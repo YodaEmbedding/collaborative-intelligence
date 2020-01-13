@@ -14,7 +14,7 @@ from typing import ByteString, Dict
 
 import numpy as np
 
-from src.layouts import Layout, RgbLayout, TensorLayout, TiledArrayLayout
+from src.layouts import TensorLayout
 from src.modelconfig import ModelConfig, PostencoderConfig, ProcessorConfig
 from src.predecode import (
     JpegPredecoder,
@@ -22,7 +22,6 @@ from src.predecode import (
     Predecoder,
     RgbPredecoder,
     TensorPredecoder,
-    from_buffer,
 )
 from src.server import monitor_client
 from src.server.comm import (

@@ -11,8 +11,6 @@ from typing import (
 )
 
 import numpy as np
-import tensorflow as tf
-from PIL import Image
 from tensorflow import keras
 from tensorflow.keras.applications import imagenet_utils
 

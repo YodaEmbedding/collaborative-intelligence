@@ -14,11 +14,7 @@ from typing import (
 import numpy as np
 import tensorflow as tf
 from PIL import Image
-from tensorflow import keras
-from tensorflow.keras.applications import imagenet_utils
 
-from src.layers import decoders
-from src.modelconfig import ModelConfig
 from src.tile import (
     TensorLayout,
     TiledArrayLayout,
