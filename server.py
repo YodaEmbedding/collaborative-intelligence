@@ -21,7 +21,7 @@ from src.predecode import (
     JpegRgbPredecoder,
     Predecoder,
     RgbPredecoder,
-    SimplePredecoder,
+    TensorPredecoder,
     from_buffer,
 )
 from src.server import monitor_client
@@ -48,33 +48,54 @@ def str_preview(s: ByteString, max_len=16):
     return f"{s[:max_len - 6].hex()}...{s[-3:].hex()}"
 
 
-# def get_predecoder(
-#     tensor_layout: TensorLayout,
-#     model_config: ModelConfig,
-#     predecoder_type: str,
-# # ) -> Layout:
-# ) -> Predecoder:
-#     layer = model_config.layer
-#     shape = (1, -1) if tensor_layout is None else tensor_layout.shape
-#     order = "hwc"
-#     if predecoder_type == "None":
-#         if layer == "server":
-#             # layout = RgbLayout.from_shape(shape, order)
-#             # return SimplePredecoder(shape, np.uint8)
-#             return SimplePredecoder(shape, np.float32)
-#         if layer == "client":
-#             return SimplePredecoder(shape, np.float32)
-#         return SimplePredecoder(shape, np.uint8)
-#     if predecoder_type == "jpeg":
-#         tiled_layout = determine_tile_layout(tensor_layout)
-#         return JpegPredecoder(tiled_layout, tensor_layout)
-#     raise ValueError("Unrecognized predecoder")
+def get_predecoder(
+    postencoder_config: PostencoderConfig,
+    model_config: ModelConfig,
+    tensor_layout: TensorLayout,
+) -> Predecoder:
+    encoder_type = model_config.encoder
+    postencoder_type = postencoder_config.type
+
+    if model_config.layer == "client":
+        assert encoder_type == "None"
+        assert postencoder_type == "None"
+        shape = (-1,)
+        dtype = np.float32
+        return TensorPredecoder(shape, dtype)
+
+    shape = tensor_layout.shape
+    dtype = tensor_layout.dtype
+
+    if model_config.layer == "server":
+        assert encoder_type == "None"
+        if postencoder_type == "None":
+            assert shape[-1] == 3
+            return RgbPredecoder(shape, dtype)
+        if postencoder_type == "jpeg":
+            return JpegRgbPredecoder(tensor_layout)
+        raise ValueError("Unknown postencoder")
+
+    if encoder_type == "None":
+        assert postencoder_type == "None"
+        return TensorPredecoder(shape, dtype)
+
+    if encoder_type == "UniformQuantizationU8Encoder":
+        assert dtype == np.uint8
+        if postencoder_type == "None":
+            return TensorPredecoder(shape, dtype)
+        if postencoder_type == "jpeg":
+            tiled_layout = determine_tile_layout(tensor_layout)
+            return JpegPredecoder(tiled_layout, tensor_layout)
+        raise ValueError("Unknown postencoder")
+
+    raise ValueError("Unknown encoder")
 
 
 @dataclass
 class State:
     model_config: ModelConfig = None
     predecoder: Predecoder = None
+    tensor_layout: TensorLayout = None
 
 
 # TODO document that this happens on a single dedicated thread
@@ -84,8 +105,6 @@ def processor(work_distributor: WorkDistributor, monitor_stats: MonitorStats):
     model_manager = ModelManager()
     smart_processor = SmartProcessor(work_distributor)
     states: Dict[int, State] = defaultdict(State)
-
-    # TODO looks like model_config is used as a state... why not put into dict?
 
     while True:
         try:
@@ -100,16 +119,10 @@ def processor(work_distributor: WorkDistributor, monitor_stats: MonitorStats):
                 assert state.model_config is None
                 model_manager.acquire(model_config)
                 state.model_config = model_config
-
-                # TODO tensor_layout could be part of State
-                tensor_layout = model_manager.input_tensor_layout(model_config)
-
-                # tensor_layout.dtype
-                # input_tensor_dtype = ???
-                # predecoder = get_predecoder(
-                #     tensor_layout, model_config, "jpeg"
-                # )
                 # TODO have client provide the tiled_layout
+                state.tensor_layout = model_manager.input_tensor_layout(
+                    model_config
+                )
             elif request_type == "release":
                 model_config = item
                 assert model_config == state.model_config
@@ -117,7 +130,9 @@ def processor(work_distributor: WorkDistributor, monitor_stats: MonitorStats):
                 state.model_config = None
             elif request_type == "init_postencoder":
                 postencoder_config = item
-                postencoder_type = postencoder_config.type
+                state.predecoder = get_predecoder(
+                    postencoder_config, state.model_config, state.tensor_layout
+                )
             elif request_type == "predict":
                 frame_number, buf = item
                 model_config = state.model_config
@@ -126,84 +141,12 @@ def processor(work_distributor: WorkDistributor, monitor_stats: MonitorStats):
                 )
                 confirmation = f"{confirmation}\n".encode("utf8")
                 work_distributor.put(guid, confirmation)
-                # TODO time decoding only
+                # TODO predecode_time separately from inference_time
                 t0 = time.time()
-
-                encoder_type = model_config.encoder
-                # postencoder_type = "None"  # "jpeg"
-
-                if model_config.layer == "client":
-                    assert encoder_type == "None"
-                    assert postencoder_type == "None"
-                    shape = (-1,)
-                    dtype = np.float32
-                    # data_tensor = from_buffer(buf, shape, dtype)
-                    predecoder = SimplePredecoder(shape, dtype)
-                    data_tensor = predecoder.run(buf)
-
-                elif model_config.layer == "server":
-                    assert encoder_type == "None"
-                    shape = tensor_layout.shape
-                    dtype = tensor_layout.dtype
-                    if postencoder_type == "None":
-                        # TODO RgbPredecoder?
-                        assert shape[-1] == 3
-                        # shape_ = (*shape[:-1], 4)
-                        # data_tensor = from_buffer(buf, shape, dtype)
-                        # data_tensor = from_buffer(buf, shape, np.uint8)
-                        # data_tensor = data_tensor.astype(dtype)
-                        predecoder = RgbPredecoder(shape, dtype)
-                        data_tensor = predecoder.run(buf)
-                    elif postencoder_type == "jpeg":
-                        # TODO JpegRgbPredecoder, JpegTensorPredecoder
-                        # TODO TensorPredecoder (rename "SimplePredecoder"?)
-                        predecoder = JpegRgbPredecoder(tensor_layout)
-                        data_tensor = predecoder.run(buf)
-                    else:
-                        raise ValueError("Unknown postencoder")
-
-                else:
-                    shape = tensor_layout.shape
-                    dtype = tensor_layout.dtype
-                    if encoder_type == "None":
-                        assert postencoder_type == "None"
-                        predecoder = SimplePredecoder(shape, dtype)
-                        data_tensor = predecoder.run(buf)
-                    elif encoder_type == "UniformQuantizationU8Encoder":
-                        assert dtype == np.uint8
-                        if postencoder_type == "None":
-                            predecoder = SimplePredecoder(shape, dtype)
-                            data_tensor = predecoder.run(buf)
-                        elif postencoder_type == "jpeg":
-                            tiled_layout = determine_tile_layout(tensor_layout)
-                            predecoder = JpegPredecoder(
-                                tiled_layout, tensor_layout
-                            )
-                            data_tensor = predecoder.run(buf)
-                        else:
-                            raise ValueError("Unknown encoder")
-                    else:
-                        raise ValueError("Unknown encoder")
-
-                # TODO persistent predecoder
-
-                # data_tensor = predecoder.run(buf)
-                # data_tensor = model_manager.decode_data(model_config, data_tensor)
-
+                data_tensor = state.predecoder.run(buf)
                 data_tensor = data_tensor[np.newaxis, ...]
-
-                # monitor_stats.add(
-                #     frame_number=frame_number,
-                #     # data_shape=..., # TODO different shapes for data?
-                #     inference_time=0,
-                #     predictions=[],
-                #     data=image_preview(data_tensor),
-                # )
-                # continue
-
                 preds = model_manager.predict(model_config, data_tensor)
                 preds = model_manager.decode_predictions(model_config, preds)
-
                 t1 = time.time()
                 inference_time = int(1000 * (t1 - t0))
                 result = json_result(

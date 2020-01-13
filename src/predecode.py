@@ -32,7 +32,7 @@ class Predecoder:
         raise NotImplementedError
 
 
-class SimplePredecoder(Predecoder):
+class TensorPredecoder(Predecoder):
     # def __init__(self, tensor_layout: TensorLayout):
     #     self._tensor_layout = tensor_layout
 
