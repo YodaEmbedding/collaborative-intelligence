@@ -41,9 +41,7 @@ class SimplePredecoder(Predecoder):
         self._dtype = to_np_dtype(dtype)
 
     def run(self, buf: ByteString) -> np.ndarray:
-        return np.frombuffer(buf, dtype=self._dtype).reshape(
-            (-1, *self._shape)
-        )
+        return np.frombuffer(buf, dtype=self._dtype).reshape(self._shape)
 
         # shape = self._tensor_layout.shape
 
@@ -63,6 +61,19 @@ class SimplePredecoder(Predecoder):
         # input_type = model.layers[0].dtype
         # dtype = to_np_dtype(input_type)
         # return np.frombuffer(buf, dtype=dtype).reshape((-1, *shape))
+
+
+class RgbPredecoder(Predecoder):
+    def __init__(self, shape: tuple, dtype: type):
+        self._shape = shape
+        self._dtype = to_np_dtype(dtype)
+
+    def run(self, buf: ByteString) -> np.ndarray:
+        return (
+            np.frombuffer(buf, dtype=np.uint8)
+            .reshape(self._shape)
+            .astype(self._dtype)
+        )
 
 
 class JpegPredecoder(Predecoder):
@@ -96,7 +107,7 @@ class JpegRgbPredecoder(Predecoder):
 
     def run(self, buf: ByteString) -> np.ndarray:
         img = _decode_raw_img(buf)
-        return np.array(img)
+        return np.array(img).astype(self._tensor_layout.dtype)
 
 
 def predecode(tensor_layout: TensorLayout):

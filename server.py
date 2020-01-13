@@ -20,6 +20,7 @@ from src.predecode import (
     JpegPredecoder,
     JpegRgbPredecoder,
     Predecoder,
+    RgbPredecoder,
     SimplePredecoder,
     from_buffer,
 )
@@ -136,7 +137,9 @@ def processor(work_distributor: WorkDistributor, monitor_stats: MonitorStats):
                     assert postencoder_type == "None"
                     shape = (-1,)
                     dtype = np.float32
-                    data_tensor = from_buffer(buf, shape, dtype)
+                    # data_tensor = from_buffer(buf, shape, dtype)
+                    predecoder = SimplePredecoder(shape, dtype)
+                    data_tensor = predecoder.run(buf)
 
                 elif model_config.layer == "server":
                     assert encoder_type == "None"
@@ -147,14 +150,15 @@ def processor(work_distributor: WorkDistributor, monitor_stats: MonitorStats):
                         assert shape[-1] == 3
                         # shape_ = (*shape[:-1], 4)
                         # data_tensor = from_buffer(buf, shape, dtype)
-                        data_tensor = from_buffer(buf, shape, np.uint8)
-                        data_tensor = data_tensor.astype(dtype)
+                        # data_tensor = from_buffer(buf, shape, np.uint8)
+                        # data_tensor = data_tensor.astype(dtype)
+                        predecoder = RgbPredecoder(shape, dtype)
+                        data_tensor = predecoder.run(buf)
                     elif postencoder_type == "jpeg":
                         # TODO JpegRgbPredecoder, JpegTensorPredecoder
                         # TODO TensorPredecoder (rename "SimplePredecoder"?)
                         predecoder = JpegRgbPredecoder(tensor_layout)
                         data_tensor = predecoder.run(buf)
-                        data_tensor = data_tensor.astype(dtype)
                     else:
                         raise ValueError("Unknown postencoder")
 
@@ -163,11 +167,13 @@ def processor(work_distributor: WorkDistributor, monitor_stats: MonitorStats):
                     dtype = tensor_layout.dtype
                     if encoder_type == "None":
                         assert postencoder_type == "None"
-                        data_tensor = from_buffer(buf, shape, dtype)
+                        predecoder = SimplePredecoder(shape, dtype)
+                        data_tensor = predecoder.run(buf)
                     elif encoder_type == "UniformQuantizationU8Encoder":
                         assert dtype == np.uint8
                         if postencoder_type == "None":
-                            data_tensor = from_buffer(buf, shape, dtype)
+                            predecoder = SimplePredecoder(shape, dtype)
+                            data_tensor = predecoder.run(buf)
                         elif postencoder_type == "jpeg":
                             tiled_layout = determine_tile_layout(tensor_layout)
                             predecoder = JpegPredecoder(
