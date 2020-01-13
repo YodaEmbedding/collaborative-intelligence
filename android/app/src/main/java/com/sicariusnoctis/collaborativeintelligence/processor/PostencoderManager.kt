@@ -7,7 +7,6 @@ import com.sicariusnoctis.collaborativeintelligence.processor.postencoders.JpegP
 import com.sicariusnoctis.collaborativeintelligence.processor.postencoders.JpegRgbPostencoder
 import com.sicariusnoctis.collaborativeintelligence.processor.postencoders.Postencoder
 
-// TODO factor out preprocessor? or maybe rename CameraPreviewPreprocessor to something else...
 class PostencoderManager {
     lateinit var postencoderConfig: PostencoderConfig; private set
 
@@ -46,8 +45,4 @@ class PostencoderManager {
             "h264" -> throw NotImplementedError()
             else -> throw NotImplementedError()
         }
-
-    // TODO switch? or how to utilize models.json?
-
-    // TODO extract models.json reader?  from the ui? but... UI provides info anyways
 }

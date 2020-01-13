@@ -135,15 +135,6 @@ class CameraPreviewPreprocessor {
         }
     }
 
-    // fun convertRgbToArgb(inputArray: ByteArray): ByteArray {
-    //     outputUcharAllocation.copyFrom(inputArray)
-    //     convert._output = outputArgbAllocation
-    //     convert.forEach_rgb2argb(outputUcharAllocation)
-    //     val byteArray = ByteArray(outputArgbAllocation.bytesSize)
-    //     outputArgbAllocation.copyTo(byteArray)
-    //     return byteArray
-    // }
-
     private fun applyRotationCompensation(aout: Allocation) {
         when (rotationCompensation) {
             0 -> return

@@ -58,7 +58,6 @@ class MainActivity : AppCompatActivity() {
         postencoderUiController = PostencoderUiController(
             modelUiController.modelConfig,
             modelUiController.modelConfigEvents,
-            // modelUiController.modelConfigEvents.startWith(modelUiController.modelConfig)
             postencoderSpinner,
             postencoderQualitySeekBar
         )
@@ -141,11 +140,6 @@ class MainActivity : AppCompatActivity() {
 
     // TODO this is kind of using references to things that stop existing after onStop
     private fun subscribeFrameProcessor() = Completable.fromRunnable {
-        // clientProcessor.subscribeFrameProcessor(frameProcessor)
-
-        // TODO why does FrameRequestInfo NEED modelConfig? does it need other options too?
-        // TODO are we going to handle post processor switching somewhere? where?
-
         val frameRequests = frameProcessor
             .subscribeOn(IoScheduler())
             .onBackpressureDrop()
@@ -187,7 +181,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     // TODO deal with unnecessary ProcessorConfig constructions...
-    // TODO rename to switchProcessor? meh...
     // TODO clean up using .log() extension method
     private fun switchModel(modelConfig: ModelConfig, postencoderConfig: PostencoderConfig) =
         Completable
@@ -209,17 +202,6 @@ class MainActivity : AppCompatActivity() {
                 )
             )
             .doOnComplete { Log.i(TAG, "Switching model end") }
-
-    // private fun switchPostencoder(postencoderConfig: PostencoderConfig) =
-    //     Completable
-    //         .fromRunnable { Log.i(TAG, "Switching postencoder begin") }
-    //         .andThen(
-    //             Completable.mergeArray(
-    //                 clientProcessor.switchPostencoder(postencoderConfig),
-    //                 networkManager.switchPostencoderServer(postencoderConfig)
-    //             )
-    //         )
-    //         .doOnComplete { Log.i(TAG, "Switching postencoder end") }
 
     // TODO extract gate... maybe split into two filters (second half handled by stats only)
     private fun shouldProcessFrame(

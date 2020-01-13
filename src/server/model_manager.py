@@ -56,24 +56,6 @@ class ModelManager:
             # del self.models[model_config]
             print(f"Released model {model_config}")
 
-    # TODO remove
-    # def decode_data(
-    #     self, model_config: ModelConfig, data: ByteString
-    # ) -> np.ndarray:
-    #     model = self.models[model_config].model
-    #     # Check if client-side inference
-    #     if model is None:
-    #         # TODO np.float32? should probably store more info about model
-    #         return np.frombuffer(data, dtype=np.float32)[None, ...]
-    #     # data_tensor = _decode_data(model, data)
-    #     input_shape = model.layers[1].input_shape[1:]
-    #     input_type = model.layers[0].dtype
-    #     dtype = _to_np_dtype(input_type)
-    #     h, w, c = input_shape
-    #     tensor_layout = TensorLayout(c, h, w, "hwc")
-    #     data_tensor = predecoder.run(data)
-    #     return np.expand_dims(data_tensor.astype(dtype=dtype), axis=0)
-
     def input_tensor_layout(self, model_config: ModelConfig) -> TensorLayout:
         model = self.models[model_config].model
         # Check if client-side inference

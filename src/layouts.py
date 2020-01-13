@@ -5,8 +5,6 @@ from typing import Any, Dict, Tuple
 
 import numpy as np
 
-# TODO also include dtype information in layouts?
-
 
 @dataclass(eq=True, frozen=True)
 class Layout:

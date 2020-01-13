@@ -22,7 +22,6 @@ class ClientProcessor(private val rs: RenderScript, private val statistics: Stat
     private var preprocessor: CameraPreviewPreprocessor? = null
     private val subscriptions = CompositeDisposable()
     private var postencoderManager = PostencoderManager()
-    // private val tiler: Tiler? = null
 
     val modelConfig get() = inference!!.modelConfig
     val postencoderConfig get() = postencoderManager.postencoderConfig
@@ -34,7 +33,6 @@ class ClientProcessor(private val rs: RenderScript, private val statistics: Stat
         _state = ClientProcessorState.Stopped
         inferenceExecutor.submit { inference?.close() }
         inferenceExecutor.shutdown()
-        // preprocessor.close() // TODO
         subscriptions.dispose()
     }
 
@@ -49,11 +47,8 @@ class ClientProcessor(private val rs: RenderScript, private val statistics: Stat
         setStateIfReady()
     }.subscribeOn(inferenceScheduler)
 
-    // TODO replace with directly creating new inference? and trigger postencoder = Postencoder()?
     fun switchModelInference(
         processorConfig: ProcessorConfig
-        // modelConfig: ModelConfig,
-        // postencoderConfig: PostencoderConfig
     ) = Completable.fromRunnable {
         _state = ClientProcessorState.BusyReconfigure
         preprocessor!!.dataType = when (processorConfig.modelConfig.layer) {
@@ -85,7 +80,7 @@ class ClientProcessor(private val rs: RenderScript, private val statistics: Stat
         .doOnNext {
             if (_state != ClientProcessorState.Ready)
                 throw Exception("Client processor is not ready")
-            _state = ClientProcessorState.BusyInference // TODO
+            _state = ClientProcessorState.BusyInference
             Log.i(TAG, "Started processing frame ${it.info.frameNumber}")
         }
         .mapTimed(statistics, ModelStatistics::setPreprocess) {
@@ -97,24 +92,7 @@ class ClientProcessor(private val rs: RenderScript, private val statistics: Stat
         }
         .observeOn(ComputationScheduler(), false, 1)
         .mapTimed(statistics, ModelStatistics::setPostencode) {
-
-            // TODO skip if client only
-
-            // TODO use different layout/encoding if server only
-
-            // TODO extract tiling directly to here, so we have executive control... let the encoder provide "recommend_tiling()" if it wants...
-
-            // TODO also, shouldn't we tell the server what the tiling layout is? or can it figure it out? using the decoder's attributes...
-
-            // tiler = Tiler(inLayout, inLayout.squarishTiling(), mbuSize)
-
             postencoderManager.run(it)
-            // frameRequest.map {
-            // JpegPostencoder(inference!!.outputTensorLayout).run(it)
-            // postencoderManager.run(it)
-            // TODO encoder should change... do we need a "State" monad? instead of passing everything in obj...
-            // "State" holds all references to what the current inference request needs?
-            // } // TODO hardcoded parameters, jpegEncoder reconstructed each time
         }
         .doOnNext {
             _state = ClientProcessorState.Ready
@@ -133,11 +111,3 @@ enum class ClientProcessorState {
     BusyInference,
     BusyReconfigure,
 }
-
-// It might make sense to have "contexts" to manage the time-variant resources
-
-// usage:
-// clientProcessor.switchModel()
-// clientProcessor.subscribe(frames)
-// onStop { clientProcessor.close() }
-// onStart { clientProcessor = ClientProcessor() }

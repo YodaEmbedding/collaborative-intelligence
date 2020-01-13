@@ -7,13 +7,10 @@ import * as split2 from "split2";
 import * as stream from "stream";
 import * as through2 from "through2";
 
-// import { Client } from "./client";
-
 const HOSTNAME: string = "localhost";
 const PORT: number = 5680;
 
 let mainWindow: BrowserWindow;
-// let client: Client;
 let socket: net.Socket;
 
 app.on("activate", () => {
@@ -27,19 +24,13 @@ app.on("ready", () => {
   registerHandlers();
 
   socket = new net.Socket();
-  // socket.setEncoding("utf8");
-  // socket.on("connect", () => { });
 
   socket
-    // .pipe(split2(JSON.parse))
-    // .pipe(es.split())  // event-stream
     .pipe(split2())
     .pipe(
-      // through2({ objectMode: true, allowHalfOpen: false }, ...)
       through2(function(chunk, _encoding, next) {
         const json = JSON.parse(chunk) as string;
         this.push(JSON.stringify(json));
-        // this.push(json);
         next();
       })
     )
@@ -54,9 +45,6 @@ app.on("ready", () => {
     );
 
   socket.connect(PORT, HOSTNAME);
-
-  // client = new Client();
-  // client.connect(5680, "localhost");
 });
 
 app.on("window-all-closed", () => {
@@ -87,14 +75,4 @@ function createWindow() {
 }
 
 function registerHandlers() {
-  // ipcMain.on("SEND_DATA", (event, data) => {
-  //   client.send(data);
-  // });
-  // ipcMain.on("RECEIVE_DATA", (event, data) => {
-  //
-  // });
 }
-
-// TODO ensure correctly ordered event handler registration
-// https://stackoverflow.com/questions/47597982/send-sync-message-from-ipcmain-to-ipcrenderer-electron
-//

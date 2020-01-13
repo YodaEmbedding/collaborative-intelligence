@@ -31,13 +31,6 @@ fun loadJsonFromDefaultFolder(filename: String): JsonObject? {
     }
 }
 
-// @UnstableDefault
-// fun loadModelConfig(filename: String): List<ModelConfig> {
-//     return loadJsonFromDefaultFolder(filename)!!.flatMap { (k, v) ->
-//         v.jsonArray.map { x -> jsonToModelConfig(x.jsonObject, k) }
-//     }
-// }
-
 @UnstableDefault
 fun loadModelConfigMap(filename: String): LinkedHashMap<String, List<ModelConfig>> {
     return loadJsonFromDefaultFolder(filename)!!.map { (k, v) ->
