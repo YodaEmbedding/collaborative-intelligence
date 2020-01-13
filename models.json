@@ -50,12 +50,44 @@
             "decoder": "None"
         },
         {
-            "layer": "add_8",
+            "layer": "add_6",
             "encoder": "None",
             "decoder": "None"
         },
         {
-            "layer": "add_8",
+            "layer": "add_6",
+            "encoder": "UniformQuantizationU8Encoder",
+            "decoder": "UniformQuantizationU8Decoder",
+            "encoder_args": {
+                "clip_range": [ -1.0, 1.0 ]
+            },
+            "decoder_args": {
+                "clip_range": [ -1.0, 1.0 ]
+            }
+        },
+        {
+            "layer": "add_12",
+            "encoder": "None",
+            "decoder": "None"
+        },
+        {
+            "layer": "add_12",
+            "encoder": "UniformQuantizationU8Encoder",
+            "decoder": "UniformQuantizationU8Decoder",
+            "encoder_args": {
+                "clip_range": [ -1.0, 1.0 ]
+            },
+            "decoder_args": {
+                "clip_range": [ -1.0, 1.0 ]
+            }
+        },
+        {
+            "layer": "add_15",
+            "encoder": "None",
+            "decoder": "None"
+        },
+        {
+            "layer": "add_15",
             "encoder": "UniformQuantizationU8Encoder",
             "decoder": "UniformQuantizationU8Decoder",
             "encoder_args": {
@@ -78,12 +110,44 @@
             "decoder": "None"
         },
         {
-            "layer": "add_8",
+            "layer": "add_6",
             "encoder": "None",
             "decoder": "None"
         },
         {
-            "layer": "add_8",
+            "layer": "add_6",
+            "encoder": "UniformQuantizationU8Encoder",
+            "decoder": "UniformQuantizationU8Decoder",
+            "encoder_args": {
+                "clip_range": [ -0.5, 0.25 ]
+            },
+            "decoder_args": {
+                "clip_range": [ -0.5, 0.25 ]
+            }
+        },
+        {
+            "layer": "add_12",
+            "encoder": "None",
+            "decoder": "None"
+        },
+        {
+            "layer": "add_12",
+            "encoder": "UniformQuantizationU8Encoder",
+            "decoder": "UniformQuantizationU8Decoder",
+            "encoder_args": {
+                "clip_range": [ -0.5, 0.25 ]
+            },
+            "decoder_args": {
+                "clip_range": [ -0.5, 0.25 ]
+            }
+        },
+        {
+            "layer": "add_15",
+            "encoder": "None",
+            "decoder": "None"
+        },
+        {
+            "layer": "add_15",
             "encoder": "UniformQuantizationU8Encoder",
             "decoder": "UniformQuantizationU8Decoder",
             "encoder_args": {
@@ -106,12 +170,44 @@
             "decoder": "None"
         },
         {
-            "layer": "add_8",
+            "layer": "add_6",
             "encoder": "None",
             "decoder": "None"
         },
         {
-            "layer": "add_8",
+            "layer": "add_6",
+            "encoder": "UniformQuantizationU8Encoder",
+            "decoder": "UniformQuantizationU8Decoder",
+            "encoder_args": {
+                "clip_range": [ -0.3, 0.3 ]
+            },
+            "decoder_args": {
+                "clip_range": [ -0.3, 0.3 ]
+            }
+        },
+        {
+            "layer": "add_29",
+            "encoder": "None",
+            "decoder": "None"
+        },
+        {
+            "layer": "add_29",
+            "encoder": "UniformQuantizationU8Encoder",
+            "decoder": "UniformQuantizationU8Decoder",
+            "encoder_args": {
+                "clip_range": [ -0.3, 0.3 ]
+            },
+            "decoder_args": {
+                "clip_range": [ -0.3, 0.3 ]
+            }
+        },
+        {
+            "layer": "add_32",
+            "encoder": "None",
+            "decoder": "None"
+        },
+        {
+            "layer": "add_32",
             "encoder": "UniformQuantizationU8Encoder",
             "decoder": "UniformQuantizationU8Decoder",
             "encoder_args": {
@@ -134,12 +230,44 @@
             "decoder": "None"
         },
         {
-            "layer": "add_12",
+            "layer": "add_10",
             "encoder": "None",
             "decoder": "None"
         },
         {
-            "layer": "add_12",
+            "layer": "add_10",
+            "encoder": "UniformQuantizationU8Encoder",
+            "decoder": "UniformQuantizationU8Decoder",
+            "encoder_args": {
+                "clip_range": [ -0.3, 0.2 ]
+            },
+            "decoder_args": {
+                "clip_range": [ -0.3, 0.2 ]
+            }
+        },
+        {
+            "layer": "add_46",
+            "encoder": "None",
+            "decoder": "None"
+        },
+        {
+            "layer": "add_46",
+            "encoder": "UniformQuantizationU8Encoder",
+            "decoder": "UniformQuantizationU8Decoder",
+            "encoder_args": {
+                "clip_range": [ -0.3, 0.2 ]
+            },
+            "decoder_args": {
+                "clip_range": [ -0.3, 0.2 ]
+            }
+        },
+        {
+            "layer": "add_49",
+            "encoder": "None",
+            "decoder": "None"
+        },
+        {
+            "layer": "add_49",
             "encoder": "UniformQuantizationU8Encoder",
             "decoder": "UniformQuantizationU8Decoder",
             "encoder_args": {
