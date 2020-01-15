@@ -4,10 +4,9 @@ import os
 import textwrap
 from contextlib import suppress
 from pprint import pprint
-from typing import Iterable
+from typing import Iterator
 
 import cv2
-import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras.backend as K  # pylint: disable=import-error
@@ -17,14 +16,14 @@ from tensorflow.keras.applications import imagenet_utils
 from tensorflow.keras.preprocessing import image
 from tensorflow.keras.utils import plot_model
 
+from src.analysis import plot
+from src.analysis.video import read_video, write_video
 from src.modelconfig import ModelConfig
 from src.split import copy_model, split_model
 from src.tile import (
     TensorLayout,
     TiledArrayLayout,
     determine_tile_layout,
-    detile,
-    tile,
 )
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
@@ -78,55 +77,14 @@ def write_summary_to_file(model: keras.Model, filename: str):
 
 def plot_histogram(prefix: str, arr: np.ndarray):
     title = textwrap.fill(prefix.replace("&", " "), 70)
-    arr = arr.reshape((-1,))
-    print(f"Min neuron: {np.min(arr)}")
-    print(f"Max neuron: {np.max(arr)}")
-
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)
-    ax.hist(arr, bins=np.linspace(np.min(arr), np.max(arr), 20))
-    ax.set_xlabel("Neuron value")
-    ax.set_ylabel("Frequency")
-    ax.set_title(title, fontsize="xx-small")
+    fig = plot.neuron_histogram(arr, title)
     fig.savefig(f"{prefix}-histogram.png", dpi=200)
 
 
-def plot_featuremap(prefix: str, arr: np.ndarray, order: str = "hwc"):
-    arr = arr[0]
-    tensor_layout = TensorLayout.from_tensor(arr, order)
-    tiled_layout = determine_tile_layout(tensor_layout)
-    tiled = tile(arr, tensor_layout, tiled_layout)
-
+def plot_featuremap(prefix: str, arr: np.ndarray):
     title = textwrap.fill(prefix.replace("&", " "), 70)
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)
-    cax = ax.matshow(tiled, cmap="viridis")
-    ax.set_title(title, fontsize="xx-small")
-    fig.colorbar(cax)
+    fig = plot.featuremap(arr[0], title)
     fig.savefig(f"{prefix}-featuremap.png", dpi=200)
-
-
-def write_video(filename: str, frames, width, height):
-    fourcc_code = (
-        "mp4v"
-        if filename.endswith(".mp4")
-        else "MJPG"
-        if filename.endswith(".avi")
-        else ""
-    )
-
-    fourcc = cv2.VideoWriter_fourcc(*fourcc_code)
-
-    writer = cv2.VideoWriter(
-        filename, fourcc, fps=30, frameSize=(width, height), isColor=False
-    )
-
-    for frame in frames:
-        gray = frame
-        # gray_3c = cv2.merge([gray, gray, gray])
-        writer.write(gray)
-
-    writer.release()
 
 
 def write_tensor_video(
@@ -136,29 +94,20 @@ def write_tensor_video(
     tiled_layout: TiledArrayLayout,
 ):
     prefix = prefix_of(model_config)
-
     preprocess_input = get_preprocessor(model_config.model)
     test_images = single_input_image("imgvideo.jpg", target_size=None)
     test_inputs = preprocess_input(test_images)
+    pred_idx = analysis_client_final(model_config)
 
-    def frame_gen():
-        prediction_decoder = imagenet_utils.decode_predictions
+    def frames():
         _, _, w, _ = model.input_shape
-
         for x in range(100):
             inputs = test_inputs[..., :, x : x + w, :]
             preds = model.predict(inputs)
-            pred = preds[analysis_client_final(model_config)]
-            frame = tile(pred[0], tensor_layout, tiled_layout)
-            height, width = frame.shape
-            if x == 0:
-                yield width, height
-            yield frame
-            # print(x, prediction_decoder(preds[-1]))
+            pred = preds[pred_idx][0]
+            yield pred
 
-    frames = frame_gen()
-    width, height = next(frames)
-    write_video(f"{prefix}-encoder.mp4", frames, width, height)
+    write_video(f"{prefix}-encoder.mp4", frames(), tensor_layout, tiled_layout)
 
 
 def read_tensor_video(
@@ -169,19 +118,12 @@ def read_tensor_video(
 ):
     prefix = prefix_of(model_config)
     prediction_decoder = imagenet_utils.decode_predictions
+    frames = read_video(f"{prefix}-encoder.mp4", tensor_layout, tiled_layout)
 
-    cap = cv2.VideoCapture(f"{prefix}-encoder.mp4")
-
-    # while cap.isOpened():
-    for i in range(100):
-        _, frame = cap.read()
-        frame = frame[:, :, 0]
-        tensor = detile(frame, tiled_layout, tensor_layout)
+    for i, tensor in enumerate(frames):
         tensor = np.expand_dims(tensor, axis=0)
         pred = model.predict(tensor)
         print(i, prediction_decoder(pred))
-
-    cap.release()
 
 
 def analysis_client_final(model_config: ModelConfig) -> int:
@@ -318,7 +260,7 @@ def run_split(
 
 def run_splits(
     model_name: str,
-    model_configs: Iterable[ModelConfig],
+    model_configs: Iterator[ModelConfig],
     clean_model: bool = False,
     clean_splits: bool = False,
     graph_plot: bool = False,
