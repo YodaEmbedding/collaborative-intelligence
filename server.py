@@ -15,14 +15,8 @@ from typing import ByteString, Dict
 import numpy as np
 
 from src.layouts import TensorLayout
-from src.modelconfig import ModelConfig, PostencoderConfig, ProcessorConfig
-from src.predecode import (
-    JpegPredecoder,
-    JpegRgbPredecoder,
-    Predecoder,
-    RgbPredecoder,
-    TensorPredecoder,
-)
+from src.modelconfig import ModelConfig, ProcessorConfig
+from src.predecode import Predecoder, get_predecoder
 from src.server import monitor_client
 from src.server.comm import (
     json_confirmation,
@@ -34,7 +28,6 @@ from src.server.model_manager import ModelManager
 from src.server.monitor_client import MonitorStats, image_preview
 from src.server.reader import read_item
 from src.server.work_distributor import SmartProcessor, WorkDistributor
-from src.tile import determine_tile_layout
 
 IP = "0.0.0.0"
 PORT = 5678

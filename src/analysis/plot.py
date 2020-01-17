@@ -2,7 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow.keras.backend as K  # pylint: disable=import-error
 
-from src.tile import TensorLayout, determine_tile_layout, tile
+from src.layouts import TensorLayout
+from src.tile import determine_tile_layout, tile
 
 
 def featuremap(arr: np.ndarray, title: str, order: str = "hwc") -> plt.Figure:

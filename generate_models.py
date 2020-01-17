@@ -6,7 +6,6 @@ from contextlib import suppress
 from pprint import pprint
 from typing import Iterator
 
-import cv2
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras.backend as K  # pylint: disable=import-error
@@ -18,13 +17,10 @@ from tensorflow.keras.utils import plot_model
 
 from src.analysis import plot
 from src.analysis.video import read_video, write_video
+from src.layouts import TensorLayout, TiledArrayLayout
 from src.modelconfig import ModelConfig
 from src.split import copy_model, split_model
-from src.tile import (
-    TensorLayout,
-    TiledArrayLayout,
-    determine_tile_layout,
-)
+from src.tile import determine_tile_layout
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 

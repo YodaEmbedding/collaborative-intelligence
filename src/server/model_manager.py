@@ -15,14 +15,9 @@ from tensorflow import keras
 from tensorflow.keras.applications import imagenet_utils
 
 from src.layers import decoders
+from src.layouts import TensorLayout
 from src.modelconfig import ModelConfig
 from src.predecode import to_np_dtype
-from src.tile import (
-    TensorLayout,
-    TiledArrayLayout,
-    determine_tile_layout,
-    detile,
-)
 
 
 @dataclass
