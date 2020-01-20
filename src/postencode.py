@@ -24,12 +24,11 @@ class JpegPostencoder(Postencoder):
     ):
         self.tensor_layout = tensor_layout
         self.postencoder_config = postencoder_config
+        self.tiled_layout = determine_tile_layout(tensor_layout)
 
     def run(self, arr: np.ndarray) -> ByteString:
-        tensor_layout = self.tensor_layout
         quality = self.postencoder_config.quality
-        tiled_layout = determine_tile_layout(tensor_layout)
-        tiled_tensor = tile(arr, tensor_layout, tiled_layout)
+        tiled_tensor = tile(arr, self.tensor_layout, self.tiled_layout)
         tiled_tensor = np.tile(tiled_tensor[..., np.newaxis], 3)
         tiled_tensor = _pad(tiled_tensor, JpegPostencoder.MBU_SIZE)
         client_bytes = _jpeg_encode(tiled_tensor, quality)
