@@ -1,22 +1,20 @@
 import json
 import textwrap
 import urllib.request
-from io import BytesIO
 from typing import ByteString, Dict, List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-from PIL import Image
 from tensorflow import keras
 
 from src.analysis.utils import prefix_of, release_models
 from src.layouts import TensorLayout
 from src.modelconfig import ModelConfig, PostencoderConfig
+from src.postencode import JpegPostencoder
 from src.predecode import get_predecoder
 from src.split import split_model
-from src.tile import determine_tile_layout, tile
 
 BATCH_SIZE = 16
 BYTES_PER_KB = 1000
@@ -100,30 +98,12 @@ def _parse_row(path, label):
     return img, label
 
 
-def _jpeg_encode(arr: np.ndarray, quality: int) -> ByteString:
-    img = Image.fromarray(arr)
-    with BytesIO() as buf:
-        img.save(buf, "JPEG", quality=quality)
-        buf.seek(0)
-        return buf.read()
-
-
-def _pad(img: np.ndarray) -> np.ndarray:
-    MBU_SIZE = 16
-    py = -img.shape[0] % MBU_SIZE
-    px = -img.shape[1] % MBU_SIZE
-    return np.pad(img, ((0, py), (0, px), (0, 0)))
-
-
 def _postencode(
     client_tensor: np.ndarray, tensor_layout: TensorLayout, quality: int
 ) -> ByteString:
-    tiled_layout = determine_tile_layout(tensor_layout)
-    tiled_tensor = tile(client_tensor, tensor_layout, tiled_layout)
-    tiled_tensor = np.tile(tiled_tensor[..., np.newaxis], 3)
-    tiled_tensor = _pad(tiled_tensor)
-    client_bytes = _jpeg_encode(tiled_tensor, quality)
-    return client_bytes
+    postencoder_config = PostencoderConfig("jpeg", quality)
+    postencoder = JpegPostencoder(tensor_layout, postencoder_config)
+    return postencoder.run(client_tensor)
 
 
 def _predecode(
@@ -131,7 +111,7 @@ def _predecode(
     model_config: ModelConfig,
     tensor_layout: TensorLayout,
 ) -> np.ndarray:
-    postencoder_config = PostencoderConfig("jpeg", 100)
+    postencoder_config = PostencoderConfig("jpeg", None)
     predecoder = get_predecoder(
         postencoder_config, model_config, tensor_layout
     )

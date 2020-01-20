@@ -19,6 +19,11 @@ def analyze_model(model_name: str, model_configs: List[ModelConfig]):
     model: keras.Model = keras.models.load_model(model_path)
     model.compile(**compile_kwargs)
     analyze_accuracy_vs_kb(model, model_configs)
+    # TODO jpeg only at the moment
+    # TODO analyze_neuron_histogram
+    # TODO analyze_video (accuracies? what are we analyzing here?)
+    # TODO analyze_featuremap (why? just a visual?)
+    # analyze sensitivity, static/dynamic components, etc
     release_models(model)
 
 
