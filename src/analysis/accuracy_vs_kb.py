@@ -1,15 +1,13 @@
-import json
 import textwrap
-import urllib.request
 from collections import defaultdict
 from typing import Callable, Dict, List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 import tensorflow as tf
 from tensorflow import keras
 
+from src.analysis.dataset import dataset_kb
 from src.analysis.utils import prefix_of, release_models
 from src.layouts import TensorLayout
 from src.modelconfig import ModelConfig, PostencoderConfig
@@ -55,9 +53,8 @@ def compute_dataset_accuracies(
 def analyze_accuracy_vs_kb(
     model: keras.Model, model_configs: List[ModelConfig]
 ):
-    df = pd.read_csv(csv_path)
     accuracies_server = [
-        (kb, _evaluate_accuracy_kb(df, model, kb)) for kb in range(1, 31)
+        (kb, _evaluate_accuracy_kb(model, kb)) for kb in range(1, 31)
     ]
     encoders = ["UniformQuantizationU8Encoder"]
     model_configs = [x for x in model_configs if x.encoder in encoders]
@@ -69,16 +66,14 @@ def analyze_accuracy_vs_kb(
             model, model_config
         )
         accuracies_shared = _evaluate_accuracies_shared_kb(
-            df, model_client, model_server
+            model_client, model_server
         )
         _plot_accuracy_vs_kb(prefix, accuracies_server, accuracies_shared)
         release_models(model_client, model_server, model_analysis)
 
 
-def _evaluate_accuracy_kb(
-    df: pd.DataFrame, model: keras.Model, kb: int,
-) -> float:
-    dataset = _dataset_from(df, kb)
+def _evaluate_accuracy_kb(model: keras.Model, kb: int,) -> float:
+    dataset = dataset_kb(kb)
     predictions = model.predict(dataset.batch(BATCH_SIZE))
     labels = np.array(list(dataset.map(lambda x, l: l).as_numpy_iterator()))
     accuracies = _categorical_top1_accuracy(labels, predictions)
@@ -86,10 +81,10 @@ def _evaluate_accuracy_kb(
 
 
 def _evaluate_accuracies_shared_kb(
-    df: pd.DataFrame, model_client: keras.Model, model_server: keras.Model,
+    model_client: keras.Model, model_server: keras.Model,
 ) -> List[Tuple[int, float]]:
     accuracies_shared = defaultdict(list)
-    dataset = _dataset_from(df, 30).batch(BATCH_SIZE)
+    dataset = dataset_kb().batch(BATCH_SIZE)
     client_tensors = model_client.predict(dataset)
     quality_lookup = _make_quality_lut(client_tensors)
     kb_lookup = [{q: kb for kb, q in d.items()} for d in quality_lookup]
@@ -130,45 +125,6 @@ def _evaluate_accuracies_shared_kb(
         for kb in range(1, 31)
         if len(accuracies_shared[kb]) != 0
     ]
-
-
-def _get_imagenet_labels() -> Dict[str, List[str]]:
-    try:
-        with open("imagenet_class_index.json", "r") as f:
-            json_data = f.read()
-    except FileNotFoundError:
-        url = (
-            "https://storage.googleapis.com/download.tensorflow.org/data/"
-            "imagenet_class_index.json"
-        )
-        response = urllib.request.urlopen(url)
-        json_data = response.read()
-        with open("imagenet_class_index.json", "wb") as f:
-            f.write(json_data)
-
-    return json.loads(json_data)
-
-
-def _get_imagenet_reverse_lookup() -> Dict[str, int]:
-    d = _get_imagenet_labels()
-    return {name: int(idx) for idx, (name, label) in d.items()}
-
-
-imagenet_lookup = _get_imagenet_reverse_lookup()
-
-
-def _dataset_from(df: pd.DataFrame, kb: int) -> tf.data.Dataset:
-    filepaths = df["file"].map(lambda x: f"{data_dir}/{kb}kb/{x}")
-    labels = df["label"].replace(imagenet_lookup)
-    dataset = tf.data.Dataset.from_tensor_slices((filepaths, labels))
-    dataset = dataset.map(_parse_row)
-    return dataset
-
-
-def _parse_row(path, label):
-    raw = tf.io.read_file(path)
-    img = tf.image.decode_jpeg(raw)
-    return img, label
 
 
 def _make_quality_lut(
