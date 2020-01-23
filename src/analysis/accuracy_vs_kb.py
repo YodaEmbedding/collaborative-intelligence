@@ -75,7 +75,7 @@ def analyze_accuracy_vs_kb(
 def _evaluate_accuracy_kb(model: keras.Model, kb: int,) -> float:
     dataset = dataset_kb(kb)
     predictions = model.predict(dataset.batch(BATCH_SIZE))
-    labels = np.array(list(dataset.map(lambda x, l: l).as_numpy_iterator()))
+    labels = np.array(list(dataset.map(lambda x, l: l)))
     accuracies = _categorical_top1_accuracy(labels, predictions)
     return np.mean(accuracies)
 
