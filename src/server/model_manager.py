@@ -69,7 +69,7 @@ class ModelManager:
         model = self.models[model_config].model
         if model is None:
             return data_tensor
-        return model.predict(data_tensor)
+        return model.predict_on_batch(data_tensor)
 
     def decode_predictions(
         self,
@@ -91,7 +91,8 @@ def _load_model(model_config: ModelConfig) -> keras.Model:
     model_name = model_config.model
     if model_config.layer == "server":
         return keras.models.load_model(
-            filepath=f"models/{model_name}/{model_name}-full.h5"
+            filepath=f"models/{model_name}/{model_name}-full.h5",
+            compile=False,
         )
     if model_config.layer == "client":
         return None
@@ -101,5 +102,6 @@ def _load_model(model_config: ModelConfig) -> keras.Model:
         custom_objects[decoder] = decoders[decoder]
     return keras.models.load_model(
         filepath=f"models/{model_config.to_path()}-server.h5",
+        compile=False,
         custom_objects=custom_objects,
     )

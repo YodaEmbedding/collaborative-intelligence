@@ -19,11 +19,6 @@ BATCH_SIZE = 64
 BYTES_PER_KB = 1000
 data_dir = "data"
 csv_path = f"{data_dir}/data.csv"
-compile_kwargs = {
-    "loss": "sparse_categorical_crossentropy",
-    "optimizer": keras.optimizers.RMSprop(),
-    "metrics": ["accuracy"],
-}
 
 
 def compute_dataset_accuracies(
