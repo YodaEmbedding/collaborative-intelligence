@@ -4,6 +4,8 @@ from typing import Callable, Dict, List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+import seaborn as sns
 import tensorflow as tf
 from tensorflow import keras
 
@@ -48,9 +50,9 @@ def compute_dataset_accuracies(
 def analyze_accuracy_vs_kb(
     model: keras.Model, model_configs: List[ModelConfig]
 ):
-    accuracies_server = [
-        (kb, _evaluate_accuracy_kb(model, kb)) for kb in range(1, 31)
-    ]
+    accuracies_server = np.concatenate(
+        [_evaluate_accuracy_kb(model, kb) for kb in range(1, 31)], axis=1
+    )
     encoders = ["UniformQuantizationU8Encoder"]
     model_configs = [x for x in model_configs if x.encoder in encoders]
 
@@ -67,17 +69,18 @@ def analyze_accuracy_vs_kb(
         release_models(model_client, model_server, model_analysis)
 
 
-def _evaluate_accuracy_kb(model: keras.Model, kb: int,) -> float:
+def _evaluate_accuracy_kb(model: keras.Model, kb: int) -> np.ndarray:
     dataset = dataset_kb(kb)
     predictions = model.predict(dataset.batch(BATCH_SIZE))
     labels = np.array(list(dataset.map(lambda x, l: l)))
     accuracies = _categorical_top1_accuracy(labels, predictions)
-    return np.mean(accuracies)
+    kbs = np.ones_like(accuracies) * kb
+    return np.vstack((kbs, accuracies))
 
 
 def _evaluate_accuracies_shared_kb(
     model_client: keras.Model, model_server: keras.Model,
-) -> List[Tuple[int, float]]:
+) -> np.ndarray:
     accuracies_shared = defaultdict(list)
     dataset = dataset_kb().batch(BATCH_SIZE)
     client_tensors = model_client.predict(dataset)
@@ -115,11 +118,12 @@ def _evaluate_accuracies_shared_kb(
         for kb, acc in zip(kbs, accuracies):
             accuracies_shared[kb].append(acc)
 
-    return [
-        (kb, np.mean(accuracies_shared[kb]))
-        for kb in range(1, 31)
-        if len(accuracies_shared[kb]) != 0
+    accuracies_shared = [
+        np.vstack((np.ones(len(xs)) * kb, np.array(xs)))
+        for kb, xs in accuracies_shared.items()
     ]
+
+    return np.concatenate(accuracies_shared, axis=1)
 
 
 def _make_quality_lut(
@@ -142,21 +146,32 @@ def _make_quality_lut(
 
 def _plot_accuracy_vs_kb(
     prefix: str,
-    accuracies_server: List[Tuple[int, float]],
-    accuracies_shared: List[Tuple[int, float]],
+    accuracies_server: np.ndarray,
+    accuracies_shared: np.ndarray,
 ):
-    kbs_server = np.array([k for (k, _) in accuracies_server]) / 1.024
-    acc_server = np.array([a for (_, a) in accuracies_server])
-    kbs_shared = np.array([k for (k, _) in accuracies_shared]) / 1.024
-    acc_shared = np.array([a for (_, a) in accuracies_shared])
+    kbs_server = accuracies_server[0] / 1.024
+    acc_server = accuracies_server[1]
+    kbs_shared = accuracies_shared[0] / 1.024
+    acc_shared = accuracies_shared[1]
+
+    data_server = pd.DataFrame({"kbs": kbs_server, "acc": acc_server})
+    data_shared = pd.DataFrame({"kbs": kbs_shared, "acc": acc_shared})
+
+    data_server.to_csv(f"{prefix}-accuracy_vs_kb-server.csv")
+    data_shared.to_csv(f"{prefix}-accuracy_vs_kb-shared.csv")
 
     title = textwrap.fill(prefix.replace("&", " "), 70)
     plt.figure()
-    plt.plot(kbs_server, acc_server, label="server-only inference")
-    plt.plot(kbs_shared, acc_shared, label="shared inference")
+    ax = sns.lineplot(x="kbs", y="acc", data=data_server)
+    ax = sns.lineplot(x="kbs", y="acc", data=data_shared)
     ax: plt.Axes = plt.gca()
-    ax.legend()
-    ax.set_xlim([0, 10])
+    ax.legend(
+        labels=["server-only inference", "shared inference"],
+        loc="lower right",
+    )
+    ax.set(xlim=(0, 30), ylim=(0, 1))
+
+    # TODO move into set
     ax.set_xlabel("KB/frame")
     ax.set_ylabel("Accuracy")
     ax.set_title(title, fontsize="xx-small")
