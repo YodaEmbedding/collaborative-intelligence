@@ -11,10 +11,6 @@ from src.analysis.utils import prefix_of, release_models
 from src.modelconfig import ModelConfig
 from src.split import split_model
 
-# tf.compat.v1.disable_eager_execution()
-# TODO import keras.losses
-# keras.losses.custom_loss = custom_loss
-
 
 compile_kwargs = {
     "loss": "sparse_categorical_crossentropy",
@@ -23,11 +19,10 @@ compile_kwargs = {
     "run_eagerly": False,
 }
 
-# TODO save_weights and load_weights? avoids compiled model?
+
 def model_by_name(model_name: str) -> keras.Model:
     model_path = f"models/{model_name}/{model_name}-full.h5"
     model = keras.models.load_model(model_path, compile=False)
-    # model.compile(**compile_kwargs)
     return model
 
 
@@ -38,31 +33,16 @@ def analyze_latency(
     # TODO also plot model layer sizes...? (transmitted over network)
     # TODO ^ also, plot for postencoders at various minimal acceptable accuracy % degradations, using accuracy_vs_kb analysis
     # TODO should be able to "estimate" or "simulate" total latency before deploying to mobile. :)
-    # img = Image.open("sample.jpg")
-    dataset = dataset_kb()
 
     BATCH_SIZE = 1
+    dataset = dataset_kb()
     n = len(list(dataset))
-    # n = len(list(dataset)) // BATCH_SIZE * BATCH_SIZE
-
     model.compile(**compile_kwargs)
     t1 = time()
-
-    # for img, _ in dataset.as_numpy_iterator():
-    # for img, _ in dataset.take(n).batch(BATCH_SIZE):
-
-    # self._experimental_run_tf_function = True
-
-    # for img, _ in dataset.batch(1):
-    #     _ = model.predict(img)
 
     # TODO has further perf improvements in TF 2.1? so maybe upgrade ubuntu
     for img, _ in dataset.batch(1):
         _ = model.predict_on_batch(img)
-
-    # for img, _ in dataset.batch(1):
-    #     _ = model(img)
-    # _ = model(img, training=False)
 
     t2 = time()
     ms = int(1000 * (t2 - t1) / n)
@@ -130,9 +110,6 @@ def analyze_distribution(model: keras.Model, model_configs: List[ModelConfig]):
             print("\n".join(f"{k}: {v}" for k, v in stats.items()))
             print("")
 
-        # if "encoded" in pred:
-        #     pred["encoded"]
-
         # TODO print max, min, mean, stddev
         # max/min also have their own mean/stddev
         # There's also min/max of the means... and stddev of the means...
@@ -145,8 +122,8 @@ def analyze_distribution(model: keras.Model, model_configs: List[ModelConfig]):
 def analyze_model(model_name: str, model_configs: List[ModelConfig]):
     model = model_by_name(model_name)
 
-    analyze_distribution(model, model_configs)
-    analyze_latency(model, model_name, model_configs)
+    # analyze_distribution(model, model_configs)
+    # analyze_latency(model, model_name, model_configs)
     analyze_accuracy_vs_kb(model, model_configs)
     # TODO jpeg only at the moment
     # TODO analyze_neuron_histogram
@@ -178,3 +155,4 @@ if __name__ == "__main__":
 
 
 # TODO move generate_models analysis stuff here...
+# TODO include scripts for generating data/{}kb
