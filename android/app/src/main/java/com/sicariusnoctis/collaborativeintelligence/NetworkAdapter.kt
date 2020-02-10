@@ -135,7 +135,10 @@ class NetworkAdapter {
             frameRequest.info.modelConfig, frameRequest.info.postencoderConfig
         )
         if (processorConfig != processorConfigFrameRequest) {
-            throw Exception("Frame request model config $processorConfigFrameRequest does not match last sent processor config $processorConfig")
+            val msg = "Frame request model config $processorConfigFrameRequest " +
+                    "does not match last sent processor config $processorConfig"
+            Log.e(TAG, msg)
+            // throw Exception(msg)
         }
         writeData(frameRequest.info.frameNumber, frameRequest.obj)
         Log.i(TAG, "Request sent")
