@@ -11,8 +11,8 @@ from matplotlib import cm
 from matplotlib.colors import Normalize
 from PIL import Image
 
-from src.layouts import TensorLayout
-from src.tile import determine_tile_layout, tile
+from src.lib.layouts import TensorLayout
+from src.lib.tile import determine_tile_layout, tile
 
 
 class MonitorStats:

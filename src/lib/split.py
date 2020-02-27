@@ -1,30 +1,28 @@
-from typing import Dict, List, Sequence, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.layers import Layer
 from tensorflow.python.framework.ops import Tensor
 
-from .layers import decoders, encoders
-from .modelconfig import ModelConfig
-
-tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
-
 
 def split_model(
-    model: keras.Model, model_config: ModelConfig
+    model: keras.Model,
+    layer: str,
+    encoder: Optional[Layer] = None,
+    decoder: Optional[Layer] = None,
 ) -> Tuple[keras.Model, keras.Model, keras.Model]:
-    """Split model by given layer index.
+    """Split model by given layer name.
 
     Attaches encoder layer to end of client model. Attaches decoder
     layer to beginning of server model.
 
     Returns:
-        - model_client
-        - model_server
-        - model_analysis
+        model_client
+        model_server
+        model_analysis
     """
-    split_idx = _get_layer_idx_by_name(model, model_config.layer)
+    split_idx = _get_layer_idx_by_name(model, layer)
     layers = model.layers
     first_layer = layers[0]
     split_layer = layers[split_idx]
@@ -45,8 +43,7 @@ def split_model(
     x_dict["client_result"] = x
 
     # Client-side (encoder)
-    if model_config.encoder != "None":
-        encoder = encoders[model_config.encoder](**model_config.encoder_args)
+    if encoder is not None:
         x = encoder(x)
         x_dict["client_encoded"] = x
 
@@ -59,8 +56,7 @@ def split_model(
     inputs2 = x2
 
     # Server-side (decoder)
-    if model_config.decoder != "None":
-        decoder = decoders[model_config.decoder](**model_config.decoder_args)
+    if decoder is not None:
         x = decoder(x)
         x2 = decoder(x2)
         x_dict["server_decoded"] = x
@@ -83,7 +79,7 @@ def split_model(
     return model1, model2, model3
 
 
-def copy_model(model: keras.Model) -> Tuple[keras.Model, keras.Model]:
+def copy_model(model: keras.Model) -> keras.Model:
     # return keras.models.clone_model(model)
     layers = model.layers
     first_layer = layers[0]

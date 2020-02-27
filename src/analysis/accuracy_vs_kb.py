@@ -11,11 +11,11 @@ from tensorflow import keras
 
 from src.analysis.dataset import dataset_kb
 from src.analysis.utils import prefix_of, release_models
-from src.layouts import TensorLayout
-from src.modelconfig import ModelConfig, PostencoderConfig
-from src.postencode import JpegPostencoder, Postencoder
-from src.predecode import JpegPredecoder, Predecoder
-from src.split import split_model
+from src.lib.layouts import TensorLayout
+from src.lib.postencode import JpegPostencoder, Postencoder
+from src.lib.predecode import JpegPredecoder, Predecoder
+from src.modelconfig import ModelConfig
+from src.utils import split_model_by_config
 
 BATCH_SIZE = 64
 BYTES_PER_KB = 1000
@@ -59,7 +59,7 @@ def analyze_accuracy_vs_kb(
     for model_config in model_configs:
         print(f"Analyzing accuracy vs KB\n{model_config}\n")
         prefix = prefix_of(model_config)
-        model_client, model_server, model_analysis = split_model(
+        model_client, model_server, model_analysis = split_model_by_config(
             model, model_config
         )
         accuracies_shared = _evaluate_accuracies_shared_kb(
@@ -100,8 +100,7 @@ def _evaluate_accuracies_shared_kb(
             .map(lambda x, c: x)
         )
 
-        postencoder_config = PostencoderConfig("jpeg", quality)
-        postencoder = JpegPostencoder(tensor_layout, postencoder_config)
+        postencoder = JpegPostencoder(tensor_layout, quality)
         tiled_layout = postencoder.tiled_layout
         predecoder = JpegPredecoder(tiled_layout, tensor_layout)
 
@@ -134,8 +133,7 @@ def _make_quality_lut(
         tensor_layout = TensorLayout.from_tensor(client_tensor, "hwc")
         d = {}
         for quality in range(1, 101):
-            postencoder_config = PostencoderConfig("jpeg", quality)
-            postencoder = JpegPostencoder(tensor_layout, postencoder_config)
+            postencoder = JpegPostencoder(tensor_layout, quality)
             encoded_bytes = postencoder.run(client_tensor)
             kb = int(len(encoded_bytes) / BYTES_PER_KB)
             if kb not in d:
@@ -145,9 +143,7 @@ def _make_quality_lut(
 
 
 def _plot_accuracy_vs_kb(
-    prefix: str,
-    accuracies_server: np.ndarray,
-    accuracies_shared: np.ndarray,
+    prefix: str, accuracies_server: np.ndarray, accuracies_shared: np.ndarray,
 ):
     kbs_server = accuracies_server[0] / 1.024
     acc_server = accuracies_server[1]

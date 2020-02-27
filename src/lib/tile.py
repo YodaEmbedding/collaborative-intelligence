@@ -6,7 +6,7 @@ from typing import List, Tuple
 
 import numpy as np
 
-from src.layouts import TensorLayout, TiledArrayLayout
+from src.lib.layouts import TensorLayout, TiledArrayLayout
 
 
 def tile(

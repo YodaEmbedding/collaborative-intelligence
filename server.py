@@ -14,9 +14,9 @@ from typing import ByteString, Dict
 
 import numpy as np
 
-from src.layouts import TensorLayout
+from src.lib.layouts import TensorLayout
+from src.lib.predecode import Predecoder
 from src.modelconfig import ModelConfig, ProcessorConfig
-from src.predecode import Predecoder, get_predecoder
 from src.server import monitor_client
 from src.server.comm import (
     json_confirmation,
@@ -28,6 +28,7 @@ from src.server.model_manager import ModelManager
 from src.server.monitor_client import MonitorStats, image_preview
 from src.server.reader import read_item
 from src.server.work_distributor import SmartProcessor, WorkDistributor
+from src.utils import get_predecoder
 
 IP = "0.0.0.0"
 PORT = 5678

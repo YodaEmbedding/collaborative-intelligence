@@ -17,10 +17,11 @@ from tensorflow.keras.utils import plot_model
 
 from src.analysis import plot
 from src.analysis.video import read_video, write_video
-from src.layouts import TensorLayout, TiledArrayLayout
+from src.lib.layouts import TensorLayout, TiledArrayLayout
+from src.lib.split import copy_model
+from src.lib.tile import determine_tile_layout
 from src.modelconfig import ModelConfig
-from src.split import copy_model, split_model
-from src.tile import determine_tile_layout
+from src.utils import split_model_by_config
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
@@ -227,7 +228,7 @@ def run_split(
         return
 
     # Load and save split model
-    model_client, model_server, model_analysis = split_model(
+    model_client, model_server, model_analysis = split_model_by_config(
         model, model_config
     )
 

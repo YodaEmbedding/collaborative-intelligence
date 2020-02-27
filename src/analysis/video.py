@@ -4,8 +4,8 @@ import cv2
 import numpy as np
 import tensorflow.keras.backend as K  # pylint: disable=import-error
 
-from src.layouts import TensorLayout, TiledArrayLayout
-from src.tile import detile, tile
+from src.lib.layouts import TensorLayout, TiledArrayLayout
+from src.lib.tile import detile, tile
 
 
 def read_video(

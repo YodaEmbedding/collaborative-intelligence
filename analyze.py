@@ -9,8 +9,7 @@ from src.analysis.accuracy_vs_kb import analyze_accuracy_vs_kb
 from src.analysis.dataset import dataset_kb
 from src.analysis.utils import prefix_of, release_models
 from src.modelconfig import ModelConfig
-from src.split import split_model
-
+from src.utils import split_model_by_config
 
 compile_kwargs = {
     "loss": "sparse_categorical_crossentropy",
@@ -74,7 +73,7 @@ def analyze_distribution(model: keras.Model, model_configs: List[ModelConfig]):
     for model_config in model_configs:
         print(f"Analyzing distribution\n{model_config}\n")
         prefix = prefix_of(model_config)
-        model_client, model_server, model_analysis = split_model(
+        model_client, model_server, model_analysis = split_model_by_config(
             model, model_config
         )
 

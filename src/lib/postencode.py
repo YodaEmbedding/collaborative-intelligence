@@ -4,9 +4,8 @@ from typing import ByteString
 import numpy as np
 from PIL import Image
 
-from src.layouts import TensorLayout
-from src.modelconfig import PostencoderConfig
-from src.tile import determine_tile_layout, tile
+from src.lib.layouts import TensorLayout
+from src.lib.tile import determine_tile_layout, tile
 
 
 class Postencoder:
@@ -18,20 +17,17 @@ class JpegPostencoder(Postencoder):
     MBU_SIZE = 16
 
     def __init__(
-        self,
-        tensor_layout: TensorLayout,
-        postencoder_config: PostencoderConfig,
+        self, tensor_layout: TensorLayout, quality: int = None,
     ):
         self.tensor_layout = tensor_layout
-        self.postencoder_config = postencoder_config
+        self.quality = quality
         self.tiled_layout = determine_tile_layout(tensor_layout)
 
     def run(self, arr: np.ndarray) -> ByteString:
-        quality = self.postencoder_config.quality
         tiled_tensor = tile(arr, self.tensor_layout, self.tiled_layout)
         tiled_tensor = np.tile(tiled_tensor[..., np.newaxis], 3)
         tiled_tensor = _pad(tiled_tensor, JpegPostencoder.MBU_SIZE)
-        client_bytes = _jpeg_encode(tiled_tensor, quality)
+        client_bytes = _jpeg_encode(tiled_tensor, self.quality)
         return client_bytes
 
 
