@@ -31,6 +31,20 @@ class JpegPostencoder(Postencoder):
         return client_bytes
 
 
+class H264Postencoder(Postencoder):
+    def __init__(self, tensor_layout: TensorLayout):
+        self.tensor_layout = tensor_layout
+        self.tiled_layout = determine_tile_layout(tensor_layout)
+
+    def run(self, arr: np.ndarray) -> ByteString:
+        tiled_tensor = tile(arr, self.tensor_layout, self.tiled_layout)
+        tiled_tensor = np.tile(tiled_tensor[..., np.newaxis], 3)
+        tiled_tensor = _pad(tiled_tensor, JpegPostencoder.MBU_SIZE)
+        # client_bytes = _h264_encode(tiled_tensor, self.quality)
+        # TODO
+        # return client_bytes
+
+
 def _jpeg_encode(arr: np.ndarray, quality: int) -> ByteString:
     img = Image.fromarray(arr)
     with BytesIO() as buf:

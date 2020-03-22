@@ -2,12 +2,19 @@ import json
 import urllib.request
 from typing import Dict, List
 
+import numpy as np
 import pandas as pd
 import tensorflow as tf
+from PIL import Image
 
+# TODO lazy?
 data_dir = "data"
 csv_path = f"{data_dir}/data.csv"
 df = pd.read_csv(csv_path)
+
+
+def single_sample_image() -> np.ndarray:
+    return np.array(Image.open("sample224.jpg"))
 
 
 def _get_imagenet_labels() -> Dict[str, List[str]]:
@@ -32,6 +39,7 @@ def _get_imagenet_reverse_lookup() -> Dict[str, int]:
     return {name: int(idx) for idx, (name, label) in d.items()}
 
 
+# TODO put this into a function that you can just @cache
 imagenet_lookup = _get_imagenet_reverse_lookup()
 
 

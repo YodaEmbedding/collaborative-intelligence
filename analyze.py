@@ -133,6 +133,24 @@ def analyze_model(model_name: str, model_configs: List[ModelConfig]):
     release_models(model)
 
 
+# TODO Refactor
+
+# ModelConfig based:
+# For each model,
+#   For each split by model_config,
+#       U8: Determine good range via mean/std/etc
+#       ...
+#       layer output histogram
+#       baseline accuracy (simple? no compress?)
+
+#       accuracy_vs_kb...???
+
+# Not ModelConfig based:
+# For each model,
+#   For each split,
+#       latency???? (do we really need to split for this? I guess... but we should )
+
+
 def main():
     with open("models.json") as f:
         d = json.load(f)

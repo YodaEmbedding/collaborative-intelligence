@@ -1,13 +1,73 @@
 import gc
-from typing import List
+from functools import wraps
+from multiprocessing import Process
+from time import sleep
+from typing import Iterator, List
 
 from tensorflow import keras
+from tensorflow.keras.layers import Layer
 
 from src.modelconfig import ModelConfig
+
+compile_kwargs = {
+    "loss": "sparse_categorical_crossentropy",
+    "optimizer": keras.optimizers.RMSprop(),
+    "metrics": [],
+    "run_eagerly": False,
+}
+
+
+def get_cut_layers(root: Layer) -> Iterator[Layer]:
+    """Obtain list of all layers that cut the graph.
+
+    Given the root layer of a directed acyclic graph (DAG) with a single
+    input layer and single output layer, yield root layer, then yield
+    any layers that are "cut vertices" in order of distance from the
+    root layer, and finally, yield output layer.
+    """
+    fringe = {root}
+    waiting = {}
+    visited = set()
+
+    while len(fringe) != 0:
+        curr = fringe.pop()
+        visited.add(curr)
+
+        if len(fringe) + len(waiting) == 0:
+            yield curr
+
+        for node in curr.outbound_nodes:
+            node = node.outbound_layer
+            x = node.inbound_nodes[0].inbound_layers
+            inbound_layers = x if isinstance(x, list) else [x]
+            if node in visited:
+                continue
+            if node in waiting:
+                waiting[node] -= 1
+                if waiting[node] == 0:
+                    del waiting[node]
+                    fringe.add(node)
+            elif len(inbound_layers) > 1:
+                waiting[node] = len(inbound_layers) - 1
+            else:
+                fringe.add(node)
+
+
+def basename_of(
+    model_name: str, layer_name: str, layer_i: int, layer_n: int
+) -> str:
+    d = len(str(layer_n))
+    return f"{model_name}-{layer_i:0{d}}of{layer_n:0{d}}-{layer_name}"
 
 
 def prefix_of(model_config: ModelConfig) -> str:
     return f"models/{model_config.to_path()}"
+
+
+def title_of(
+    model_name: str, layer_name: str, layer_i: int, layer_n: int
+) -> str:
+    return f"{model_name} {layer_name} ({layer_i}/{layer_n})"
 
 
 def release_models(*models: List[keras.Model]):
@@ -16,3 +76,19 @@ def release_models(*models: List[keras.Model]):
     gc.collect()
     keras.backend.clear_session()
     gc.collect()
+
+
+def separate_process(sleep_after: int = 0):
+    """Run decorated function in a separate process."""
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            p = Process(target=func, args=args, kwargs=kwargs)
+            p.start()
+            p.join()
+            sleep(sleep_after)
+
+        return wrapper
+
+    return decorator
