@@ -4,18 +4,12 @@ import numpy as np
 from tensorflow import keras
 
 from src.analysis.dataset import single_sample_image
-from src.analysis.utils import compile_kwargs, release_models
-from src.lib.split import split_model
 
 
-# @separate_process()
-def analyze_latencies_layer(model: keras.Model, layer_name: str):
-    model_client, model_server, model_analysis = split_model(
-        model, layer=layer_name
-    )
-    model_client.compile(**compile_kwargs)
-    model_server.compile(**compile_kwargs)
-    model_analysis.compile(**compile_kwargs)
+# TODO plot bar chart
+# TODO exclude GPU -> RAM data copy time (e.g. via Stage or tf.profiler)
+# TODO plot stacked bar chart including GPU -> RAM data copy time
+def analyze_latencies_layer(model_client: keras.Model, layer_name: str):
     num_samples = 100
     data = single_sample_image()[np.newaxis].astype(np.float32)
     t0 = time()
@@ -23,5 +17,5 @@ def analyze_latencies_layer(model: keras.Model, layer_name: str):
         model_client.predict(data)
     t1 = time()
     t = (t1 - t0) / num_samples
-    release_models(model_client, model_server, model_analysis)
-    print(f"{layer_name:20}{int(t * 1000)}")
+    print("{}".format("cumulative time (ms)"))
+    print(f"{int(t * 1000)}")

@@ -4,31 +4,18 @@ from PIL import Image
 from tensorflow import keras
 
 from src.analysis import plot
-from src.analysis.utils import (
-    basename_of,
-    compile_kwargs,
-    release_models,
-    title_of,
-)
+from src.analysis.utils import basename_of, title_of
 from src.lib.layouts import TensorLayout
-from src.lib.split import split_model
 from src.lib.tile import as_order, determine_tile_layout, tile_chw
 
 
-# @separate_process()
 def analyze_motions_layer(
     model_name: str,
-    model: keras.Model,
+    model_client: keras.Model,
     layer_name: str,
     layer_i: int,
     layer_n: int,
 ):
-    model_client, model_server, model_analysis = split_model(
-        model, layer=layer_name
-    )
-    model_client.compile(**compile_kwargs)
-    model_server.compile(**compile_kwargs)
-    model_analysis.compile(**compile_kwargs)
     shape = model_client.output_shape[1:]
     if len(shape) != 3:
         return
@@ -97,6 +84,3 @@ def analyze_motions_layer(
     # top row: input image frame
     # med row: intermediate tensor output
     # bot row: optical flow
-
-    release_models(model_client, model_server, model_analysis)
-    print(f"{layer_name:20}")

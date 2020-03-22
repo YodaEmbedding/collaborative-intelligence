@@ -3,29 +3,18 @@ from tensorflow import keras
 
 from src.analysis import plot
 from src.analysis.dataset import single_sample_image
-from src.analysis.utils import (
-    basename_of,
-    compile_kwargs,
-    release_models,
-    title_of,
-)
-from src.lib.split import split_model
+from src.analysis.utils import basename_of, title_of
 
 
-# @separate_process()
+# TODO remove frequency y-label or scale it as a continuous density
+# TODO do this over multiple dataset samples?
 def analyze_histograms_layer(
     model_name: str,
-    model: keras.Model,
+    model_client: keras.Model,
     layer_name: str,
     layer_i: int,
     layer_n: int,
 ):
-    model_client, model_server, model_analysis = split_model(
-        model, layer=layer_name
-    )
-    model_client.compile(**compile_kwargs)
-    model_server.compile(**compile_kwargs)
-    model_analysis.compile(**compile_kwargs)
     data = single_sample_image()[np.newaxis].astype(np.float32)
     pred = model_client.predict(data)
     mean = np.mean(pred)
@@ -34,5 +23,5 @@ def analyze_histograms_layer(
     basename = basename_of(model_name, layer_name, layer_i, layer_n)
     fig = plot.neuron_histogram(pred, title, bins=100)
     plot.save(fig, f"img/histogram/{basename}.png")
-    release_models(model_client, model_server, model_analysis)
-    print(f"{layer_name:20}{mean:8.2f}{std:8.2f}")
+    print("{:8} {:8}".format("mean", "stddev"))
+    print(f"{mean:8.2f} {std:8.2f}")
