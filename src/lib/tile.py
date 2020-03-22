@@ -25,12 +25,12 @@ def tile(
     assert in_layout.shape == out_layout.orig_shape_in_order(in_layout.order)
     assert arr.shape == in_layout.shape
     arr = _as_chw(arr, in_layout.order)
-    arr = _tile_chw(arr, out_layout.nrows, out_layout.ncols)
+    arr = tile_chw(arr, out_layout.nrows, out_layout.ncols)
     assert arr.shape == out_layout.shape
     return arr
 
 
-def _tile_chw(arr: np.ndarray, nrows: int, ncols: int) -> np.ndarray:
+def tile_chw(arr: np.ndarray, nrows: int, ncols: int) -> np.ndarray:
     """
     Args:
         arr: chw tensor
@@ -40,17 +40,17 @@ def _tile_chw(arr: np.ndarray, nrows: int, ncols: int) -> np.ndarray:
     Returns:
         np.ndarray: tiled array
     """
-    c, h, w = arr.shape
+    c, h, w, *extra_dims = arr.shape
     assert c <= nrows * ncols
 
     if c < nrows * ncols:
         arr = arr.reshape(-1).copy()
-        arr.resize(nrows * ncols * h * w)
+        arr.resize(nrows * ncols * h * w * np.prod(extra_dims, dtype=int))
 
     return (
-        arr.reshape(nrows, ncols, h, w)
+        arr.reshape(nrows, ncols, h, w, *extra_dims)
         .swapaxes(1, 2)
-        .reshape(nrows * h, ncols * w)
+        .reshape(nrows * h, ncols * w, *extra_dims)
     )
 
 
@@ -69,13 +69,13 @@ def detile(
     """
     assert out_layout.shape == in_layout.orig_shape_in_order(out_layout.order)
     assert arr.shape == in_layout.shape
-    arr = _detile_chw(arr, **in_layout.__dict__)
-    arr = _as_order(arr, "chw", out_layout.order)
+    arr = detile_chw(arr, **in_layout.__dict__)
+    arr = as_order(arr, "chw", out_layout.order)
     assert arr.shape == out_layout.shape
     return arr
 
 
-def _detile_chw(
+def detile_chw(
     arr: np.ndarray, c: int, h: int, w: int, nrows: int, ncols: int, **kwargs
 ) -> np.ndarray:
     """
@@ -98,7 +98,7 @@ def _detile_chw(
     )
 
 
-def _as_order(arr: np.ndarray, in_order: str, out_order: str) -> np.ndarray:
+def as_order(arr: np.ndarray, in_order: str, out_order: str) -> np.ndarray:
     if in_order == out_order:
         return arr
     if out_order == "chw":
@@ -112,13 +112,13 @@ def _as_chw(arr: np.ndarray, order: str) -> np.ndarray:
     if order == "chw":
         return arr
     if order == "hwc":
-        return np.rollaxis(arr, 2, 0)
+        return np.rollaxis(arr, -1, -3)
     raise ValueError(f"Cannot convert to chw from {order}")
 
 
 def _as_hwc(arr: np.ndarray, order: str) -> np.ndarray:
     if order == "chw":
-        return np.rollaxis(arr, 0, 3)
+        return np.rollaxis(arr, -3, len(arr.shape))
     if order == "hwc":
         return arr
     raise ValueError(f"Cannot convert to hwc from {order}")
