@@ -9,6 +9,10 @@ from tensorflow import keras
 
 from src.analysis import plot
 from src.analysis.methods.accuracyvskb import analyze_accuracyvskb_layer
+from src.analysis.methods.featuremap import (
+    analyze_featuremap_layer,
+    analyze_featuremapcompression_layer,
+)
 from src.analysis.methods.histograms import analyze_histograms_layer
 from src.analysis.methods.latencies import analyze_latencies_layer
 from src.analysis.methods.motions import analyze_motions_layer
@@ -66,6 +70,7 @@ def analyze_layer(
     model_server.compile(**compile_kwargs)
     model_analysis.compile(**compile_kwargs)
 
+    # TODO experiment if accuracy improves depending on how much clipping we do
     d = analyze_histograms_layer(model_name, model_client, layer_name, i, n)
     clip_range = (d["mean"] - 4 * d["std"], d["mean"] + 4 * d["std"])
 
@@ -79,6 +84,10 @@ def analyze_layer(
     # model_server_u8.compile(**compile_kwargs)
     # model_analysis_u8.compile(**compile_kwargs)
 
+    analyze_featuremap_layer(model_name, model_client, layer_name, i, n)
+    analyze_featuremapcompression_layer(
+        model_name, model_client_u8, layer_name, i, n, kbs=[2, 5, 10, 30]
+    )
     analyze_latencies_layer(model_client, layer_name)
     analyze_motions_layer(model_name, model_client, layer_name, i, n)
     analyze_accuracyvskb_layer(

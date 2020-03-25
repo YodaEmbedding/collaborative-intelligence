@@ -1,4 +1,6 @@
 from contextlib import suppress
+from math import ceil, sqrt
+from typing import Dict, Tuple
 
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
@@ -8,16 +10,57 @@ from src.lib.layouts import TensorLayout
 from src.lib.tile import determine_tile_layout, tile
 
 
-def featuremap(arr: np.ndarray, title: str, order: str = "hwc") -> plt.Figure:
+def featuremap_image(arr: np.ndarray, order: str = "hwc") -> np.ndarray:
     tensor_layout = TensorLayout.from_tensor(arr, order)
     tiled_layout = determine_tile_layout(tensor_layout)
     tiled = tile(arr, tensor_layout, tiled_layout)
+    return tiled
 
+
+def featuremap(
+    arr: np.ndarray,
+    title: str,
+    order: str = "hwc",
+    clim: Tuple[int, int] = None,
+    cbar: bool = True,
+) -> plt.Figure:
+    img = featuremap_image(arr, order)
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
-    im = ax.matshow(tiled, cmap="viridis")
+    im = ax.matshow(img, cmap="viridis")
     ax.set_title(title, fontsize="xx-small")
-    fig.colorbar(im)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    if clim is not None:
+        im.set_clim(*clim)
+    if cbar:
+        fig.colorbar(im)
+    return fig
+
+
+def featuremapcompression(
+    samples: Dict[float, np.ndarray],
+    title: str,
+    order: str = "hwc",
+    clim: Tuple[int, int] = None,
+) -> plt.Figure:
+    n = len(samples)
+    ncols = int(ceil(sqrt(len(samples))))
+    nrows = int(ceil(n / ncols))
+    fig, axes = plt.subplots(nrows, ncols)
+    for i, (kb, arr) in enumerate(samples.items()):
+        img = featuremap_image(arr, order)
+        ax = axes[i // ncols, i % ncols] if nrows > 1 else axes[i]
+        im = ax.matshow(img, cmap="viridis")
+        ax.set_title(f"{kb:.0f} KB", y=-0.16)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        if clim is not None:
+            im.set_clim(*clim)
+    for i in range(n, nrows * ncols):
+        ax = axes[i // ncols, i % ncols] if nrows > 1 else axes[i]
+        ax.axis("off")
+    fig.suptitle(title, fontsize="xx-small")
     return fig
 
 
