@@ -8,6 +8,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 from src.analysis import plot
+from src.analysis.methods.accuracyvskb import analyze_accuracyvskb_layer
 from src.analysis.methods.histograms import analyze_histograms_layer
 from src.analysis.methods.latencies import analyze_latencies_layer
 from src.analysis.methods.motions import analyze_motions_layer
@@ -16,6 +17,10 @@ from src.analysis.utils import (
     get_cut_layers,
     release_models,
     separate_process,
+)
+from src.lib.layers import (
+    UniformQuantizationU8Decoder,
+    UniformQuantizationU8Encoder,
 )
 from src.lib.split import split_model
 
@@ -61,11 +66,27 @@ def analyze_layer(
     model_server.compile(**compile_kwargs)
     model_analysis.compile(**compile_kwargs)
 
-    analyze_histograms_layer(model_name, model_client, layer_name, i, n)
+    d = analyze_histograms_layer(model_name, model_client, layer_name, i, n)
+    clip_range = (d["mean"] - 4 * d["std"], d["mean"] + 4 * d["std"])
+
+    model_client_u8, model_server_u8, model_analysis_u8 = split_model(
+        model,
+        layer=layer_name,
+        encoder=UniformQuantizationU8Encoder(clip_range),
+        decoder=UniformQuantizationU8Decoder(clip_range),
+    )
+    # model_client_u8.compile(**compile_kwargs)
+    # model_server_u8.compile(**compile_kwargs)
+    # model_analysis_u8.compile(**compile_kwargs)
+
     analyze_latencies_layer(model_client, layer_name)
     analyze_motions_layer(model_name, model_client, layer_name, i, n)
+    analyze_accuracyvskb_layer(
+        model_name, model, model_client_u8, model_server_u8, layer_name, i, n
+    )
 
     release_models(model_client, model_server, model_analysis)
+    release_models(model_client_u8, model_server_u8, model_analysis_u8)
     print("")
 
 

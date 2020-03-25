@@ -80,6 +80,8 @@ def analyze_motions_layer(
     ani.save_img(f"img/motion/{basename}.png")
     ani.save(f"img/motion/{basename}.mp4")
 
+    print("Analyzed motion")
+
     # TODO output png containing sequence of images with:
     # top row: input image frame
     # med row: intermediate tensor output

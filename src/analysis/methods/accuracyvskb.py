@@ -9,8 +9,9 @@ import seaborn as sns
 import tensorflow as tf
 from tensorflow import keras
 
+from src.analysis import plot
 from src.analysis.dataset import dataset_kb
-from src.analysis.utils import prefix_of, release_models
+from src.analysis.utils import basename_of, title_of
 from src.lib.layouts import TensorLayout
 from src.lib.postencode import JpegPostencoder, Postencoder
 from src.lib.predecode import JpegPredecoder, Predecoder
@@ -23,7 +24,36 @@ data_dir = "data"
 csv_path = f"{data_dir}/data.csv"
 
 
-def compute_dataset_accuracies(
+# TODO loop postencoders...?
+def analyze_accuracyvskb_layer(
+    model_name: str,
+    model: keras.Model,
+    model_client: keras.Model,
+    model_server: keras.Model,
+    layer_name: str,
+    layer_i: int,
+    layer_n: int,
+):
+    accuracies_server = np.concatenate(
+        [_evaluate_accuracy_kb(model, kb) for kb in range(1, 31)], axis=1
+    )
+    print("Analyzed server accuracy vs KB")
+    accuracies_shared = _evaluate_accuracies_shared_kb(
+        model_client, model_server
+    )
+    print("Analyzed shared accuracy vs KB")
+    title = title_of(model_name, layer_name, layer_i, layer_n)
+    basename = basename_of(model_name, layer_name, layer_i, layer_n)
+    fig, data_server, data_shared = _plot_accuracy_vs_kb(
+        title, accuracies_server, accuracies_shared
+    )
+    plot.save(fig, f"img/accuracyvskb/{basename}.png")
+    data_server.to_csv(f"img/accuracyvskb/{basename}-server.csv")
+    data_shared.to_csv(f"img/accuracyvskb/{basename}-shared.csv")
+    print("Analyzed accuracy vs KB")
+
+
+def _compute_dataset_accuracies(
     model_client: keras.Model,
     model_server: keras.Model,
     postencoder: Postencoder,
@@ -45,28 +75,6 @@ def compute_dataset_accuracies(
         accuracies.extend(accuracy_func(labels.numpy(), predictions))
 
     return accuracies
-
-
-def analyze_accuracy_vs_kb(
-    model: keras.Model, model_configs: List[ModelConfig]
-):
-    accuracies_server = np.concatenate(
-        [_evaluate_accuracy_kb(model, kb) for kb in range(1, 31)], axis=1
-    )
-    encoders = ["UniformQuantizationU8Encoder"]
-    model_configs = [x for x in model_configs if x.encoder in encoders]
-
-    for model_config in model_configs:
-        print(f"Analyzing accuracy vs KB\n{model_config}\n")
-        prefix = prefix_of(model_config)
-        model_client, model_server, model_analysis = split_model_by_config(
-            model, model_config
-        )
-        accuracies_shared = _evaluate_accuracies_shared_kb(
-            model_client, model_server
-        )
-        _plot_accuracy_vs_kb(prefix, accuracies_server, accuracies_shared)
-        release_models(model_client, model_server, model_analysis)
 
 
 def _evaluate_accuracy_kb(model: keras.Model, kb: int) -> np.ndarray:
@@ -104,7 +112,7 @@ def _evaluate_accuracies_shared_kb(
         tiled_layout = postencoder.tiled_layout
         predecoder = JpegPredecoder(tiled_layout, tensor_layout)
 
-        accuracies = compute_dataset_accuracies(
+        accuracies = _compute_dataset_accuracies(
             model_client,
             model_server,
             postencoder,
@@ -143,7 +151,7 @@ def _make_quality_lut(
 
 
 def _plot_accuracy_vs_kb(
-    prefix: str, accuracies_server: np.ndarray, accuracies_shared: np.ndarray,
+    title: str, accuracies_server: np.ndarray, accuracies_shared: np.ndarray
 ):
     kbs_server = accuracies_server[0] / 1.024
     acc_server = accuracies_server[1]
@@ -153,11 +161,7 @@ def _plot_accuracy_vs_kb(
     data_server = pd.DataFrame({"kbs": kbs_server, "acc": acc_server})
     data_shared = pd.DataFrame({"kbs": kbs_shared, "acc": acc_shared})
 
-    data_server.to_csv(f"{prefix}-accuracy_vs_kb-server.csv")
-    data_shared.to_csv(f"{prefix}-accuracy_vs_kb-shared.csv")
-
-    title = textwrap.fill(prefix.replace("&", " "), 70)
-    plt.figure()
+    fig = plt.figure()
     ax = sns.lineplot(x="kbs", y="acc", data=data_server)
     ax = sns.lineplot(x="kbs", y="acc", data=data_shared)
     ax: plt.Axes = plt.gca()
@@ -166,12 +170,11 @@ def _plot_accuracy_vs_kb(
         loc="lower right",
     )
     ax.set(xlim=(0, 30), ylim=(0, 1))
-
-    # TODO move into set
     ax.set_xlabel("KB/frame")
     ax.set_ylabel("Accuracy")
     ax.set_title(title, fontsize="xx-small")
-    plt.savefig(f"{prefix}-accuracy_vs_kb.png", dpi=200)
+
+    return fig, data_server, data_shared
 
 
 def _categorical_top1_accuracy(

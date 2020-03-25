@@ -1,3 +1,5 @@
+from typing import Any, Dict
+
 import numpy as np
 from tensorflow import keras
 
@@ -14,7 +16,7 @@ def analyze_histograms_layer(
     layer_name: str,
     layer_i: int,
     layer_n: int,
-):
+) -> Dict[str, Any]:
     data = single_sample_image()[np.newaxis].astype(np.float32)
     pred = model_client.predict(data)
     mean = np.mean(pred)
@@ -25,3 +27,4 @@ def analyze_histograms_layer(
     plot.save(fig, f"img/histogram/{basename}.png")
     print("{:8} {:8}".format("mean", "stddev"))
     print(f"{mean:8.2f} {std:8.2f}")
+    return {"mean": mean, "std": std}

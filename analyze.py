@@ -121,8 +121,8 @@ def analyze_distribution(model: keras.Model, model_configs: List[ModelConfig]):
 def analyze_model(model_name: str, model_configs: List[ModelConfig]):
     model = model_by_name(model_name)
 
-    # analyze_distribution(model, model_configs)
-    # analyze_latency(model, model_name, model_configs)
+    analyze_distribution(model, model_configs)
+    analyze_latency(model, model_name, model_configs)
     analyze_accuracy_vs_kb(model, model_configs)
     # TODO jpeg only at the moment
     # TODO analyze_neuron_histogram
