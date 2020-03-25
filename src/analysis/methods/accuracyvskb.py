@@ -80,7 +80,7 @@ def _compute_dataset_accuracies(
 def _evaluate_accuracy_kb(model: keras.Model, kb: int) -> np.ndarray:
     dataset = dataset_kb(kb)
     predictions = model.predict(dataset.batch(BATCH_SIZE))
-    labels = np.array(list(dataset.map(lambda x, l: l)))
+    labels = np.array(list(dataset.map(_second)))
     accuracies = _categorical_top1_accuracy(labels, predictions)
     kbs = np.ones_like(accuracies) * kb
     return np.vstack((kbs, accuracies))
@@ -103,9 +103,7 @@ def _evaluate_accuracies_shared_kb(
         keep_ds = tf.data.Dataset.from_tensor_slices(keep)
 
         dataset_quality = (
-            tf.data.Dataset.zip((dataset, keep_ds))
-            .filter(lambda x, c: c)
-            .map(lambda x, c: x)
+            tf.data.Dataset.zip((dataset, keep_ds)).filter(_second).map(_first)
         )
 
         postencoder = JpegPostencoder(tensor_layout, quality)
@@ -181,3 +179,13 @@ def _categorical_top1_accuracy(
     label: np.ndarray, pred: np.ndarray
 ) -> np.ndarray:
     return (np.argmax(pred, axis=-1) == label).astype(np.float32)
+
+
+@tf.function(autograph=False)
+def _first(x, y):
+    return x
+
+
+@tf.function(autograph=False)
+def _second(x, y):
+    return y
