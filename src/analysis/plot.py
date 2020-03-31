@@ -5,6 +5,7 @@ from typing import Dict, Tuple
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.ticker import MaxNLocator
 
 from src.lib.layouts import TensorLayout
 from src.lib.tile import determine_tile_layout, tile
@@ -47,12 +48,14 @@ def featuremapcompression(
     n = len(samples)
     ncols = int(ceil(sqrt(len(samples))))
     nrows = int(ceil(n / ncols))
-    fig, axes = plt.subplots(nrows, ncols)
+    fig, axes = plt.subplots(
+        nrows, ncols, figsize=(8, 9), constrained_layout=True
+    )
     for i, (kb, arr) in enumerate(samples.items()):
         img = featuremap_image(arr, order)
         ax = axes[i // ncols, i % ncols] if nrows > 1 else axes[i]
         im = ax.matshow(img, cmap="viridis")
-        ax.set_title(f"{kb:.0f} KB", y=-0.16)
+        ax.set_title(f"{kb:.0f} KB", y=-0.07)
         ax.set_xticks([])
         ax.set_yticks([])
         if clim is not None:
@@ -61,6 +64,19 @@ def featuremapcompression(
         ax = axes[i // ncols, i % ncols] if nrows > 1 else axes[i]
         ax.axis("off")
     fig.suptitle(title, fontsize="xx-small")
+    return fig
+
+
+def model_bar(heights, xlabels, title: str, ylabel: str) -> plt.Figure:
+    x = np.arange(len(heights))
+    fig, ax = plt.subplots()
+    rect = ax.bar(x, heights)
+    ax.set_title(title)
+    ax.set_xticks(x)
+    ax.set_xticklabels(xlabels, rotation=-90)
+    ax.set_ylabel(ylabel)
+    ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+    fig.subplots_adjust(bottom=0.35)
     return fig
 
 

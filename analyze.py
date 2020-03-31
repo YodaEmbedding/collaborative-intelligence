@@ -1,11 +1,13 @@
 import json
 from io import BytesIO
-from typing import ByteString
+from typing import ByteString, List, Tuple
 
 import h5py
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
+from tensorflow.keras.layers import Layer
+from tensorflow.python.framework.ops import disable_eager_execution
 
 from src.analysis import plot
 from src.analysis.methods.accuracyvskb import analyze_accuracyvskb_layer
@@ -14,11 +16,15 @@ from src.analysis.methods.featuremap import (
     analyze_featuremapcompression_layer,
 )
 from src.analysis.methods.histograms import analyze_histograms_layer
-from src.analysis.methods.latencies import analyze_latencies_layer
+from src.analysis.methods.latencies import (
+    analyze_latencies_layer,
+    analyze_latencies_post,
+)
 from src.analysis.methods.motions import analyze_motions_layer
 from src.analysis.utils import (
     compile_kwargs,
     get_cut_layers,
+    new_tf_graph_and_session,
     release_models,
     separate_process,
 )
@@ -28,8 +34,17 @@ from src.lib.layers import (
 )
 from src.lib.split import split_model
 
-# from src.analysis.accuracy_vs_kb import analyze_accuracy_vs_kb
-# from src.analysis.dataset import dataset_kb
+# config = tf.compat.v1.ConfigProto()
+# config.gpu_options.allow_growth=True
+# sess = tf.compat.v1.Session(config=config)
+
+# for gpu in tf.config.experimental.list_physical_devices('GPU'):
+#     tf.config.experimental.set_memory_growth(gpu, True)
+
+# tf.compat.v1.disable_eager_execution()
+
+disable_eager_execution()
+
 
 # On all models:
 # 1. Output graph and text of model
@@ -58,11 +73,38 @@ from src.lib.split import split_model
 # per-neuron stddev/mean/etc... or try to find structure in feature maps or whatever...
 
 
+def layer_output_size(layer: Layer) -> Tuple[int, int]:
+    """Returns total size in bytes and total size in number of neurons"""
+    bpn_lut = {tf.uint8: 1, "uint8": 1, tf.float32: 4, "float32": 4}
+    bpn = bpn_lut[layer.dtype]
+    output_shape = layer.output_shape
+    if isinstance(output_shape, list):
+        if len(output_shape) > 1:
+            raise Exception("More than one output_shape found")
+        output_shape = output_shape[0]
+    n = np.prod(list(filter(None, output_shape)))
+    return bpn * n, n
+
+
+def analyze_size(model_name: str, model: keras.Model, layer_names: List[str]):
+    title = f"{model_name}"
+    basename = f"{model_name}"
+    xlabels = layer_names
+    layers = [model.get_layer(x) for x in layer_names]
+    heights = [layer_output_size(x)[0] / 1024 for x in layers]
+    fig = plot.model_bar(heights, xlabels, title, "Output tensor size (KiB)")
+    plot.save(fig, f"img/sizes/{basename}.png")
+
+
 def analyze_layer(
     model_name: str, model: keras.Model, layer_name: str, i: int, n: int
 ):
-    print(f"cut layer: {layer_name}")
+    print(f"cut layer: {layer_name} ({i + 1} / {n})")
 
+    d = {"layer": layer_name}
+
+    # TODO maybe create a "monolithic" analysis model over ALL layers to speed
+    # things up significantly...
     model_client, model_server, model_analysis = split_model(
         model, layer=layer_name
     )
@@ -71,7 +113,9 @@ def analyze_layer(
     model_analysis.compile(**compile_kwargs)
 
     # TODO experiment if accuracy improves depending on how much clipping we do
-    d = analyze_histograms_layer(model_name, model_client, layer_name, i, n)
+    d.update(
+        analyze_histograms_layer(model_name, model_client, layer_name, i, n)
+    )
     clip_range = (d["mean"] - 4 * d["std"], d["mean"] + 4 * d["std"])
 
     model_client_u8, model_server_u8, model_analysis_u8 = split_model(
@@ -80,15 +124,15 @@ def analyze_layer(
         encoder=UniformQuantizationU8Encoder(clip_range),
         decoder=UniformQuantizationU8Decoder(clip_range),
     )
-    # model_client_u8.compile(**compile_kwargs)
-    # model_server_u8.compile(**compile_kwargs)
-    # model_analysis_u8.compile(**compile_kwargs)
+    model_client_u8.compile(**compile_kwargs)
+    model_server_u8.compile(**compile_kwargs)
+    model_analysis_u8.compile(**compile_kwargs)
 
     analyze_featuremap_layer(model_name, model_client, layer_name, i, n)
     analyze_featuremapcompression_layer(
         model_name, model_client_u8, layer_name, i, n, kbs=[2, 5, 10, 30]
     )
-    analyze_latencies_layer(model_client, layer_name)
+    d["latency"] = analyze_latencies_layer(model_client, layer_name)
     analyze_motions_layer(model_name, model_client, layer_name, i, n)
     analyze_accuracyvskb_layer(
         model_name, model, model_client_u8, model_server_u8, layer_name, i, n
@@ -98,10 +142,13 @@ def analyze_layer(
     release_models(model_client_u8, model_server_u8, model_analysis_u8)
     print("")
 
+    return d
+
 
 # TODO memory: reload model for each separate task (or just comment out tasks)
 # TODO optimization: reuse split models
 @separate_process(sleep_after=5)
+@new_tf_graph_and_session
 def analyze_model(model_name, cut_layers=None):
     print(f"Analyzing {model_name}...\n")
     prefix = f"models/{model_name}/{model_name}"
@@ -118,8 +165,14 @@ def analyze_model(model_name, cut_layers=None):
 
     n = len(cut_layers)
 
+    dicts = []
+
     for i, cut_layer_name in enumerate(cut_layers):
-        analyze_layer(model_name, model, cut_layer_name, i, n)
+        d = analyze_layer(model_name, model, cut_layer_name, i, n)
+        dicts.append(d)
+
+    analyze_size(model_name, model, cut_layers)
+    analyze_latencies_post(model_name, dicts)
 
     release_models(model)
     print("\n-----\n")
@@ -156,6 +209,4 @@ def plot_test():
 
 
 if __name__ == "__main__":
-    # plot_test()
-    # main()
-    main2()
+    main()

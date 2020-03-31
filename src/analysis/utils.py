@@ -4,6 +4,7 @@ from multiprocessing import Process
 from time import sleep
 from typing import Iterator, List
 
+import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.layers import Layer
 
@@ -57,7 +58,7 @@ def basename_of(
     model_name: str, layer_name: str, layer_i: int, layer_n: int
 ) -> str:
     d = len(str(layer_n))
-    return f"{model_name}-{layer_i:0{d}}of{layer_n:0{d}}-{layer_name}"
+    return f"{model_name}-{layer_i+1:0{d}}of{layer_n:0{d}}-{layer_name}"
 
 
 def prefix_of(model_config: ModelConfig) -> str:
@@ -67,15 +68,31 @@ def prefix_of(model_config: ModelConfig) -> str:
 def title_of(
     model_name: str, layer_name: str, layer_i: int, layer_n: int
 ) -> str:
-    return f"{model_name} {layer_name} ({layer_i}/{layer_n})"
+    return f"{model_name} {layer_name} ({layer_i+1}/{layer_n})"
 
 
 def release_models(*models: List[keras.Model]):
     for model in models:
         del model
-    gc.collect()
-    keras.backend.clear_session()
-    gc.collect()
+        gc.collect()
+    # gc.collect()
+    # keras.backend.clear_session()
+    # tf.compat.v1.reset_default_graph()
+    # gc.collect()
+
+
+def new_tf_graph_and_session(func):
+    """Run decorated function in a new tf.Graph and tf.Session process."""
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        graph = tf.Graph()
+        sess = tf.compat.v1.Session(graph=graph)
+        with sess:
+            with graph.as_default():
+                func(*args, **kwargs)
+
+    return wrapper
 
 
 def separate_process(sleep_after: int = 0):
