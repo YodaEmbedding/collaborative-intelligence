@@ -71,9 +71,12 @@ def model_bar(heights, xlabels, title: str, ylabel: str) -> plt.Figure:
     x = np.arange(len(heights))
     fig, ax = plt.subplots()
     rect = ax.bar(x, heights)
+    n = len(xlabels)
+    font_scale_factor = 320
+    fontsize = min(10, int(2 * font_scale_factor / n) / 2)
     ax.set_title(title)
     ax.set_xticks(x)
-    ax.set_xticklabels(xlabels, rotation=-90)
+    ax.set_xticklabels(xlabels, fontsize=fontsize, rotation=-90)
     ax.set_ylabel(ylabel)
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     fig.subplots_adjust(bottom=0.35)
