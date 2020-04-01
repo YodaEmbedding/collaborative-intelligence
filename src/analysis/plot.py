@@ -14,7 +14,7 @@ from src.lib.tile import determine_tile_layout, tile
 def featuremap_image(arr: np.ndarray, order: str = "hwc") -> np.ndarray:
     tensor_layout = TensorLayout.from_tensor(arr, order)
     tiled_layout = determine_tile_layout(tensor_layout)
-    tiled = tile(arr, tensor_layout, tiled_layout)
+    tiled = tile(arr, tensor_layout, tiled_layout, fill_value=np.min(arr))
     return tiled
 
 

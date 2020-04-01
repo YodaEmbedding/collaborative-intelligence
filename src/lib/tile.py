@@ -10,7 +10,10 @@ from src.lib.layouts import TensorLayout, TiledArrayLayout
 
 
 def tile(
-    arr: np.ndarray, in_layout: TensorLayout, out_layout: TiledArrayLayout
+    arr: np.ndarray,
+    in_layout: TensorLayout,
+    out_layout: TiledArrayLayout,
+    fill_value: float = 0.0,
 ) -> np.ndarray:
     """Tiles tensor into 2D image.
 
@@ -18,6 +21,7 @@ def tile(
         arr: tensor
         in_layout: layout of input tensor
         out_layout: layout of output tiled array
+        fill_value: value to set remaining area to
 
     Returns:
         np.ndarray: tiled array
@@ -25,17 +29,22 @@ def tile(
     assert in_layout.shape == out_layout.orig_shape_in_order(in_layout.order)
     assert arr.shape == in_layout.shape
     arr = _as_chw(arr, in_layout.order)
-    arr = tile_chw(arr, out_layout.nrows, out_layout.ncols)
+    arr = tile_chw(
+        arr, out_layout.nrows, out_layout.ncols, fill_value=fill_value
+    )
     assert arr.shape == out_layout.shape
     return arr
 
 
-def tile_chw(arr: np.ndarray, nrows: int, ncols: int) -> np.ndarray:
+def tile_chw(
+    arr: np.ndarray, nrows: int, ncols: int, fill_value: float = 0.0
+) -> np.ndarray:
     """
     Args:
         arr: chw tensor
         nrows: number of tiled rows
         ncols: number of tiled columns
+        fill_value: value to set remaining area to
 
     Returns:
         np.ndarray: tiled array
@@ -45,7 +54,10 @@ def tile_chw(arr: np.ndarray, nrows: int, ncols: int) -> np.ndarray:
 
     if c < nrows * ncols:
         arr = arr.reshape(-1).copy()
+        prev_size = arr.size
         arr.resize(nrows * ncols * h * w * np.prod(extra_dims, dtype=int))
+        if fill_value != 0.0:
+            arr[prev_size:] = fill_value
 
     return (
         arr.reshape(nrows, ncols, h, w, *extra_dims)
