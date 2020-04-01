@@ -84,12 +84,18 @@ def model_bar(heights, xlabels, title: str, ylabel: str) -> plt.Figure:
 
 
 def neuron_histogram(
-    arr: np.ndarray, title: str, bins: int = 20
+    arr: np.ndarray,
+    title: str,
+    bins: int = 20,
+    clip_range: Tuple[int, int] = None,
 ) -> plt.Figure:
     arr = arr.reshape((-1,))
+    if clip_range is None:
+        clip_range = (np.min(arr), np.max(arr))
+    bins_ = np.linspace(*clip_range, bins)
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
-    ax.hist(arr, bins=np.linspace(np.min(arr), np.max(arr), bins))
+    ax.hist(arr, bins=bins_, density=True)
     ax.set_xlabel("Neuron value")
     ax.set_ylabel("Frequency")
     ax.set_title(title, fontsize="xx-small")
