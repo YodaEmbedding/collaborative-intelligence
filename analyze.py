@@ -6,7 +6,6 @@ import h5py
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras.layers import Layer
 from tensorflow.python.framework.ops import disable_eager_execution
 
 from src.analysis import plot
@@ -21,6 +20,7 @@ from src.analysis.methods.latencies import (
     analyze_latencies_post,
 )
 from src.analysis.methods.motions import analyze_motions_layer
+from src.analysis.methods.size import analyze_size_model
 from src.analysis.utils import (
     compile_kwargs,
     get_cut_layers,
@@ -71,29 +71,6 @@ disable_eager_execution()
 # mkdir -p img/graph img/summary
 # stddev of stddevs?
 # per-neuron stddev/mean/etc... or try to find structure in feature maps or whatever...
-
-
-def layer_output_size(layer: Layer) -> Tuple[int, int]:
-    """Returns total size in bytes and total size in number of neurons"""
-    bpn_lut = {tf.uint8: 1, "uint8": 1, tf.float32: 4, "float32": 4}
-    bpn = bpn_lut[layer.dtype]
-    output_shape = layer.output_shape
-    if isinstance(output_shape, list):
-        if len(output_shape) > 1:
-            raise Exception("More than one output_shape found")
-        output_shape = output_shape[0]
-    n = np.prod(list(filter(None, output_shape)))
-    return bpn * n, n
-
-
-def analyze_size(model_name: str, model: keras.Model, layer_names: List[str]):
-    title = f"{model_name}"
-    basename = f"{model_name}"
-    xlabels = layer_names
-    layers = [model.get_layer(x) for x in layer_names]
-    heights = [layer_output_size(x)[0] / 1024 for x in layers]
-    fig = plot.model_bar(heights, xlabels, title, "Output tensor size (KiB)")
-    plot.save(fig, f"img/sizes/{basename}.png")
 
 
 def analyze_layer(
@@ -171,7 +148,7 @@ def analyze_model(model_name, cut_layers=None):
         d = analyze_layer(model_name, model, cut_layer_name, i, n)
         dicts.append(d)
 
-    analyze_size(model_name, model, cut_layers)
+    analyze_size_model(model_name, model, cut_layers)
     analyze_latencies_post(model_name, dicts)
 
     release_models(model)
