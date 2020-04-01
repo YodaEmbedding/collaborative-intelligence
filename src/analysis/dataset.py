@@ -43,6 +43,10 @@ def _get_imagenet_reverse_lookup() -> Dict[str, int]:
 imagenet_lookup = _get_imagenet_reverse_lookup()
 
 
+def dataset() -> tf.data.Dataset:
+    return dataset_kb(30)
+
+
 def dataset_kb(kb: int = 30) -> tf.data.Dataset:
     filepaths = df["file"].map(lambda x: f"{data_dir}/{kb}kb/{x}")
     labels = df["label"].replace(imagenet_lookup)

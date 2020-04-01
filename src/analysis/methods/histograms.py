@@ -3,8 +3,7 @@ from typing import Any, Dict
 import numpy as np
 from tensorflow import keras
 
-from src.analysis import plot
-from src.analysis.dataset import single_sample_image
+from src.analysis import dataset, plot
 from src.analysis.utils import basename_of, title_of
 
 
@@ -16,8 +15,10 @@ def analyze_histograms_layer(
     layer_name: str,
     layer_i: int,
     layer_n: int,
+    take: int = 64,
+    batch_size: int = 64,
 ) -> Dict[str, Any]:
-    data = single_sample_image()[np.newaxis].astype(np.float32)
+    data = dataset.dataset().take(take).batch(batch_size)
     pred = model_client.predict(data)
     mean = np.mean(pred)
     std = np.std(pred)
