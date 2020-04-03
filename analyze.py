@@ -43,7 +43,7 @@ from src.lib.split import split_model
 
 # tf.compat.v1.disable_eager_execution()
 
-disable_eager_execution()
+# disable_eager_execution()
 
 
 # On all models:
@@ -125,7 +125,7 @@ def analyze_layer(
 # TODO memory: reload model for each separate task (or just comment out tasks)
 # TODO optimization: reuse split models
 @separate_process(sleep_after=5)
-@new_tf_graph_and_session
+# @new_tf_graph_and_session
 def analyze_model(model_name, cut_layers=None):
     print(f"Analyzing {model_name}...\n")
     prefix = f"models/{model_name}/{model_name}"

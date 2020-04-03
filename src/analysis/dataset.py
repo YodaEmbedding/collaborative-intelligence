@@ -49,7 +49,7 @@ def dataset() -> tf.data.Dataset:
 
 def dataset_kb(kb: int = 30) -> tf.data.Dataset:
     filepaths = df["file"].map(lambda x: f"{data_dir}/{kb}kb/{x}")
-    labels = df["label"].replace(imagenet_lookup)
+    labels = df["label"].replace(imagenet_lookup).astype(dtype=np.int64)
     dataset = tf.data.Dataset.from_tensor_slices((filepaths, labels))
     dataset = dataset.map(_parse_row)
     return dataset
