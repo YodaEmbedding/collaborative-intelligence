@@ -1,5 +1,6 @@
 import textwrap
 from collections import defaultdict
+from os import path
 from typing import Callable, Dict, List, Tuple
 
 import matplotlib.pyplot as plt
@@ -33,23 +34,40 @@ def analyze_accuracyvskb_layer(
     layer_name: str,
     layer_i: int,
     layer_n: int,
+    subdir: str = "",
 ):
-    accuracies_server = np.concatenate(
-        [_evaluate_accuracy_kb(model, kb) for kb in range(1, 31)], axis=1
-    )
-    print("Analyzed server accuracy vs KB")
-    accuracies_shared = _evaluate_accuracies_shared_kb(
-        model_client, model_server
-    )
-    print("Analyzed shared accuracy vs KB")
     title = title_of(model_name, layer_name, layer_i, layer_n)
     basename = basename_of(model_name, layer_name, layer_i, layer_n)
-    fig, data_server, data_shared = _plot_accuracy_vs_kb(
-        title, accuracies_server, accuracies_shared
-    )
+    basedir = "img/accuracyvskb"
+    filename_server = path.join(basedir, f"{basename}-server.csv")
+    filename_shared = path.join(basedir, subdir, f"{basename}-shared.csv")
+
+    try:
+        data_server = pd.read_csv(filename_server)
+    except FileNotFoundError:
+        accuracies_server = np.concatenate(
+            [_evaluate_accuracy_kb(model, kb) for kb in range(1, 31)], axis=1
+        )
+        kbs_server = accuracies_server[0] / 1.024
+        acc_server = accuracies_server[1]
+        data_server = pd.DataFrame({"kbs": kbs_server, "acc": acc_server})
+        data_server.to_csv(filename_server)
+        print("Analyzed server accuracy vs KB")
+
+    try:
+        data_shared = pd.read_csv(filename_shared)
+    except FileNotFoundError:
+        accuracies_shared = _evaluate_accuracies_shared_kb(
+            model_client, model_server
+        )
+        kbs_shared = accuracies_shared[0] / 1.024
+        acc_shared = accuracies_shared[1]
+        data_shared = pd.DataFrame({"kbs": kbs_shared, "acc": acc_shared})
+        data_shared.to_csv(filename_shared)
+        print("Analyzed shared accuracy vs KB")
+
+    fig = _plot_accuracy_vs_kb(title, data_server, data_shared)
     plot.save(fig, f"img/accuracyvskb/{basename}.png")
-    data_server.to_csv(f"img/accuracyvskb/{basename}-server.csv")
-    data_shared.to_csv(f"img/accuracyvskb/{basename}-shared.csv")
     print("Analyzed accuracy vs KB")
 
 
@@ -149,16 +167,8 @@ def _make_quality_lut(
 
 
 def _plot_accuracy_vs_kb(
-    title: str, accuracies_server: np.ndarray, accuracies_shared: np.ndarray
+    title: str, data_server: pd.DataFrame, data_shared: pd.DataFrame
 ):
-    kbs_server = accuracies_server[0] / 1.024
-    acc_server = accuracies_server[1]
-    kbs_shared = accuracies_shared[0] / 1.024
-    acc_shared = accuracies_shared[1]
-
-    data_server = pd.DataFrame({"kbs": kbs_server, "acc": acc_server})
-    data_shared = pd.DataFrame({"kbs": kbs_shared, "acc": acc_shared})
-
     fig = plt.figure()
     ax = sns.lineplot(x="kbs", y="acc", data=data_server)
     ax = sns.lineplot(x="kbs", y="acc", data=data_shared)
@@ -171,8 +181,7 @@ def _plot_accuracy_vs_kb(
     ax.set_xlabel("KB/frame")
     ax.set_ylabel("Accuracy")
     ax.set_title(title, fontsize="xx-small")
-
-    return fig, data_server, data_shared
+    return fig
 
 
 def _categorical_top1_accuracy(
