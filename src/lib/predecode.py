@@ -57,7 +57,7 @@ class JpegPredecoder(Predecoder):
 
     def run(self, buf: ByteString) -> np.ndarray:
         img = _decode_raw_img(buf)
-        img = np.array(img)[..., 0]
+        img = np.array(img)
         img = self._trim(img)
         tensor = detile(img, self._tiled_layout, self._tensor_layout)
         return tensor
