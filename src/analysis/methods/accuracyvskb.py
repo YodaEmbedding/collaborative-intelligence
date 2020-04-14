@@ -33,6 +33,8 @@ def analyze_accuracyvskb_layer(
     layer_name: str,
     layer_i: int,
     layer_n: int,
+    quant: Callable[[np.ndarray], np.ndarray],
+    dequant: Callable[[np.ndarray], np.ndarray],
     subdir: str = "",
 ):
     title = title_of(model_name, layer_name, layer_i, layer_n)
@@ -57,7 +59,7 @@ def analyze_accuracyvskb_layer(
         data_shared = pd.read_csv(filename_shared)
     except FileNotFoundError:
         accuracies_shared = _evaluate_accuracies_shared_kb(
-            model_client, model_server
+            model_client, model_server, quant, dequant
         )
         kbs_shared = accuracies_shared[0] / 1.024
         acc_shared = accuracies_shared[1]
@@ -77,19 +79,24 @@ def _compute_dataset_accuracies(
     predecoder: Predecoder,
     dataset: tf.data.Dataset,
     accuracy_func: Callable[[np.ndarray, int], float],
+    quant: Callable[[np.ndarray], np.ndarray],
+    dequant: Callable[[np.ndarray], np.ndarray],
 ) -> List[float]:
+    dataset = tfds.as_numpy(dataset)
     accuracies = []
 
     for frames, labels in dataset:
         client_tensors = model_client.predict(frames)
         decoded_tensors = []
         for client_tensor in client_tensors:
-            encoded_bytes = postencoder.run(client_tensor)
+            quant_tensor = quant(client_tensor)
+            encoded_bytes = postencoder.run(quant_tensor)
             decoded_tensor = predecoder.run(encoded_bytes)
-            decoded_tensors.append(decoded_tensor)
+            recv_tensor = dequant(decoded_tensor)
+            decoded_tensors.append(recv_tensor)
         decoded_tensors = np.array(decoded_tensors)
         predictions = model_server.predict(decoded_tensors)
-        accuracies.extend(accuracy_func(labels.numpy(), predictions))
+        accuracies.extend(accuracy_func(labels, predictions))
 
     return accuracies
 
@@ -104,11 +111,15 @@ def _evaluate_accuracy_kb(model: keras.Model, kb: int) -> np.ndarray:
 
 
 def _evaluate_accuracies_shared_kb(
-    model_client: keras.Model, model_server: keras.Model,
+    model_client: keras.Model,
+    model_server: keras.Model,
+    quant: Callable[[np.ndarray], np.ndarray],
+    dequant: Callable[[np.ndarray], np.ndarray],
 ) -> np.ndarray:
     accuracies_shared = defaultdict(list)
     dataset = dataset_kb().batch(BATCH_SIZE)
     client_tensors = model_client.predict(dataset)
+    client_tensors = quant(client_tensors)
     quality_lookup = _make_quality_lut(client_tensors)
     kb_lookup = [{q: kb for kb, q in d.items()} for d in quality_lookup]
     tensor_layout = TensorLayout.from_shape(
@@ -134,6 +145,8 @@ def _evaluate_accuracies_shared_kb(
             predecoder,
             dataset_quality,
             _categorical_top1_accuracy,
+            quant,
+            dequant,
         )
 
         kbs = [d[quality] for d in kb_lookup if quality in d]

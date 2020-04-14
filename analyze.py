@@ -18,6 +18,7 @@ from src.analysis.methods.latencies import (
 )
 from src.analysis.methods.motions import analyze_motions_layer
 from src.analysis.methods.size import analyze_size_model
+from src.analysis.quant import uni_dequant, uni_quant
 from src.analysis.utils import (
     compile_kwargs,
     dataset_to_numpy_array,
@@ -61,28 +62,28 @@ def analyze_layer(
     )
     clip_range = (d["mean"] - 4 * d["std"], d["mean"] + 4 * d["std"])
 
-    model_client_u8, model_server_u8, model_analysis_u8 = split_model(
-        model,
-        layer=layer_name,
-        encoder=UniformQuantizationU8Encoder(clip_range),
-        decoder=UniformQuantizationU8Decoder(clip_range),
-    )
-    # model_client_u8.compile(**compile_kwargs)
-    # model_server_u8.compile(**compile_kwargs)
-    # model_analysis_u8.compile(**compile_kwargs)
+    quant = lambda x: uni_quant(x, clip_range=clip_range, levels=256)
+    dequant = lambda x: uni_dequant(x, clip_range=clip_range, levels=256)
 
     analyze_featuremap_layer(model_name, model_client, layer_name, i, n)
     analyze_featuremapcompression_layer(
-        model_name, model_client_u8, layer_name, i, n, kbs=[2, 5, 10, 30]
+        model_name, model_client, layer_name, i, n, quant, kbs=[2, 5, 10, 30]
     )
     analyze_motions_layer(model_name, model_client, layer_name, i, n)
     analyze_accuracyvskb_layer(
-        model_name, model, model_client_u8, model_server_u8, layer_name, i, n
+        model_name,
+        model,
+        model_client,
+        model_server,
+        layer_name,
+        i,
+        n,
+        quant,
+        dequant,
     )
     d["latency"] = analyze_latencies_layer(model_client, layer_name)
 
     release_models(model_client, model_server, model_analysis)
-    release_models(model_client_u8, model_server_u8, model_analysis_u8)
     print("")
 
     return d
