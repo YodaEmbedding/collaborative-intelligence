@@ -4,7 +4,9 @@ from multiprocessing import Process, Queue
 from time import sleep
 from typing import Iterator, List
 
+import numpy as np
 import tensorflow as tf
+import tensorflow_datasets as tfds
 from tensorflow import keras
 from tensorflow.keras.layers import Layer
 
@@ -63,6 +65,12 @@ def basename_of(
 
 def prefix_of(model_config: ModelConfig) -> str:
     return f"models/{model_config.to_path()}"
+
+
+def dataset_to_numpy_array(xs):
+    if isinstance(xs, (tf.Tensor, tf.data.Dataset)):
+        return np.array([x[0] for x in tfds.as_numpy(xs)])
+    return np.array(xs)
 
 
 def title_of(

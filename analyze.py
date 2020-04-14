@@ -1,13 +1,11 @@
 import json
 from io import BytesIO
-from typing import ByteString, List, Tuple
+from typing import ByteString
 
 import h5py
-import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 
-from src.analysis import plot
 from src.analysis.methods.accuracyvskb import analyze_accuracyvskb_layer
 from src.analysis.methods.featuremap import (
     analyze_featuremap_layer,
@@ -22,16 +20,20 @@ from src.analysis.methods.motions import analyze_motions_layer
 from src.analysis.methods.size import analyze_size_model
 from src.analysis.utils import (
     compile_kwargs,
+    dataset_to_numpy_array,
     get_cut_layers,
     new_tf_graph_and_session,
     release_models,
     separate_process,
+    tf_disable_eager_execution,
 )
 from src.lib.layers import (
     UniformQuantizationU8Decoder,
     UniformQuantizationU8Encoder,
 )
 from src.lib.split import split_model
+
+tf_disable_eager_execution()
 
 
 def analyze_layer(
@@ -50,6 +52,9 @@ def analyze_layer(
     model_server.compile(**compile_kwargs)
     model_analysis.compile(**compile_kwargs)
 
+    if model_client.input == model_client.output:
+        model_client.predict = dataset_to_numpy_array
+
     # TODO experiment if accuracy improves depending on how much clipping we do
     d.update(
         analyze_histograms_layer(model_name, model_client, layer_name, i, n)
@@ -62,19 +67,19 @@ def analyze_layer(
         encoder=UniformQuantizationU8Encoder(clip_range),
         decoder=UniformQuantizationU8Decoder(clip_range),
     )
-    model_client_u8.compile(**compile_kwargs)
-    model_server_u8.compile(**compile_kwargs)
-    model_analysis_u8.compile(**compile_kwargs)
+    # model_client_u8.compile(**compile_kwargs)
+    # model_server_u8.compile(**compile_kwargs)
+    # model_analysis_u8.compile(**compile_kwargs)
 
     analyze_featuremap_layer(model_name, model_client, layer_name, i, n)
     analyze_featuremapcompression_layer(
         model_name, model_client_u8, layer_name, i, n, kbs=[2, 5, 10, 30]
     )
-    d["latency"] = analyze_latencies_layer(model_client, layer_name)
     analyze_motions_layer(model_name, model_client, layer_name, i, n)
     analyze_accuracyvskb_layer(
         model_name, model, model_client_u8, model_server_u8, layer_name, i, n
     )
+    d["latency"] = analyze_latencies_layer(model_client, layer_name)
 
     release_models(model_client, model_server, model_analysis)
     release_models(model_client_u8, model_server_u8, model_analysis_u8)
@@ -105,6 +110,7 @@ def analyze_model(model_name, cut_layers=None):
             model.summary(print_fn=lambda x: f.write(f"{x}\n"))
         if cut_layers is None:
             cut_layers = [x.name for x in get_cut_layers(model.layers[0])]
+        analyze_size_model(model_name, model, cut_layers)
         return cut_layers
 
     cut_layers = load_model_and_run(model_name, init)
@@ -113,13 +119,12 @@ def analyze_model(model_name, cut_layers=None):
 
     for i, cut_layer_name in enumerate(cut_layers):
 
-        def analyze_layer_wrapper(model):
+        def analyze_layer_wrapper(model, cut_layer_name=cut_layer_name, i=i):
             return analyze_layer(model_name, model, cut_layer_name, i, n)
 
         d = load_model_and_run(model_name, analyze_layer_wrapper)
         dicts.append(d)
 
-    analyze_size_model(model_name, model, cut_layers)
     analyze_latencies_post(model_name, dicts)
 
     print("\n-----\n")
@@ -144,15 +149,11 @@ def main():
 
 
 def main2():
+    global analyze_latencies_post, analyze_size_model
+    identity = lambda *args, **kwargs: None
+    analyze_size_model = identity
+    analyze_latencies_post = identity
     analyze_model("resnet34", cut_layers=["stage3_unit1_relu1", "add_7"])
-
-
-def plot_test():
-    basename = "test"
-    frames = np.arange(60 * 72 * 72).reshape(60, 72, 72).astype(np.uint8)
-    ani = plot.OpticalFlowAnimator(frames, frames, frames, f"{basename}")
-    ani.save_img(f"img/motion/{basename}.png")
-    ani.save(f"img/motion/{basename}.mp4")
 
 
 if __name__ == "__main__":

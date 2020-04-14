@@ -41,10 +41,11 @@ class ExperimentRunner:
             c.output_shape[1:], "hwc", c.dtype
         )
 
-        self.data = dataset.dataset().take(dataset_size).batch(batch_size)
-        labels = self.data.map(lambda x, y: y).unbatch()
+        self.data = dataset.dataset().take(dataset_size)
+        self.data_batched = self.data.batch(batch_size)
+        labels = self.data.map(lambda x, y: y)
         self.data_labels = np.array(list(tfds.as_numpy(labels)))
-        self.data_numpy_batches = list(tfds.as_numpy(self.data))
+        self.data_numpy_batches = list(tfds.as_numpy(self.data_batched))
 
         self.d = {}
 

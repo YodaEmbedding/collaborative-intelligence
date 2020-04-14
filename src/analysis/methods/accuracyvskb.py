@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import tensorflow as tf
+import tensorflow_datasets as tfds
 from tensorflow import keras
 
 from src.analysis import plot
@@ -96,7 +97,7 @@ def _compute_dataset_accuracies(
 def _evaluate_accuracy_kb(model: keras.Model, kb: int) -> np.ndarray:
     dataset = dataset_kb(kb)
     predictions = model.predict(dataset.batch(BATCH_SIZE))
-    labels = np.array(list(dataset.map(_second)))
+    labels = np.array(list(tfds.as_numpy(dataset.map(_second))))
     accuracies = _categorical_top1_accuracy(labels, predictions)
     kbs = np.ones_like(accuracies) * kb
     return np.vstack((kbs, accuracies))

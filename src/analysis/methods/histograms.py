@@ -1,6 +1,7 @@
 from typing import Any, Dict
 
 import numpy as np
+import tensorflow_datasets as tfds
 from tensorflow import keras
 
 from src.analysis import dataset, plot
@@ -28,4 +29,4 @@ def analyze_histograms_layer(
     plot.save(fig, f"img/histogram/{basename}.png")
     print("{:8} {:8}".format("mean", "stddev"))
     print(f"{mean:8.2f} {std:8.2f}")
-    return {"mean": mean, "std": std}
+    return {"mean": mean, "std": std, "client_tensors": pred}

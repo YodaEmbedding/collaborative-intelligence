@@ -19,7 +19,7 @@ def analyze_latencies_layer(model_client: keras.Model, layer_name: str):
     sess = K.get_session()
     data = single_sample_image()[np.newaxis].astype(np.float32)
     data = tf.constant(data)
-    out_shape = model_client.output.shape[1:]
+    out_shape = model_client.output_shape[1:]
     output_store = tf.Variable(tf.zeros((1, *out_shape)), name="output_store")
     infer_op = output_store.assign(model_client(data))
 
