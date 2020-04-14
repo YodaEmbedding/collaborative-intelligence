@@ -81,6 +81,7 @@ def analyze_layer(
         n,
         quant,
         dequant,
+        subdir="jpeg_uniquant256",
     )
     d["latency"] = analyze_latencies_layer(model_client, layer_name)
 
