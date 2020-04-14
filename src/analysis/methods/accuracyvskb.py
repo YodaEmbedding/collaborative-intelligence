@@ -43,8 +43,9 @@ def analyze_accuracyvskb_layer(
     title = title_of(model_name, layer_name, layer_i, layer_n)
     basename = basename_of(model_name, layer_name, layer_i, layer_n)
     basedir = "img/accuracyvskb"
+    shareddir = path.join(basedir, subdir)
     filename_server = path.join(basedir, f"{model_name}-server.csv")
-    filename_shared = path.join(basedir, subdir, f"{basename}-shared.csv")
+    filename_shared = path.join(shareddir, f"{basename}-shared.csv")
 
     try:
         data_server = pd.read_csv(filename_server)
@@ -71,7 +72,7 @@ def analyze_accuracyvskb_layer(
         print("Analyzed shared accuracy vs KB")
 
     fig = _plot_accuracy_vs_kb(title, data_server, data_shared)
-    plot.save(fig, f"img/accuracyvskb/{basename}.png")
+    plot.save(fig, path.join(shareddir, f"{basename}.png"))
     print("Analyzed accuracy vs KB")
 
 
