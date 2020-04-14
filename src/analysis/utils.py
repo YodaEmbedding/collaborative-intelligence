@@ -80,11 +80,12 @@ def dataset_to_numpy_array(xs):
 
 
 def predict_dataset(
-    model: keras.Model, dataset: tf.data.Dataset
+    model: keras.Model, dataset: tf.data.Dataset, batched: bool = True
 ) -> np.ndarray:
     preds = []
+    pred_func = model.predict_on_batch if batched else model.predict
     for frames, _labels in tfds.as_numpy(dataset):
-        preds.append(model.predict(frames))
+        preds.append(pred_func(frames))
     return np.concatenate(preds, axis=0)
 
 

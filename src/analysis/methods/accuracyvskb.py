@@ -88,7 +88,7 @@ def _compute_dataset_accuracies(
     accuracies = []
 
     for frames, labels in tfds.as_numpy(dataset):
-        client_tensors = model_client.predict(frames)
+        client_tensors = model_client.predict_on_batch(frames)
         decoded_tensors = []
         for client_tensor in client_tensors:
             quant_tensor = quant(client_tensor)
@@ -97,7 +97,7 @@ def _compute_dataset_accuracies(
             recv_tensor = dequant(decoded_tensor)
             decoded_tensors.append(recv_tensor)
         decoded_tensors = np.array(decoded_tensors)
-        predictions = model_server.predict(decoded_tensors)
+        predictions = model_server.predict_on_batch(decoded_tensors)
         accuracies.extend(accuracy_func(labels, predictions))
 
     return accuracies

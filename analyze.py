@@ -55,6 +55,7 @@ def analyze_layer(
 
     if model_client.input == model_client.output:
         model_client.predict = dataset_to_numpy_array
+        model_client.predict_on_batch = dataset_to_numpy_array
 
     # TODO experiment if accuracy improves depending on how much clipping we do
     d.update(
