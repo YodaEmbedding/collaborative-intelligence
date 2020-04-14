@@ -12,7 +12,7 @@ import tensorflow_datasets as tfds
 from tensorflow import keras
 
 from src.analysis import plot
-from src.analysis.dataset import dataset_kb
+from src.analysis import dataset as ds
 from src.analysis.utils import basename_of, predict_dataset, title_of
 from src.lib.layouts import TensorLayout
 from src.lib.postencode import JpegPostencoder, Postencoder
@@ -103,7 +103,7 @@ def _compute_dataset_accuracies(
 def _evaluate_accuracy_kb(
     model: keras.Model, kb: int, batch_size: int
 ) -> np.ndarray:
-    dataset = dataset_kb(kb)
+    dataset = ds.dataset_kb(kb)
     predictions = predict_dataset(model, dataset.batch(batch_size))
     labels = np.array(list(tfds.as_numpy(dataset.map(_second))))
     accuracies = _categorical_top1_accuracy(labels, predictions)
@@ -128,7 +128,7 @@ def _evaluate_accuracies_shared_kb(
     batch_size: int,
 ) -> np.ndarray:
     accuracies_shared = defaultdict(list)
-    dataset = dataset_kb()
+    dataset = ds.dataset()
     client_tensors = predict_dataset(model_client, dataset.batch(batch_size))
     client_tensors = quant(client_tensors)
     quality_lookup = _make_quality_lut(client_tensors)
