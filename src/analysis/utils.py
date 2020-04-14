@@ -1,6 +1,6 @@
 import gc
 from functools import wraps
-from multiprocessing import Process
+from multiprocessing import Process, Queue
 from time import sleep
 from typing import Iterator, List
 
@@ -90,7 +90,7 @@ def new_tf_graph_and_session(func):
         sess = tf.compat.v1.Session(graph=graph)
         with sess:
             with graph.as_default():
-                func(*args, **kwargs)
+                return func(*args, **kwargs)
 
     return wrapper
 
@@ -101,10 +101,16 @@ def separate_process(sleep_after: int = 0):
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            p = Process(target=func, args=args, kwargs=kwargs)
+            q = Queue()
+
+            def worker(q, *args, **kwargs):
+                q.put(func(*args, **kwargs))
+
+            p = Process(target=worker, args=(q, *args), kwargs=kwargs)
             p.start()
             p.join()
             sleep(sleep_after)
+            return q.get()
 
         return wrapper
 
