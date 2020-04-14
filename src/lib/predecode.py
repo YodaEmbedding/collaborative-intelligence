@@ -3,6 +3,7 @@ from math import ceil
 from typing import (
     Awaitable,
     ByteString,
+    Callable,
     Dict,
     Generator,
     Generic,
@@ -22,6 +23,14 @@ from src.lib.tile import detile
 class Predecoder:
     def run(self, buf: ByteString) -> np.ndarray:
         raise NotImplementedError
+
+
+class CallablePredecoder(Predecoder):
+    def __init__(self, func: Callable[[ByteString], np.ndarray]):
+        self.func = func
+
+    def run(self, buf: ByteString) -> np.ndarray:
+        return self.func(buf)
 
 
 class TensorPredecoder(Predecoder):
@@ -58,15 +67,9 @@ class JpegPredecoder(Predecoder):
     def run(self, buf: ByteString) -> np.ndarray:
         img = _decode_raw_img(buf)
         img = np.array(img)
-        img = self._trim(img)
+        img = _trim(img, self._tiled_layout, self.MBU_SIZE)
         tensor = detile(img, self._tiled_layout, self._tensor_layout)
         return tensor
-
-    def _trim(self, img: np.ndarray) -> np.ndarray:
-        shape = self._tiled_layout.shape
-        expect = tuple(ceil(x / self.MBU_SIZE) * self.MBU_SIZE for x in shape)
-        assert expect == img.shape
-        return img[: shape[0], : shape[1]]
 
 
 class JpegRgbPredecoder(Predecoder):
@@ -76,6 +79,38 @@ class JpegRgbPredecoder(Predecoder):
     def run(self, buf: ByteString) -> np.ndarray:
         img = _decode_raw_img(buf)
         return np.array(img).astype(self._tensor_layout.dtype)
+
+
+class Jpeg2000Predecoder(Predecoder):
+    MBU_SIZE = 16
+
+    def __init__(
+        self, tiled_layout: TiledArrayLayout, tensor_layout: TensorLayout
+    ):
+        self._tiled_layout = tiled_layout
+        self._tensor_layout = tensor_layout
+
+    def run(self, buf: ByteString) -> np.ndarray:
+        img = _decode_raw_img(buf)
+        img = np.array(img)
+        img = _trim(img, self._tiled_layout, self.MBU_SIZE)
+        tensor = detile(img, self._tiled_layout, self._tensor_layout)
+        return tensor
+
+
+class PngPredecoder(Predecoder):
+    def __init__(
+        self, tiled_layout: TiledArrayLayout, tensor_layout: TensorLayout
+    ):
+        self._tiled_layout = tiled_layout
+        self._tensor_layout = tensor_layout
+
+    def run(self, buf: ByteString) -> np.ndarray:
+        img = _decode_raw_img(buf)
+        img = np.array(img)
+        assert self._tiled_layout.shape == img.shape
+        tensor = detile(img, self._tiled_layout, self._tensor_layout)
+        return tensor
 
 
 def to_np_dtype(dtype: type) -> type:
@@ -94,3 +129,12 @@ def _decode_raw_img(buf: ByteString) -> Image.Image:
         img = Image.open(stream)
         img.load()
     return img
+
+
+def _trim(
+    img: np.ndarray, tiled_layout: TiledArrayLayout, mbu_size: int
+) -> np.ndarray:
+    shape = tiled_layout.shape
+    expect = tuple(ceil(x / mbu_size) * mbu_size for x in shape)
+    assert expect == img.shape
+    return img[: shape[0], : shape[1]]

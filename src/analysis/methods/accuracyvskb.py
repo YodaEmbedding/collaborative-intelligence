@@ -124,7 +124,7 @@ def _evaluate_accuracies_shared_kb(
             tf.data.Dataset.zip((dataset, keep_ds)).filter(_second).map(_first)
         )
 
-        postencoder = JpegPostencoder(tensor_layout, quality)
+        postencoder = JpegPostencoder(tensor_layout, quality=quality)
         tiled_layout = postencoder.tiled_layout
         predecoder = JpegPredecoder(tiled_layout, tensor_layout)
 
@@ -157,7 +157,7 @@ def _make_quality_lut(
         tensor_layout = TensorLayout.from_tensor(client_tensor, "hwc")
         d = {}
         for quality in range(1, 101):
-            postencoder = JpegPostencoder(tensor_layout, quality)
+            postencoder = JpegPostencoder(tensor_layout, quality=quality)
             encoded_bytes = postencoder.run(client_tensor)
             kb = int(len(encoded_bytes) / BYTES_PER_KB)
             if kb not in d:
