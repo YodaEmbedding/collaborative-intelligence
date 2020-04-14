@@ -81,6 +81,24 @@ def release_models(*models: List[keras.Model]):
     # gc.collect()
 
 
+def tf_disable_eager_execution():
+    """Disable eager execution globally and force graph mode."""
+    from tensorflow.python.framework.ops import disable_eager_execution
+
+    disable_eager_execution()
+    # tf.compat.v1.disable_eager_execution()
+
+
+def tf_gpu_grow_memory():
+    """Only allocate GPU memory when needed."""
+    for gpu in tf.config.experimental.list_physical_devices("GPU"):
+        tf.config.experimental.set_memory_growth(gpu, True)
+
+    # config = tf.compat.v1.ConfigProto()
+    # config.gpu_options.allow_growth = True
+    # sess = tf.compat.v1.Session(config=config)
+
+
 def new_tf_graph_and_session(func):
     """Run decorated function in a new tf.Graph and tf.Session process."""
 
