@@ -6,7 +6,6 @@ import h5py
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.python.framework.ops import disable_eager_execution
 
 from src.analysis import plot
 from src.analysis.methods.accuracyvskb import analyze_accuracyvskb_layer
@@ -33,44 +32,6 @@ from src.lib.layers import (
     UniformQuantizationU8Encoder,
 )
 from src.lib.split import split_model
-
-# config = tf.compat.v1.ConfigProto()
-# config.gpu_options.allow_growth=True
-# sess = tf.compat.v1.Session(config=config)
-
-# for gpu in tf.config.experimental.list_physical_devices('GPU'):
-#     tf.config.experimental.set_memory_growth(gpu, True)
-
-# tf.compat.v1.disable_eager_execution()
-
-# disable_eager_execution()
-
-
-# On all models:
-# 1. Output graph and text of model
-# 2.
-# 3.
-
-# On all layers:
-# 1. Output layer latencies
-# 2. Output layer distribution histograms (=> generate models.json via stddev?)
-# 3. Measure tensor optical flow on video (translate, rotation, scale, noise)
-
-# On certain/recommended layers (that can be quantized):
-# 1. Accuracy vs KB
-# 2. Accuracy vs SNR/MSE
-# 3.
-
-# On ModelConfig layers:
-# 1.
-# 2.
-# 3.
-
-# Other:
-# measure which has more accuracy: clip @ 90th pct, 99th pct, ...? (maybe make this an experiment!)
-# mkdir -p img/graph img/summary
-# stddev of stddevs?
-# per-neuron stddev/mean/etc... or try to find structure in feature maps or whatever...
 
 
 def analyze_layer(
