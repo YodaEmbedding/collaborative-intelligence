@@ -126,9 +126,10 @@ def separate_process(sleep_after: int = 0):
 
             p = Process(target=worker, args=(q, *args), kwargs=kwargs)
             p.start()
+            result = q.get()
             p.join()
             sleep(sleep_after)
-            return q.get()
+            return result
 
         return wrapper
 
