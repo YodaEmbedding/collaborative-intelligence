@@ -16,8 +16,6 @@ from src.analysis.utils import basename_of, title_of
 from src.lib.layouts import TensorLayout
 from src.lib.postencode import JpegPostencoder, Postencoder
 from src.lib.predecode import JpegPredecoder, Predecoder
-from src.modelconfig import ModelConfig
-from src.utils import split_model_by_config
 
 BATCH_SIZE = 64
 BYTES_PER_KB = 1000
@@ -191,10 +189,10 @@ def _categorical_top1_accuracy(
 
 
 @tf.function(autograph=False)
-def _first(x, y):
+def _first(x, _y):
     return x
 
 
 @tf.function(autograph=False)
-def _second(x, y):
+def _second(_x, y):
     return y
