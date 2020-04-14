@@ -7,10 +7,7 @@ import pandas as pd
 import tensorflow as tf
 from PIL import Image
 
-# TODO lazy?
 data_dir = "data"
-csv_path = f"{data_dir}/data.csv"
-df = pd.read_csv(csv_path)
 
 
 def single_sample_image() -> np.ndarray:
@@ -44,10 +41,12 @@ imagenet_lookup = _get_imagenet_reverse_lookup()
 
 
 def dataset() -> tf.data.Dataset:
-    return dataset_kb(30)
+    return dataset_kb(kb=30, filtered=False)
 
 
-def dataset_kb(kb: int = 30) -> tf.data.Dataset:
+def dataset_kb(kb: int = 30, filtered: bool = True) -> tf.data.Dataset:
+    filename = "data_kb_filtered.csv" if filtered else "data_kb_all.csv"
+    df = pd.read_csv(f"{data_dir}/{filename}")
     filepaths = df["file"].map(lambda x: f"{data_dir}/{kb}kb/{x}")
     labels = df["label"].replace(imagenet_lookup).astype(dtype=np.int64)
     dataset = tf.data.Dataset.from_tensor_slices((filepaths, labels))
