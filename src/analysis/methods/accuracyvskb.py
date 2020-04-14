@@ -142,7 +142,7 @@ def _evaluate_accuracies_shared_kb(
             model_server,
             postencoder,
             predecoder,
-            dataset_quality,
+            dataset_quality.batch(BATCH_SIZE),
             _categorical_top1_accuracy,
             quant,
             dequant,
