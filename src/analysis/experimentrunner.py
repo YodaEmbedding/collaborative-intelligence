@@ -45,14 +45,14 @@ class ExperimentRunner:
         self.data_batched = self.data.batch(batch_size)
         labels = self.data.map(lambda x, y: y)
         self.data_labels = np.array(list(tfds.as_numpy(labels)))
-        self.data_numpy_batches = list(tfds.as_numpy(self.data_batched))
 
         self.d = {}
 
     def client_tensor_batches(self, images: bool = False, copy: bool = True):
         client_tensors = self.d["tensors"]
         bs = self.batch_size
-        for i, (frames, labels) in enumerate(self.data_numpy_batches):
+        batches = tfds.as_numpy(self.data_batched)
+        for i, (frames, labels) in enumerate(batches):
             client_tensors_batch = client_tensors[i * bs : (i + 1) * bs]
             if copy:
                 client_tensors_batch = client_tensors_batch.copy()
