@@ -43,7 +43,7 @@ def analyze_accuracyvskb_layer(
     title = title_of(model_name, layer_name, layer_i, layer_n)
     basename = basename_of(model_name, layer_name, layer_i, layer_n)
     basedir = "img/accuracyvskb"
-    filename_server = path.join(basedir, f"{basename}-server.csv")
+    filename_server = path.join(basedir, f"{model_name}-server.csv")
     filename_shared = path.join(basedir, subdir, f"{basename}-shared.csv")
 
     try:
