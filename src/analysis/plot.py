@@ -26,8 +26,7 @@ def featuremap(
     cbar: bool = True,
 ) -> plt.Figure:
     img = featuremap_image(arr, order)
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1)
+    fig, ax = plt.subplots(tight_layout=True)
     im = ax.matshow(img, cmap="viridis")
     ax.set_title(title, fontsize="xx-small")
     ax.set_xticks([])
@@ -102,8 +101,8 @@ def neuron_histogram(
     return fig
 
 
-def save(fig: plt.Figure, filename: str, close: bool = True):
-    fig.savefig(filename, dpi=200)
+def save(fig: plt.Figure, filename: str, close=True, dpi=300, **kwargs):
+    fig.savefig(filename, dpi=dpi, **kwargs)
     if close:
         fig.clf()
         plt.close(fig)
