@@ -13,7 +13,7 @@ from tensorflow import keras
 
 from src.analysis import plot
 from src.analysis.dataset import dataset_kb
-from src.analysis.utils import basename_of, title_of
+from src.analysis.utils import basename_of, predict_dataset, title_of
 from src.lib.layouts import TensorLayout
 from src.lib.postencode import JpegPostencoder, Postencoder
 from src.lib.predecode import JpegPredecoder, Predecoder
@@ -82,10 +82,9 @@ def _compute_dataset_accuracies(
     quant: Callable[[np.ndarray], np.ndarray],
     dequant: Callable[[np.ndarray], np.ndarray],
 ) -> List[float]:
-    dataset = tfds.as_numpy(dataset)
     accuracies = []
 
-    for frames, labels in dataset:
+    for frames, labels in tfds.as_numpy(dataset):
         client_tensors = model_client.predict(frames)
         decoded_tensors = []
         for client_tensor in client_tensors:
@@ -103,7 +102,7 @@ def _compute_dataset_accuracies(
 
 def _evaluate_accuracy_kb(model: keras.Model, kb: int) -> np.ndarray:
     dataset = dataset_kb(kb)
-    predictions = model.predict(dataset.batch(BATCH_SIZE))
+    predictions = predict_dataset(model, dataset.batch(BATCH_SIZE))
     labels = np.array(list(tfds.as_numpy(dataset.map(_second))))
     accuracies = _categorical_top1_accuracy(labels, predictions)
     kbs = np.ones_like(accuracies) * kb
@@ -117,8 +116,8 @@ def _evaluate_accuracies_shared_kb(
     dequant: Callable[[np.ndarray], np.ndarray],
 ) -> np.ndarray:
     accuracies_shared = defaultdict(list)
-    dataset = dataset_kb().batch(BATCH_SIZE)
-    client_tensors = model_client.predict(dataset)
+    dataset = dataset_kb()
+    client_tensors = predict_dataset(model_client, dataset.batch(BATCH_SIZE))
     client_tensors = quant(client_tensors)
     quality_lookup = _make_quality_lut(client_tensors)
     kb_lookup = [{q: kb for kb, q in d.items()} for d in quality_lookup]

@@ -67,16 +67,25 @@ def prefix_of(model_config: ModelConfig) -> str:
     return f"models/{model_config.to_path()}"
 
 
+def title_of(
+    model_name: str, layer_name: str, layer_i: int, layer_n: int
+) -> str:
+    return f"{model_name} {layer_name} ({layer_i+1}/{layer_n})"
+
+
 def dataset_to_numpy_array(xs):
     if isinstance(xs, (tf.Tensor, tf.data.Dataset)):
         return np.array([x[0] for x in tfds.as_numpy(xs)])
     return np.array(xs)
 
 
-def title_of(
-    model_name: str, layer_name: str, layer_i: int, layer_n: int
-) -> str:
-    return f"{model_name} {layer_name} ({layer_i+1}/{layer_n})"
+def predict_dataset(
+    model: keras.Model, dataset: tf.data.Dataset
+) -> np.ndarray:
+    preds = []
+    for frames, _labels in tfds.as_numpy(dataset):
+        preds.append(model.predict(frames))
+    return np.concatenate(preds, axis=0)
 
 
 def release_models(*models: List[keras.Model]):
