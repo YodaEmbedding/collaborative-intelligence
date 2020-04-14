@@ -36,6 +36,8 @@ from src.lib.split import split_model
 
 tf_disable_eager_execution()
 
+BATCH_SIZE = 64
+
 
 def analyze_layer(
     model_name: str, model: keras.Model, layer_name: str, i: int, n: int
@@ -81,6 +83,7 @@ def analyze_layer(
         n,
         quant,
         dequant,
+        batch_size=BATCH_SIZE,
         subdir="jpeg_uniquant256",
     )
     d["latency"] = analyze_latencies_layer(model_client, layer_name)

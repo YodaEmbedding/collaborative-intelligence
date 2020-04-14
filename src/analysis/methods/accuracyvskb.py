@@ -18,10 +18,7 @@ from src.lib.layouts import TensorLayout
 from src.lib.postencode import JpegPostencoder, Postencoder
 from src.lib.predecode import JpegPredecoder, Predecoder
 
-BATCH_SIZE = 64
 BYTES_PER_KB = 1000
-data_dir = "data"
-csv_path = f"{data_dir}/data.csv"
 
 
 # TODO loop postencoders...?
@@ -35,6 +32,7 @@ def analyze_accuracyvskb_layer(
     layer_n: int,
     quant: Callable[[np.ndarray], np.ndarray],
     dequant: Callable[[np.ndarray], np.ndarray],
+    batch_size: int,
     subdir: str = "",
 ):
     if len(model_client.output_shape) != 4:
@@ -50,9 +48,7 @@ def analyze_accuracyvskb_layer(
     try:
         data_server = pd.read_csv(filename_server)
     except FileNotFoundError:
-        accuracies_server = np.concatenate(
-            [_evaluate_accuracy_kb(model, kb) for kb in range(1, 31)], axis=1
-        )
+        accuracies_server = _evaluate_accuracies_server_kb(model, batch_size)
         kbs_server = accuracies_server[0] / 1.024
         acc_server = accuracies_server[1]
         data_server = pd.DataFrame({"kbs": kbs_server, "acc": acc_server})
@@ -63,7 +59,7 @@ def analyze_accuracyvskb_layer(
         data_shared = pd.read_csv(filename_shared)
     except FileNotFoundError:
         accuracies_shared = _evaluate_accuracies_shared_kb(
-            model_client, model_server, quant, dequant
+            model_client, model_server, quant, dequant, batch_size
         )
         kbs_shared = accuracies_shared[0] / 1.024
         acc_shared = accuracies_shared[1]
@@ -104,13 +100,24 @@ def _compute_dataset_accuracies(
     return accuracies
 
 
-def _evaluate_accuracy_kb(model: keras.Model, kb: int) -> np.ndarray:
+def _evaluate_accuracy_kb(
+    model: keras.Model, kb: int, batch_size: int
+) -> np.ndarray:
     dataset = dataset_kb(kb)
-    predictions = predict_dataset(model, dataset.batch(BATCH_SIZE))
+    predictions = predict_dataset(model, dataset.batch(batch_size))
     labels = np.array(list(tfds.as_numpy(dataset.map(_second))))
     accuracies = _categorical_top1_accuracy(labels, predictions)
     kbs = np.ones_like(accuracies) * kb
     return np.vstack((kbs, accuracies))
+
+
+def _evaluate_accuracies_server_kb(
+    model: keras.Model, batch_size: int,
+) -> np.ndarray:
+    accuracies_server = [
+        _evaluate_accuracy_kb(model, kb, batch_size) for kb in range(1, 31)
+    ]
+    return np.concatenate(accuracies_server, axis=1)
 
 
 def _evaluate_accuracies_shared_kb(
@@ -118,10 +125,11 @@ def _evaluate_accuracies_shared_kb(
     model_server: keras.Model,
     quant: Callable[[np.ndarray], np.ndarray],
     dequant: Callable[[np.ndarray], np.ndarray],
+    batch_size: int,
 ) -> np.ndarray:
     accuracies_shared = defaultdict(list)
     dataset = dataset_kb()
-    client_tensors = predict_dataset(model_client, dataset.batch(BATCH_SIZE))
+    client_tensors = predict_dataset(model_client, dataset.batch(batch_size))
     client_tensors = quant(client_tensors)
     quality_lookup = _make_quality_lut(client_tensors)
     kb_lookup = [{q: kb for kb, q in d.items()} for d in quality_lookup]
@@ -146,7 +154,7 @@ def _evaluate_accuracies_shared_kb(
             model_server,
             postencoder,
             predecoder,
-            dataset_quality.batch(BATCH_SIZE),
+            dataset_quality.batch(batch_size),
             _categorical_top1_accuracy,
             quant,
             dequant,
