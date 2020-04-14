@@ -37,6 +37,9 @@ def analyze_accuracyvskb_layer(
     dequant: Callable[[np.ndarray], np.ndarray],
     subdir: str = "",
 ):
+    if len(model_client.output_shape) != 4:
+        return
+
     title = title_of(model_name, layer_name, layer_i, layer_n)
     basename = basename_of(model_name, layer_name, layer_i, layer_n)
     basedir = "img/accuracyvskb"
