@@ -125,33 +125,42 @@ def analyze_layer(
 # TODO memory: reload model for each separate task (or just comment out tasks)
 # TODO optimization: reuse split models
 @separate_process(sleep_after=5)
-# @new_tf_graph_and_session
-def analyze_model(model_name, cut_layers=None):
-    print(f"Analyzing {model_name}...\n")
+@new_tf_graph_and_session
+def load_model_and_run(model_name, func):
     prefix = f"models/{model_name}/{model_name}"
     model = keras.models.load_model(f"{prefix}-full.h5", compile=False)
     model.compile(**compile_kwargs)
+    result = func(model)
+    release_models(model)
+    return result
 
-    keras.utils.plot_model(model, to_file=f"img/graph/{model_name}.png")
 
-    with open(f"img/summary/{model_name}.txt", "w") as f:
-        model.summary(print_fn=lambda x: f.write(f"{x}\n"))
+def analyze_model(model_name, cut_layers=None):
+    print(f"Analyzing {model_name}...\n")
 
-    if cut_layers is None:
-        cut_layers = [x.name for x in get_cut_layers(model.layers[0])]
+    def init(model, cut_layers=cut_layers):
+        keras.utils.plot_model(model, to_file=f"img/graph/{model_name}.png")
+        with open(f"img/summary/{model_name}.txt", "w") as f:
+            model.summary(print_fn=lambda x: f.write(f"{x}\n"))
+        if cut_layers is None:
+            cut_layers = [x.name for x in get_cut_layers(model.layers[0])]
+        return cut_layers
 
+    cut_layers = load_model_and_run(model_name, init)
     n = len(cut_layers)
-
     dicts = []
 
     for i, cut_layer_name in enumerate(cut_layers):
-        d = analyze_layer(model_name, model, cut_layer_name, i, n)
+
+        def analyze_layer_wrapper(model):
+            return analyze_layer(model_name, model, cut_layer_name, i, n)
+
+        d = load_model_and_run(model_name, analyze_layer_wrapper)
         dicts.append(d)
 
     analyze_size_model(model_name, model, cut_layers)
     analyze_latencies_post(model_name, dicts)
 
-    release_models(model)
     print("\n-----\n")
 
 
