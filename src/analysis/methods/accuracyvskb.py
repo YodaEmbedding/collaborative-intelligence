@@ -49,7 +49,7 @@ def analyze_accuracyvskb_layer(
         data_server = pd.read_csv(filename_server)
     except FileNotFoundError:
         data_server = _evaluate_accuracies_server_kb(model, batch_size)
-        data_server.to_csv(filename_server)
+        data_server.to_csv(filename_server, index=False)
         print("Analyzed server accuracy vs KB")
 
     try:
@@ -58,8 +58,15 @@ def analyze_accuracyvskb_layer(
         data_shared = _evaluate_accuracies_shared_kb(
             model_client, model_server, quant, dequant, batch_size
         )
-        data_shared.to_csv(filename_shared)
+        data_shared.to_csv(filename_shared, index=False)
         print("Analyzed shared accuracy vs KB")
+
+    if "kbs" not in data_shared.columns:
+        data_shared["kbs"] = data_shared["bytes"] / 1024
+        data_shared.drop("bytes", axis=1, inplace=True)
+
+    bins = np.logspace(0, np.log10(30), num=30)
+    data_shared = _bin_for_plot(data_shared, "kbs", bins)
 
     fig = _plot_accuracy_vs_kb(title, data_server, data_shared)
     plot.save(fig, path.join(shareddir, f"{basename}.png"))
@@ -110,24 +117,19 @@ def _evaluate_accuracies_shared_kb(
 
     for xs, ls, bs in batches:
         xs = model_server.predict_on_batch(xs)
-        accs = _categorical_top1_accuracy(xs, ls)
+        accs = _categorical_top1_accuracy(ls, xs)
         accuracies.extend(accs)
         labels.extend(ls)
         byte_sizes.extend(bs)
-        print(f"n={len(accuracies)}...")
+        print(f"processed {len(accuracies)}...")
 
-    kbs = byte_sizes / 1024
+    byte_sizes = np.array(byte_sizes)
+    accuracies = np.array(accuracies)
+    labels = np.array(labels)
+
     df = pd.DataFrame(
-        # {"byte_size": byte_sizes, "acc": accuracies, "label": labels}
-        {"kbs": kbs, "acc": accuracies, "label": labels}
+        {"bytes": byte_sizes, "acc": accuracies, "label": labels}
     )
-
-    # TODO Shouldn't this be moved... outside...?
-    bins = np.linspace(0.9, 30.1, num=5 * 29 + 2)
-    mids = 0.5 * (bins[:-1] + bins[1:])
-    df.sort_values("kbs", inplace=True)
-    df = df[(bins[0] < df["kbs"]) & (df["kbs"] < bins[-1])]
-    df["kbs"] = mids[np.digitize(df["kbs"], bins)]
 
     return df
 
@@ -143,15 +145,14 @@ def _make_batches(client_tensors, labels, many_func, batch_size):
         xss.extend(xs)
         lss.extend(ls)
         bss.extend(bs)
-        if len(xss) < batch_size:
-            continue
-        xs_ = np.array(xss[:batch_size])
-        ls_ = np.array(lss[:batch_size])
-        bs_ = np.array(bss[:batch_size])
-        yield xs_, ls_, bs_
-        xss = xss[batch_size:]
-        lss = lss[batch_size:]
-        bss = bss[batch_size:]
+        while len(xss) >= batch_size:
+            xs_ = np.array(xss[:batch_size])
+            ls_ = np.array(lss[:batch_size])
+            bs_ = np.array(bss[:batch_size])
+            yield xs_, ls_, bs_
+            xss = xss[batch_size:]
+            lss = lss[batch_size:]
+            bss = bss[batch_size:]
 
     if len(xss) != 0:
         yield np.array(xss), np.array(lss), np.array(bss)
@@ -185,6 +186,17 @@ def _generate_jpeg_tensors(
         bs.append(b)
 
     return xs, bs
+
+
+def _bin_for_plot(
+    df: pd.DataFrame, key: str, bins: np.ndarray
+) -> pd.DataFrame:
+    mids = 0.5 * (bins[:-1] + bins[1:])
+    df = df.sort_values(key)
+    df = df[(bins[0] < df[key]) & (df[key] < bins[-1])]
+    idxs = np.digitize(df[key], bins) - 1
+    df[key] = mids[idxs]
+    return df
 
 
 def _plot_accuracy_vs_kb(
