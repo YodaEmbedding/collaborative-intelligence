@@ -13,12 +13,7 @@ from tensorflow import keras
 
 from src.analysis import dataset as ds
 from src.analysis import plot
-from src.analysis.utils import (
-    basename_of,
-    predict_dataset,
-    predict_dataset_into_dataset,
-    title_of,
-)
+from src.analysis.utils import basename_of, predict_dataset, title_of
 from src.lib.layouts import TensorLayout
 from src.lib.postencode import JpegPostencoder, Postencoder
 from src.lib.predecode import JpegPredecoder, Predecoder
@@ -101,20 +96,19 @@ def _evaluate_accuracies_shared_kb(
     dequant: Callable[[np.ndarray], np.ndarray],
     batch_size: int,
 ) -> pd.DataFrame:
-
-    # TODO also, for JPEG2000, rate control rather than LUT for required quality
-
     dataset = ds.dataset()
-    dataset_client = predict_dataset_into_dataset(model_client, dataset)
-    dataset_recv = _generate_jpeg_dataset(
-        dataset_client, model_server.input_shape, quant, dequant
-    )
+    client_tensors = predict_dataset(model_client, dataset.batch(batch_size))
+    labels = np.array(list(tfds.as_numpy(dataset.map(_second))))
+
+    # TODO for JPEG2000, rate control rather than quality
+    many_func = lambda x: _generate_jpeg_tensors(x, quant, dequant)
+    batches = _make_batches(client_tensors, labels, many_func, batch_size)
 
     byte_sizes = []
     accuracies = []
     labels = []
 
-    for xs, ls, bs in tfds.as_numpy(dataset_recv.batch(batch_size)):
+    for xs, ls, bs in batches:
         xs = model_server.predict_on_batch(xs)
         accs = _categorical_top1_accuracy(xs, ls)
         accuracies.extend(accs)
@@ -138,37 +132,29 @@ def _evaluate_accuracies_shared_kb(
     return df
 
 
-def _generate_jpeg_dataset(
-    dataset: tf.data.Dataset,
-    shape: tuple,
-    quant: Callable[[np.ndarray], np.ndarray],
-    dequant: Callable[[np.ndarray], np.ndarray],
-) -> tf.data.Dataset:
-    """Dataset of reconstructed tensors from various compressed sizes"""
+def _make_batches(client_tensors, labels, many_func, batch_size):
+    xss = []
+    lss = []
+    bss = []
 
-    def map_func(client_tensor: np.ndarray, label: int):
-        def _func(x: np.ndarray):
-            _generate_jpeg_tensors(x, quant, dequant)
+    for client_tensor, label in zip(client_tensors, labels):
+        xs, bs = many_func(client_tensor)
+        ls = [label] * len(xs)
+        xss.extend(xs)
+        lss.extend(ls)
+        bss.extend(bs)
+        if len(xss) < batch_size:
+            continue
+        xs_ = np.array(xss[:batch_size])
+        ls_ = np.array(lss[:batch_size])
+        bs_ = np.array(bss[:batch_size])
+        yield xs_, ls_, bs_
+        xss = xss[batch_size:]
+        lss = lss[batch_size:]
+        bss = bss[batch_size:]
 
-        xs, bs = tf.py_function(
-            _func, inp=[client_tensor], Tout=[tf.float32, tf.int64]
-        )
-        ls = tf.ones_like(bs) * label
-        print(xs, ls, bs)
-        return xs, ls, bs
-
-    return dataset.map(map_func).unbatch()
-
-    # def gen():
-    #     for client_tensor, label in tfds.as_numpy(dataset):
-    #         for x, b in _generate_jpeg_tensors(client_tensor, quant, dequant):
-    #             yield x, label, b
-    #
-    # return tf.data.Dataset.from_generator(
-    #     gen,
-    #     (tf.float32, tf.int64, tf.int64),
-    #     (tf.TensorShape(shape), tf.TensorShape([]), tf.TensorShape([])),
-    # )
+    if len(xss) != 0:
+        yield np.array(xss), np.array(lss), np.array(bss)
 
 
 def _generate_jpeg_tensors(
@@ -199,51 +185,6 @@ def _generate_jpeg_tensors(
         bs.append(b)
 
     return xs, bs
-
-
-# def _generate_jpeg_dataset(
-#     dataset: tf.data.Dataset,
-#     shape: tuple,
-#     quant: Callable[[np.ndarray], np.ndarray],
-#     dequant: Callable[[np.ndarray], np.ndarray],
-# ) -> tf.data.Dataset:
-#     """Dataset of reconstructed tensors from various compressed sizes"""
-#
-#     def gen():
-#         for client_tensor, label in tfds.as_numpy(dataset):
-#             for x, b in _generate_jpeg_tensors(client_tensor, quant, dequant):
-#                 yield x, label, b
-#
-#     return tf.data.Dataset.from_generator(
-#         gen,
-#         (tf.float32, tf.int64, tf.int64),
-#         (tf.TensorShape(shape), tf.TensorShape([]), tf.TensorShape([])),
-#     )
-#
-#
-# def _generate_jpeg_tensors(
-#     client_tensor: np.ndarray,
-#     quant: Callable[[np.ndarray], np.ndarray],
-#     dequant: Callable[[np.ndarray], np.ndarray],
-# ) -> Iterator[Tuple[np.ndarray, int]]:
-#     """Yields reconstructed tensors from various compressed sizes"""
-#     tensor_layout = TensorLayout.from_tensor(client_tensor, "hwc")
-#     tiled_layout = JpegPostencoder(tensor_layout).tiled_layout
-#     d = {}
-#
-#     for quality in range(1, 101):
-#         postencoder = JpegPostencoder(tensor_layout, quality=quality)
-#         x = client_tensor
-#         x = quant(x)
-#         x = postencoder.run(x)
-#         b = len(x)
-#         d[b] = x, quality
-#
-#     for b, (x, quality) in d.items():
-#         predecoder = JpegPredecoder(tiled_layout, tensor_layout)
-#         x = predecoder.run(x)
-#         x = dequant(x)
-#         yield x, b
 
 
 def _plot_accuracy_vs_kb(

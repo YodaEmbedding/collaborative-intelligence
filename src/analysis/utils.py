@@ -89,40 +89,6 @@ def predict_dataset(
     return np.concatenate(preds, axis=0)
 
 
-def predict_dataset_into_dataset(
-    model: keras.Model, dataset: tf.data.Dataset
-) -> tf.data.Dataset:
-    """Predict over batched dataset into another dataset."""
-
-    def gen():
-        for frames, labels in tfds.as_numpy(dataset):
-            preds = model.predict_on_batch(frames)
-            yield preds, labels
-
-    dataset_gen = tf.data.Dataset.from_generator(
-        gen,
-        (model.dtype, tf.int64),
-        (tf.TensorShape(model.output_shape), tf.TensorShape([None])),
-    )
-
-    return dataset_gen.unbatch()
-
-    # def map_func(x, y):
-    #     model.predict_on_batch(x)
-    #     tf.py_function(
-    #         model.predict_on_batch, inp=[x], Tout=[tf.float32]
-    #     )
-    #     return (x, y)
-    #
-    # return dataset.map(map_func)
-
-    # return dataset.map(lambda x, y: (model.predict_on_batch(x), y))
-    # return dataset.map(lambda x, y: (model(x), y))
-    # return dataset.map(lambda x, y: (model(x), y))
-    #
-    # return dataset_gen.unbatch()
-
-
 def release_models(*models: List[keras.Model]):
     for model in models:
         del model
