@@ -1,7 +1,7 @@
 import textwrap
 from collections import defaultdict
 from os import path
-from typing import Callable, Dict, Iterator, List, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,14 +14,17 @@ from tensorflow import keras
 from src.analysis import dataset as ds
 from src.analysis import plot
 from src.analysis.utils import basename_of, predict_dataset, title_of
-from src.lib.layouts import TensorLayout
-from src.lib.postencode import JpegPostencoder, Postencoder
-from src.lib.predecode import JpegPredecoder, Predecoder
+from src.lib.layouts import TensorLayout, TiledArrayLayout
+from src.lib.postencode import (
+    Jpeg2000Postencoder,
+    JpegPostencoder,
+    Postencoder,
+)
+from src.lib.predecode import Jpeg2000Predecoder, JpegPredecoder, Predecoder
 
 BYTES_PER_KB = 1000
 
 
-# TODO loop postencoders...?
 def analyze_accuracyvskb_layer(
     model_name: str,
     model: keras.Model,
@@ -32,6 +35,7 @@ def analyze_accuracyvskb_layer(
     layer_n: int,
     quant: Callable[[np.ndarray], np.ndarray],
     dequant: Callable[[np.ndarray], np.ndarray],
+    postencoder: str,
     batch_size: int,
     subdir: str = "",
 ):
@@ -56,7 +60,7 @@ def analyze_accuracyvskb_layer(
         data_shared = pd.read_csv(filename_shared)
     except FileNotFoundError:
         data_shared = _evaluate_accuracies_shared_kb(
-            model_client, model_server, quant, dequant, batch_size
+            model_client, model_server, quant, dequant, postencoder, batch_size
         )
         data_shared.to_csv(filename_shared, index=False)
         print("Analyzed shared accuracy vs KB")
@@ -100,14 +104,22 @@ def _evaluate_accuracies_shared_kb(
     model_server: keras.Model,
     quant: Callable[[np.ndarray], np.ndarray],
     dequant: Callable[[np.ndarray], np.ndarray],
+    postencoder: str,
     batch_size: int,
 ) -> pd.DataFrame:
     dataset = ds.dataset()
     client_tensors = predict_dataset(model_client, dataset.batch(batch_size))
     labels = np.array(list(tfds.as_numpy(dataset.map(_second))))
 
-    # TODO for JPEG2000, rate control rather than quality
-    many_func = lambda x: _generate_jpeg_tensors(x, quant, dequant)
+    bins = np.logspace(0, np.log10(30), num=30)
+    many_func = {
+        "jpeg": lambda x: _generate_jpeg_tensors(
+            x, quant, dequant, quality_levels=range(1, 101)
+        ),
+        "jpeg2000": lambda x: _generate_jpeg2000_tensors(
+            x, quant, dequant, out_sizes=1024 * bins
+        ),
+    }[postencoder.lower()]
     batches = _make_batches(client_tensors, labels, many_func, batch_size)
 
     byte_sizes = []
@@ -157,34 +169,71 @@ def _make_batches(client_tensors, labels, many_func, batch_size):
         yield np.array(xss), np.array(lss), np.array(bss)
 
 
-def _generate_jpeg_tensors(
+def _generate_tensors(
     client_tensor: np.ndarray,
     quant: Callable[[np.ndarray], np.ndarray],
     dequant: Callable[[np.ndarray], np.ndarray],
+    make_postencoder: Callable[..., Postencoder],
+    make_predecoder: Callable[[TiledArrayLayout, TensorLayout], Predecoder],
+    kwargs_list: Iterator[Dict[str, Any]],
 ) -> Tuple[List[np.ndarray], List[int]]:
     """Returns reconstructed tensors from various compressed sizes"""
     tensor_layout = TensorLayout.from_tensor(client_tensor, "hwc")
-    tiled_layout = JpegPostencoder(tensor_layout).tiled_layout
+    tiled_layout = make_postencoder(tensor_layout).tiled_layout
     d = {}
     xs = []
     bs = []
 
-    for quality in range(1, 101):
-        postencoder = JpegPostencoder(tensor_layout, quality=quality)
+    for kwargs in kwargs_list:
+        postencoder = make_postencoder(tensor_layout, **kwargs)
         x = client_tensor
         x = quant(x)
         x = postencoder.run(x)
         b = len(x)
-        d[b] = x, quality
+        d[b] = x
 
-    for b, (x, quality) in d.items():
-        predecoder = JpegPredecoder(tiled_layout, tensor_layout)
+    for b, x in d.items():
+        predecoder = make_predecoder(tiled_layout, tensor_layout)
         x = predecoder.run(x)
         x = dequant(x)
         xs.append(x)
         bs.append(b)
 
     return xs, bs
+
+
+def _generate_jpeg_tensors(
+    client_tensor: np.ndarray,
+    quant: Callable[[np.ndarray], np.ndarray],
+    dequant: Callable[[np.ndarray], np.ndarray],
+    quality_levels: Iterator[int],
+) -> Tuple[List[np.ndarray], List[int]]:
+    """Returns reconstructed tensors from various compressed sizes"""
+    return _generate_tensors(
+        client_tensor,
+        quant,
+        dequant,
+        JpegPostencoder,
+        JpegPredecoder,
+        [{"quality": quality} for quality in quality_levels],
+    )
+
+
+def _generate_jpeg2000_tensors(
+    client_tensor: np.ndarray,
+    quant: Callable[[np.ndarray], np.ndarray],
+    dequant: Callable[[np.ndarray], np.ndarray],
+    out_sizes: Iterator[int],
+) -> Tuple[List[np.ndarray], List[int]]:
+    """Returns reconstructed tensors from various compressed sizes"""
+    return _generate_tensors(
+        client_tensor,
+        quant,
+        dequant,
+        Jpeg2000Postencoder,
+        Jpeg2000Predecoder,
+        [{"out_size": out_size} for out_size in out_sizes],
+    )
 
 
 def _dataframe_normalize(df: pd.DataFrame):

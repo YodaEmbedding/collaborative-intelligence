@@ -39,10 +39,17 @@ class JpegPostencoder(Postencoder):
 class Jpeg2000Postencoder(Postencoder):
     MBU_SIZE = 16
 
-    def __init__(self, tensor_layout: TensorLayout, **kwargs):
+    def __init__(
+        self, tensor_layout: TensorLayout, out_size: int = None, **kwargs
+    ):
         self.kwargs = kwargs
         self.tensor_layout = tensor_layout
         self.tiled_layout = determine_tile_layout(tensor_layout)
+        if out_size is not None:
+            size = np.prod(self.tiled_layout.shape)
+            rate = size / out_size
+            self.kwargs["quality_mode"] = "rates"
+            self.kwargs["quality_layers"] = [rate]
 
     def run(self, arr: np.ndarray) -> ByteString:
         tiled_tensor = tile(arr, self.tensor_layout, self.tiled_layout)

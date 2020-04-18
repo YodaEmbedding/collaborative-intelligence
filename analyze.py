@@ -69,23 +69,20 @@ def analyze_layer(
     dequant = lambda x: uni_dequant(x, clip_range=clip_range, levels=256)
 
     analyze_featuremap_layer(model_name, model_client, layer_name, i, n)
+
     analyze_featuremapcompression_layer(
         model_name, model_client, layer_name, i, n, quant, kbs=[2, 5, 10, 30]
     )
+
     analyze_motions_layer(model_name, model_client, layer_name, i, n)
+
+    args = (model_name, model, model_client, model_server, layer_name, i, n)
+    postencoder_name = "jpeg2000"
+    subdir = f"{postencoder_name}_uniquant256/{model_name}"
     analyze_accuracyvskb_layer(
-        model_name,
-        model,
-        model_client,
-        model_server,
-        layer_name,
-        i,
-        n,
-        quant,
-        dequant,
-        batch_size=BATCH_SIZE,
-        subdir="jpeg_uniquant256",
+        *args, quant, dequant, postencoder_name, BATCH_SIZE, subdir
     )
+
     d["latency"] = analyze_latencies_layer(model_client, layer_name)
 
     release_models(model_client, model_server, model_analysis)
