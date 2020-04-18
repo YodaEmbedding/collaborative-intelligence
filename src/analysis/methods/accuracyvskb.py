@@ -61,9 +61,8 @@ def analyze_accuracyvskb_layer(
         data_shared.to_csv(filename_shared, index=False)
         print("Analyzed shared accuracy vs KB")
 
-    if "kbs" not in data_shared.columns:
-        data_shared["kbs"] = data_shared["bytes"] / 1024
-        data_shared.drop("bytes", axis=1, inplace=True)
+    _dataframe_normalize(data_server)
+    _dataframe_normalize(data_shared)
 
     bins = np.logspace(0, np.log10(30), num=30)
     data_shared = _bin_for_plot(data_shared, "kbs", bins)
@@ -91,9 +90,9 @@ def _evaluate_accuracies_server_kb(
         _evaluate_accuracy_kb(model, kb, batch_size) for kb in range(1, 31)
     ]
     accuracies_server = np.concatenate(accuracies_server, axis=1)
-    kbs_server = accuracies_server[0] / 1.024
-    acc_server = accuracies_server[1]
-    return pd.DataFrame({"kbs": kbs_server, "acc": acc_server})
+    byte_sizes = accuracies_server[0] * BYTES_PER_KB
+    accuracies = accuracies_server[1]
+    return pd.DataFrame({"bytes": byte_sizes, "acc": accuracies})
 
 
 def _evaluate_accuracies_shared_kb(
@@ -188,12 +187,17 @@ def _generate_jpeg_tensors(
     return xs, bs
 
 
-def _bin_for_plot(
-    df: pd.DataFrame, key: str, bins: np.ndarray
-) -> pd.DataFrame:
+def _dataframe_normalize(df: pd.DataFrame):
+    if "kbs" not in df.columns:
+        df["kbs"] = df["bytes"] / 1024
+        df.drop("bytes", axis=1, inplace=True)
+
+
+def _bin_for_plot(df: pd.DataFrame, key: str, bins: np.ndarray):
     mids = 0.5 * (bins[:-1] + bins[1:])
-    df = df.sort_values(key)
-    df = df[(bins[0] < df[key]) & (df[key] < bins[-1])]
+    df.sort_values(key, inplace=True)
+    drop_mask = (df[key] <= bins[0]) | (bins[-1] <= df[key])
+    df.drop(df[drop_mask].index, inplace=True)
     idxs = np.digitize(df[key], bins) - 1
     df[key] = mids[idxs]
     return df
