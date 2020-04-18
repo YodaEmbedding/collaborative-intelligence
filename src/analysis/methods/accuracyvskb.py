@@ -18,9 +18,15 @@ from src.lib.layouts import TensorLayout, TiledArrayLayout
 from src.lib.postencode import (
     Jpeg2000Postencoder,
     JpegPostencoder,
+    PngPostencoder,
     Postencoder,
 )
-from src.lib.predecode import Jpeg2000Predecoder, JpegPredecoder, Predecoder
+from src.lib.predecode import (
+    Jpeg2000Predecoder,
+    JpegPredecoder,
+    PngPredecoder,
+    Predecoder,
+)
 
 BYTES_PER_KB = 1000
 
@@ -119,6 +125,7 @@ def _evaluate_accuracies_shared_kb(
         "jpeg2000": lambda x: _generate_jpeg2000_tensors(
             x, quant, dequant, out_sizes=1024 * bins
         ),
+        "png": lambda x: _generate_png_tensors(x, quant, dequant),
     }[postencoder.lower()]
     batches = _make_batches(client_tensors, labels, many_func, batch_size)
 
@@ -233,6 +240,17 @@ def _generate_jpeg2000_tensors(
         Jpeg2000Postencoder,
         Jpeg2000Predecoder,
         [{"out_size": out_size} for out_size in out_sizes],
+    )
+
+
+def _generate_png_tensors(
+    client_tensor: np.ndarray,
+    quant: Callable[[np.ndarray], np.ndarray],
+    dequant: Callable[[np.ndarray], np.ndarray],
+) -> Tuple[List[np.ndarray], List[int]]:
+    """Returns reconstructed tensors from various compressed sizes"""
+    return _generate_tensors(
+        client_tensor, quant, dequant, PngPostencoder, PngPredecoder, [{}],
     )
 
 

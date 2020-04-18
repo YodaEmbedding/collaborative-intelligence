@@ -63,13 +63,11 @@ def analyze_layer(
     d.update(
         analyze_histograms_layer(model_name, model_client, layer_name, i, n)
     )
-    clip_range = (d["mean"] - 4 * d["std"], d["mean"] + 4 * d["std"])
-
-    quant = lambda x: uni_quant(x, clip_range=clip_range, levels=256)
-    dequant = lambda x: uni_dequant(x, clip_range=clip_range, levels=256)
 
     analyze_featuremap_layer(model_name, model_client, layer_name, i, n)
 
+    clip_range = (d["mean"] - 4 * d["std"], d["mean"] + 4 * d["std"])
+    quant = lambda x: uni_quant(x, clip_range=clip_range, levels=256)
     analyze_featuremapcompression_layer(
         model_name, model_client, layer_name, i, n, quant, kbs=[2, 5, 10, 30]
     )
@@ -77,8 +75,11 @@ def analyze_layer(
     analyze_motions_layer(model_name, model_client, layer_name, i, n)
 
     args = (model_name, model, model_client, model_server, layer_name, i, n)
-    postencoder_name = "jpeg2000"
-    subdir = f"{postencoder_name}_uniquant256/{model_name}"
+    clip_range = (d["mean"] - 3 * d["std"], d["mean"] + 3 * d["std"])
+    quant = lambda x: uni_quant(x, clip_range=clip_range, levels=8)
+    dequant = lambda x: uni_dequant(x, clip_range=clip_range, levels=8)
+    postencoder_name = "png"
+    subdir = f"{postencoder_name}_uniquant8/{model_name}"
     analyze_accuracyvskb_layer(
         *args, quant, dequant, postencoder_name, BATCH_SIZE, subdir
     )
