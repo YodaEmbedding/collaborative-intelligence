@@ -5,16 +5,22 @@ from typing import Dict, Tuple
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import cm
+from matplotlib.colors import ListedColormap
 from matplotlib.ticker import MaxNLocator
 
 from src.lib.layouts import TensorLayout
 from src.lib.tile import determine_tile_layout, tile
 
 
-def featuremap_image(arr: np.ndarray, order: str = "hwc") -> np.ndarray:
+def featuremap_image(
+    arr: np.ndarray, order: str = "hwc", fill_value=None
+) -> np.ndarray:
+    if fill_value is None:
+        fill_value = np.min(arr)
     tensor_layout = TensorLayout.from_tensor(arr, order)
     tiled_layout = determine_tile_layout(tensor_layout)
-    tiled = tile(arr, tensor_layout, tiled_layout, fill_value=np.min(arr))
+    tiled = tile(arr, tensor_layout, tiled_layout, fill_value=fill_value)
     return tiled
 
 
@@ -22,12 +28,15 @@ def featuremap(
     arr: np.ndarray,
     title: str,
     order: str = "hwc",
-    clim: Tuple[int, int] = None,
+    *,
     cbar: bool = True,
+    clim: Tuple[int, int] = None,
+    cmap="viridis",
 ) -> plt.Figure:
-    img = featuremap_image(arr, order)
+    fill_value = clim[0] if clim is not None else None
+    img = featuremap_image(arr, order, fill_value=fill_value)
     fig, ax = plt.subplots(tight_layout=True)
-    im = ax.matshow(img, cmap="viridis")
+    im = ax.matshow(img, cmap=cmap)
     ax.set_title(title, fontsize="xx-small")
     ax.set_xticks([])
     ax.set_yticks([])
@@ -42,7 +51,9 @@ def featuremapcompression(
     samples: Dict[float, np.ndarray],
     title: str,
     order: str = "hwc",
+    *,
     clim: Tuple[int, int] = None,
+    cmap="viridis",
 ) -> plt.Figure:
     n = len(samples)
     ncols = int(ceil(sqrt(len(samples))))
@@ -50,10 +61,11 @@ def featuremapcompression(
     fig, axes = plt.subplots(
         nrows, ncols, figsize=(8, 9), constrained_layout=True
     )
+    fill_value = clim[0] if clim is not None else None
     for i, (kb, arr) in enumerate(samples.items()):
-        img = featuremap_image(arr, order)
+        img = featuremap_image(arr, order, fill_value=fill_value)
         ax = axes[i // ncols, i % ncols] if nrows > 1 else axes[i]
-        im = ax.matshow(img, cmap="viridis")
+        im = ax.matshow(img, cmap=cmap)
         ax.set_title(f"{kb:.0f} KB", y=-0.07)
         ax.set_xticks([])
         ax.set_yticks([])
@@ -106,6 +118,20 @@ def save(fig: plt.Figure, filename: str, close=True, dpi=300, **kwargs):
     if close:
         fig.clf()
         plt.close(fig)
+
+
+def colormap_upper(
+    levels: int,
+    *,
+    cmin: float = 0.0,
+    cmax: float = 1.0,
+    cmap: str = "viridis",
+    gamma: float = 2.0,
+) -> ListedColormap:
+    """Colormap with higher resolution around upper end of range"""
+    crange = np.linspace(cmin, cmax, levels)
+    colormap = cm.get_cmap(cmap, 100000)
+    return ListedColormap(colormap(crange ** gamma))
 
 
 class OpticalFlowAnimator:
