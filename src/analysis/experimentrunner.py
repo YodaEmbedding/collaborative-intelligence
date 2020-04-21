@@ -1,3 +1,5 @@
+from typing import Iterator, Tuple
+
 import numpy as np
 import tensorflow_datasets as tfds
 from tensorflow import keras
@@ -48,10 +50,13 @@ class ExperimentRunner:
 
         self.d = {}
 
-    def client_tensor_batches(self, images: bool = False, copy: bool = True):
+    def client_tensor_batches(
+        self, *, images: bool = False, copy: bool = True, take: int = None
+    ) -> Iterator[Tuple[np.ndarray, np.ndarray]]:
         client_tensors = self.d["tensors"]
         bs = self.batch_size
-        batches = tfds.as_numpy(self.data_batched)
+        data = self.data if take is None else self.data.take(take)
+        batches = tfds.as_numpy(data.batch(bs))
         for i, (frames, labels) in enumerate(batches):
             client_tensors_batch = client_tensors[i * bs : (i + 1) * bs]
             if copy:
