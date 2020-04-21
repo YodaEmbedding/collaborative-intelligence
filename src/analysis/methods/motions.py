@@ -4,17 +4,12 @@ from PIL import Image
 from tensorflow import keras
 
 from src.analysis import plot
-from src.analysis.utils import basename_of, title_of
 from src.lib.layouts import TensorLayout
 from src.lib.tile import as_order, determine_tile_layout, tile_chw
 
 
 def analyze_motions_layer(
-    model_name: str,
-    model_client: keras.Model,
-    layer_name: str,
-    layer_i: int,
-    layer_n: int,
+    model_client: keras.Model, title: str, basename: str
 ):
     shape = model_client.output_shape[1:]
     if len(shape) != 3:
@@ -72,8 +67,6 @@ def analyze_motions_layer(
         tensor_frames[i] = tile_chw(tensors[i], nrows, ncols)
         flow_frames[i] = tile_chw(flows[i], nrows, ncols)
 
-    title = title_of(model_name, layer_name, layer_i, layer_n)
-    basename = basename_of(model_name, layer_name, layer_i, layer_n)
     ani = plot.OpticalFlowAnimator(
         frames[:-1], tensor_frames, flow_frames, title
     )

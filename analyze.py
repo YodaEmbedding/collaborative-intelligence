@@ -20,6 +20,7 @@ from src.analysis.methods.motions import analyze_motions_layer
 from src.analysis.methods.size import analyze_size_model
 from src.analysis.quant import uni_dequant, uni_quant
 from src.analysis.utils import (
+    basename_of,
     compile_kwargs,
     dataset_to_numpy_array,
     get_cut_layers,
@@ -27,6 +28,7 @@ from src.analysis.utils import (
     release_models,
     separate_process,
     tf_disable_eager_execution,
+    title_of,
 )
 from src.lib.layers import (
     UniformQuantizationU8Decoder,
@@ -45,9 +47,9 @@ def analyze_layer(
     print(f"cut layer: {layer_name} ({i + 1} / {n})")
 
     d = {"layer": layer_name}
+    title = title_of(model_name, layer_name, i, n)
+    basename = basename_of(model_name, layer_name, i, n)
 
-    # TODO maybe create a "monolithic" analysis model over ALL layers to speed
-    # things up significantly...
     model_client, model_server, model_analysis = split_model(
         model, layer=layer_name
     )
@@ -59,22 +61,20 @@ def analyze_layer(
         model_client.predict = dataset_to_numpy_array
         model_client.predict_on_batch = dataset_to_numpy_array
 
-    # TODO experiment if accuracy improves depending on how much clipping we do
-    d.update(
-        analyze_histograms_layer(model_name, model_client, layer_name, i, n)
-    )
+    d.update(analyze_histograms_layer(model_client, title, basename))
 
-    analyze_featuremap_layer(model_name, model_client, layer_name, i, n)
+    analyze_featuremap_layer(model_client, title, basename)
 
     clip_range = (d["mean"] - 4 * d["std"], d["mean"] + 4 * d["std"])
     quant = lambda x: uni_quant(x, clip_range=clip_range, levels=256)
+    kbs = [2, 5, 10, 30]
     analyze_featuremapcompression_layer(
-        model_name, model_client, layer_name, i, n, quant, kbs=[2, 5, 10, 30]
+        model_client, title, basename, quant, kbs=kbs
     )
 
-    analyze_motions_layer(model_name, model_client, layer_name, i, n)
+    analyze_motions_layer(model_client, title, basename)
 
-    args = (model_name, model, model_client, model_server, layer_name, i, n)
+    args = (model_name, model, model_client, model_server, title, basename)
     clip_range = (d["mean"] - 3 * d["std"], d["mean"] + 3 * d["std"])
     quant = lambda x: uni_quant(x, clip_range=clip_range, levels=8)
     dequant = lambda x: uni_dequant(x, clip_range=clip_range, levels=8)

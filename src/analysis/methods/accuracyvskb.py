@@ -13,7 +13,7 @@ from tensorflow import keras
 
 from src.analysis import dataset as ds
 from src.analysis import plot
-from src.analysis.utils import basename_of, predict_dataset, title_of
+from src.analysis.utils import predict_dataset
 from src.lib.layouts import TensorLayout, TiledArrayLayout
 from src.lib.postencode import (
     Jpeg2000Postencoder,
@@ -36,9 +36,8 @@ def analyze_accuracyvskb_layer(
     model: keras.Model,
     model_client: keras.Model,
     model_server: keras.Model,
-    layer_name: str,
-    layer_i: int,
-    layer_n: int,
+    title: str,
+    basename: str,
     quant: Callable[[np.ndarray], np.ndarray],
     dequant: Callable[[np.ndarray], np.ndarray],
     postencoder: str,
@@ -48,8 +47,6 @@ def analyze_accuracyvskb_layer(
     if len(model_client.output_shape) != 4:
         return
 
-    title = title_of(model_name, layer_name, layer_i, layer_n)
-    basename = basename_of(model_name, layer_name, layer_i, layer_n)
     basedir = "img/accuracyvskb"
     shareddir = path.join(basedir, subdir)
     filename_server = path.join(basedir, f"{model_name}-server.csv")
