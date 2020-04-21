@@ -1,6 +1,7 @@
-from typing import Iterator, Tuple
+from typing import Iterator, Tuple, Union
 
 import numpy as np
+import tensorflow as tf
 import tensorflow_datasets as tfds
 from tensorflow import keras
 
@@ -16,11 +17,16 @@ from src.lib.split import split_model
 
 
 class ExperimentRunner:
-    def __init__(self, model_name, layer_name, dataset_size, batch_size):
+    def __init__(
+        self,
+        model_name: str,
+        layer_name: str,
+        *,
+        dataset_size: int,
+        batch_size: int,
+    ):
         self.model_name = model_name
         self.layer_name = layer_name
-        self.dataset_size = dataset_size
-        self.batch_size = batch_size
 
         self.model = keras.models.load_model(
             f"models/{model_name}/{model_name}-full.h5", compile=False
@@ -43,28 +49,15 @@ class ExperimentRunner:
             c.output_shape[1:], "hwc", c.dtype
         )
 
-        self.data = dataset.dataset().take(dataset_size)
-        self.data_batched = self.data.batch(batch_size)
-        labels = self.data.map(lambda x, y: y)
-        self.data_labels = np.array(list(tfds.as_numpy(labels)))
+        data_all = dataset.dataset()
+        data = data_all.take(dataset_size)
+        data_test = data_all.skip(dataset_size).take(dataset_size)
+        self.data = ClientTensorDataset(data, self.model_client, batch_size)
+        self.data_test = ClientTensorDataset(
+            data_test, self.model_client, batch_size
+        )
 
         self.d = {}
-
-    def client_tensor_batches(
-        self, *, images: bool = False, copy: bool = True, take: int = None
-    ) -> Iterator[Tuple[np.ndarray, np.ndarray]]:
-        client_tensors = self.d["tensors"]
-        bs = self.batch_size
-        data = self.data if take is None else self.data.take(take)
-        batches = tfds.as_numpy(data.batch(bs))
-        for i, (frames, labels) in enumerate(batches):
-            client_tensors_batch = client_tensors[i * bs : (i + 1) * bs]
-            if copy:
-                client_tensors_batch = client_tensors_batch.copy()
-            if images:
-                yield client_tensors_batch, frames, labels
-                continue
-            yield client_tensors_batch, labels
 
     def summarize(self):
         for k, v in self.d.items():
@@ -74,3 +67,35 @@ class ExperimentRunner:
                 print(f"{k}: {v:.4g}")
                 continue
             print(f"{k}: {v}")
+
+
+class ClientTensorDataset:
+    """Caches client tensor inferences in memory."""
+
+    def __init__(
+        self, data: tf.data.Dataset, model_client: keras.Model, batch_size: int
+    ):
+        self.data = data
+        self.batch_size = batch_size
+        self.labels = np.array(list(tfds.as_numpy(data.map(lambda x, y: y))))
+        self.client_tensors = model_client.predict(data.batch(batch_size))
+
+    def client_tensor_batches(
+        self, *, images: bool = False, copy: bool = True, take: int = None
+    ) -> Iterator[
+        Union[
+            Tuple[np.ndarray, np.ndarray],
+            Tuple[np.ndarray, np.ndarray, np.ndarray],
+        ]
+    ]:
+        bs = self.batch_size
+        data = self.data if take is None else self.data.take(take)
+        batches = tfds.as_numpy(data.batch(bs))
+        for i, (frames, labels) in enumerate(batches):
+            client_tensors_batch = self.client_tensors[i * bs : (i + 1) * bs]
+            if copy:
+                client_tensors_batch = client_tensors_batch.copy()
+            if images:
+                yield client_tensors_batch, frames, labels
+                continue
+            yield client_tensors_batch, labels
