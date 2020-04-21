@@ -40,13 +40,17 @@ def _get_imagenet_reverse_lookup() -> Dict[str, int]:
 imagenet_lookup = _get_imagenet_reverse_lookup()
 
 
-def dataset() -> tf.data.Dataset:
-    return dataset_kb(kb=30, filtered=False)
+def dataset(shuffle: bool = True) -> tf.data.Dataset:
+    return dataset_kb(kb=30, filtered=False, shuffle=shuffle)
 
 
-def dataset_kb(kb: int = 30, filtered: bool = True) -> tf.data.Dataset:
+def dataset_kb(
+    kb: int = 30, filtered: bool = True, shuffle: bool = True
+) -> tf.data.Dataset:
     filename = "data_kb_filtered.csv" if filtered else "data_kb_all.csv"
     df = pd.read_csv(f"{data_dir}/{filename}")
+    if shuffle:
+        df = df.sample(frac=1).reset_index(drop=True)
     filepaths = df["file"].map(lambda x: f"{data_dir}/{kb}kb/{x}")
     labels = df["label"].replace(imagenet_lookup).astype(dtype=np.int64)
     dataset = tf.data.Dataset.from_tensor_slices((filepaths, labels))
