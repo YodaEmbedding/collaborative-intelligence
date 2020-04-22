@@ -105,15 +105,14 @@ def load_model_and_run(model_name, func):
     return result
 
 
-def analyze_model(model_name, cut_layers=None):
+def analyze_model(model_name, layers=None):
     print(f"Analyzing {model_name}...\n")
 
-    def init(model, cut_layers=cut_layers):
+    def init(model):
         keras.utils.plot_model(model, to_file=f"img/graph/{model_name}.png")
         with open(f"img/summary/{model_name}.txt", "w") as f:
             model.summary(print_fn=lambda x: f.write(f"{x}\n"))
-        if cut_layers is None:
-            cut_layers = [x.name for x in get_cut_layers(model.layers[0])]
+        cut_layers = [x.name for x in get_cut_layers(model.layers[0])]
         analyze_size_model(model_name, model, cut_layers)
         return cut_layers
 
@@ -121,10 +120,17 @@ def analyze_model(model_name, cut_layers=None):
     n = len(cut_layers)
     dicts = []
 
+    if layers is None:
+        layers = cut_layers
+
     for i, cut_layer_name in enumerate(cut_layers):
 
         def analyze_layer_wrapper(model, cut_layer_name=cut_layer_name, i=i):
             return analyze_layer(model_name, model, cut_layer_name, i, n)
+
+        if cut_layer_name not in layers:
+            dicts.append({})
+            continue
 
         d = load_model_and_run(model_name, analyze_layer_wrapper)
         dicts.append(d)
@@ -157,7 +163,8 @@ def main2():
     identity = lambda *args, **kwargs: None
     analyze_size_model = identity
     analyze_latencies_post = identity
-    analyze_model("resnet34", cut_layers=["stage3_unit1_relu1", "add_7"])
+    layers = ["pooling0", "add_3", "add_7", "add_13"]
+    analyze_model("resnet34", layers=layers)
 
 
 if __name__ == "__main__":
