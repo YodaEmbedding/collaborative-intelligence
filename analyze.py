@@ -76,10 +76,10 @@ def analyze_layer(
 
     args = (model_name, model, model_client, model_server, title, basename)
     clip_range = (d["mean"] - 3 * d["std"], d["mean"] + 3 * d["std"])
-    quant = lambda x: uni_quant(x, clip_range=clip_range, levels=8)
-    dequant = lambda x: uni_dequant(x, clip_range=clip_range, levels=8)
-    postencoder_name = "png"
-    subdir = f"{postencoder_name}_uniquant8/{model_name}"
+    quant = lambda x: uni_quant(x, clip_range=clip_range, levels=256)
+    dequant = lambda x: uni_dequant(x, clip_range=clip_range, levels=256)
+    postencoder_name = "jpeg"
+    subdir = f"{postencoder_name}_uniquant256/{model_name}"
     analyze_accuracyvskb_layer(
         *args, quant, dequant, postencoder_name, BATCH_SIZE, subdir
     )
@@ -159,10 +159,21 @@ def main():
 
 
 def main2():
-    global analyze_latencies_post, analyze_size_model
+    global \
+        analyze_featuremap_layer, \
+        analyze_featuremapcompression_layer, \
+        analyze_latencies_post, \
+        analyze_motions_layer, \
+        analyze_size_model
+
     identity = lambda *args, **kwargs: None
+
     analyze_size_model = identity
     analyze_latencies_post = identity
+    analyze_featuremap_layer = identity
+    analyze_featuremapcompression_layer = identity
+    analyze_motions_layer = identity
+
     layers = ["pooling0", "add_3", "add_7", "add_13"]
     analyze_model("resnet34", layers=layers)
 
