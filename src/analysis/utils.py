@@ -2,7 +2,7 @@ import gc
 from functools import wraps
 from multiprocessing import Process, Queue
 from time import sleep
-from typing import Iterator, List
+from typing import Callable, Iterator, List
 
 import numpy as np
 import tensorflow as tf
@@ -80,11 +80,16 @@ def dataset_to_numpy_array(xs):
 
 
 def predict_dataset(
-    model: keras.Model, dataset: tf.data.Dataset, batched: bool = True
+    model: keras.Model,
+    dataset: tf.data.Dataset,
+    map_frame: Callable[[np.ndarray], np.ndarray] = None,
+    batched: bool = True,
 ) -> np.ndarray:
     preds = []
     pred_func = model.predict_on_batch if batched else model.predict
     for frames, _labels in tfds.as_numpy(dataset):
+        if map_frame is not None:
+            frames = np.array(list(map(map_frame, frames)))
         preds.append(pred_func(frames))
     return np.concatenate(preds, axis=0)
 

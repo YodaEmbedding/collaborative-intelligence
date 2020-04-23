@@ -17,14 +17,20 @@ from src.analysis.utils import predict_dataset
 from src.lib.layouts import TensorLayout, TiledArrayLayout
 from src.lib.postencode import (
     Jpeg2000Postencoder,
+    Jpeg2000RgbPostencoder,
     JpegPostencoder,
+    JpegRgbPostencoder,
     PngPostencoder,
+    PngRgbPostencoder,
     Postencoder,
 )
 from src.lib.predecode import (
     Jpeg2000Predecoder,
+    Jpeg2000RgbPredecoder,
     JpegPredecoder,
+    JpegRgbPredecoder,
     PngPredecoder,
+    PngRgbPredecoder,
     Predecoder,
 )
 
@@ -49,13 +55,16 @@ def analyze_accuracyvskb_layer(
 
     basedir = "img/accuracyvskb"
     shareddir = path.join(basedir, subdir)
-    filename_server = path.join(basedir, f"{model_name}-server.csv")
+    filename_server = path.join(shareddir, f"{model_name}-server.csv")
     filename_shared = path.join(shareddir, f"{basename}-shared.csv")
 
     try:
         data_server = pd.read_csv(filename_server)
     except FileNotFoundError:
-        data_server = _evaluate_accuracies_server_kb(model, batch_size)
+        out_sizes = np.logspace(0, np.log10(30), num=30) * 1024
+        data_server = _evaluate_accuracies_server_kb(
+            model, quant, dequant, postencoder, batch_size, out_sizes
+        )
         data_server.to_csv(filename_server, index=False)
         print("Analyzed server accuracy vs KB")
 
@@ -80,7 +89,7 @@ def analyze_accuracyvskb_layer(
 
 
 def _evaluate_accuracy_kb(
-    model: keras.Model, kb: int, batch_size: int
+    model: keras.Model, batch_size: int, kb: int,
 ) -> np.ndarray:
     dataset = ds.dataset_kb(kb)
     predictions = predict_dataset(model, dataset.batch(batch_size))
@@ -91,10 +100,62 @@ def _evaluate_accuracy_kb(
 
 
 def _evaluate_accuracies_server_kb(
-    model: keras.Model, batch_size: int,
+    model: keras.Model,
+    quant: Callable[[np.ndarray], np.ndarray],
+    dequant: Callable[[np.ndarray], np.ndarray],
+    postencoder: str,
+    batch_size: int,
+    out_sizes: List[float],
+) -> pd.DataFrame:
+    if postencoder.lower() == "jpeg":
+        kbs = range(1, 31)
+        # kbs = list(sorted(set(x // 1024 for x in out_sizes)))
+        return _evaluate_accuracies_server_jpeg_kb(model, batch_size, kbs)
+
+    shape = model.input_shape[1:]
+    input_dtype = model.layers[0].dtype
+    tensor_layout = TensorLayout.from_shape(shape, "hwc", input_dtype)
+
+    make_prepostencoders = {
+        # "jpeg": lambda: JpegRgbPredecoder(tensor_layout),
+        "jpeg2000": lambda out_size: (
+            Jpeg2000RgbPostencoder(out_size=out_size),
+            Jpeg2000RgbPredecoder(tensor_layout),
+        ),
+        # "png": lambda: PngRgbPredecoder(tensor_layout),
+    }[postencoder.lower()]
+
+    dataset = ds.dataset()
+    labels = np.array(list(tfds.as_numpy(dataset.map(_second))))
+
+    byte_sizes = []
+    accuracies = []
+
+    for out_size in out_sizes:
+        postencoder, predecoder = make_prepostencoders(out_size)
+
+        def map_frame(x, postencoder=postencoder, predecoder=predecoder):
+            x = quant(x)
+            x = postencoder.run(x)
+            x = predecoder.run(x)
+            x = dequant(x)
+            return x
+
+        preds = predict_dataset(model, dataset.batch(batch_size), map_frame)
+        accs = _categorical_top1_accuracy(labels, preds)
+        byte_sizes.extend([out_size] * len(accs))
+        accuracies.extend(accs)
+
+    byte_sizes = np.array(byte_sizes)
+    accuracies = np.array(accuracies)
+    return pd.DataFrame({"bytes": byte_sizes, "acc": accuracies})
+
+
+def _evaluate_accuracies_server_jpeg_kb(
+    model: keras.Model, batch_size: int, kbs: List[int],
 ) -> pd.DataFrame:
     accuracies_server = [
-        _evaluate_accuracy_kb(model, kb, batch_size) for kb in range(1, 31)
+        _evaluate_accuracy_kb(model, batch_size, kb) for kb in kbs
     ]
     accuracies_server = np.concatenate(accuracies_server, axis=1)
     byte_sizes = accuracies_server[0] * BYTES_PER_KB
