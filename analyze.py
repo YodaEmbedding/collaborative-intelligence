@@ -154,17 +154,20 @@ def main():
     with open("models.json") as f:
         models = json.load(f)
 
+    # models = ["resnet18"]
+    models = ["resnet34"]
+    # models = ["resnet50"]
+
     for model_name in models:
         analyze_model(model_name)
 
 
 def main2():
-    global \
-        analyze_featuremap_layer, \
-        analyze_featuremapcompression_layer, \
-        analyze_latencies_post, \
-        analyze_motions_layer, \
-        analyze_size_model
+    global analyze_featuremap_layer
+    global analyze_featuremapcompression_layer
+    global analyze_latencies_post
+    global analyze_motions_layer
+    global analyze_size_model
 
     identity = lambda *args, **kwargs: None
 
