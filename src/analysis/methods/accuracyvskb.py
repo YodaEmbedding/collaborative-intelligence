@@ -63,7 +63,7 @@ def analyze_accuracyvskb_layer(
     except FileNotFoundError:
         out_sizes = np.logspace(0, np.log10(30), num=30) * 1024
         data_server = _evaluate_accuracies_server_kb(
-            model, quant, dequant, postencoder, batch_size, out_sizes
+            model, postencoder, batch_size, out_sizes
         )
         data_server.to_csv(filename_server, index=False)
         print("Analyzed server accuracy vs KB")
@@ -101,8 +101,6 @@ def _evaluate_accuracy_kb(
 
 def _evaluate_accuracies_server_kb(
     model: keras.Model,
-    quant: Callable[[np.ndarray], np.ndarray],
-    dequant: Callable[[np.ndarray], np.ndarray],
     postencoder: str,
     batch_size: int,
     out_sizes: List[float],
@@ -135,10 +133,10 @@ def _evaluate_accuracies_server_kb(
         postencoder, predecoder = make_prepostencoders(out_size)
 
         def map_frame(x, postencoder=postencoder, predecoder=predecoder):
-            x = quant(x)
+            x = x.astype(np.uint8)
             x = postencoder.run(x)
             x = predecoder.run(x)
-            x = dequant(x)
+            x = x.astype(input_dtype)
             return x
 
         preds = predict_dataset(model, dataset.batch(batch_size), map_frame)
