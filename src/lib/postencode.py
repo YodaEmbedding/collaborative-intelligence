@@ -36,6 +36,14 @@ class JpegPostencoder(Postencoder):
         return client_bytes
 
 
+class JpegRgbPostencoder(Postencoder):
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+
+    def run(self, arr: np.ndarray) -> ByteString:
+        return _pil_encode(arr, "JPEG", **self.kwargs)
+
+
 class Jpeg2000Postencoder(Postencoder):
     MBU_SIZE = 16
 
@@ -58,6 +66,19 @@ class Jpeg2000Postencoder(Postencoder):
         return client_bytes
 
 
+class Jpeg2000RgbPostencoder(Postencoder):
+    def __init__(self, out_size: int = None, **kwargs):
+        self.kwargs = kwargs
+        self.out_size = out_size
+
+    def run(self, arr: np.ndarray) -> ByteString:
+        if self.out_size is not None:
+            rate = arr.size / self.out_size
+            self.kwargs["quality_mode"] = "rates"
+            self.kwargs["quality_layers"] = [rate]
+        return _pil_encode(arr, "JPEG2000", **self.kwargs)
+
+
 class PngPostencoder(Postencoder):
     def __init__(self, tensor_layout: TensorLayout, **kwargs):
         self.kwargs = kwargs
@@ -68,6 +89,14 @@ class PngPostencoder(Postencoder):
         tiled_tensor = tile(arr, self.tensor_layout, self.tiled_layout)
         client_bytes = _pil_encode(tiled_tensor, "PNG", **self.kwargs)
         return client_bytes
+
+
+class PngRgbPostencoder(Postencoder):
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+
+    def run(self, arr: np.ndarray) -> ByteString:
+        return _pil_encode(arr, "PNG", **self.kwargs)
 
 
 class H264Postencoder(Postencoder):

@@ -55,6 +55,15 @@ class RgbPredecoder(Predecoder):
         )
 
 
+class _ImageRgbPredecoder(Predecoder):
+    def __init__(self, tensor_layout: TensorLayout):
+        self._tensor_layout = tensor_layout
+
+    def run(self, buf: ByteString) -> np.ndarray:
+        img = _decode_raw_img(buf)
+        return np.array(img).astype(self._tensor_layout.dtype)
+
+
 class JpegPredecoder(Predecoder):
     MBU_SIZE = 16
 
@@ -72,13 +81,8 @@ class JpegPredecoder(Predecoder):
         return tensor
 
 
-class JpegRgbPredecoder(Predecoder):
-    def __init__(self, tensor_layout: TensorLayout):
-        self._tensor_layout = tensor_layout
-
-    def run(self, buf: ByteString) -> np.ndarray:
-        img = _decode_raw_img(buf)
-        return np.array(img).astype(self._tensor_layout.dtype)
+class JpegRgbPredecoder(_ImageRgbPredecoder):
+    pass
 
 
 class Jpeg2000Predecoder(Predecoder):
@@ -98,6 +102,10 @@ class Jpeg2000Predecoder(Predecoder):
         return tensor
 
 
+class Jpeg2000RgbPredecoder(_ImageRgbPredecoder):
+    pass
+
+
 class PngPredecoder(Predecoder):
     def __init__(
         self, tiled_layout: TiledArrayLayout, tensor_layout: TensorLayout
@@ -111,6 +119,10 @@ class PngPredecoder(Predecoder):
         assert self._tiled_layout.shape == img.shape
         tensor = detile(img, self._tiled_layout, self._tensor_layout)
         return tensor
+
+
+class PngRgbPredecoder(_ImageRgbPredecoder):
+    pass
 
 
 def to_np_dtype(dtype: type) -> type:
