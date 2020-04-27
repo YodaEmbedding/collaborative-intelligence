@@ -604,6 +604,18 @@ def main():
         black = np.broadcast_to(np.mean(x, axis=-1)[..., np.newaxis], x.shape)
         return black_channel_pr(x, black, p)
 
+    def distort_black_neuron_tensoroffsetmean(x: np.ndarray, p) -> np.ndarray:
+        mu = np.broadcast_to(np.mean(x, axis=-1)[..., np.newaxis], x.shape)
+        tm = runner.d["tensors_mean"]
+        black = mu + tm - np.mean(tm, axis=-1)[..., np.newaxis]
+        return black_neuron_pr(x, black, p)
+
+    def distort_black_channel_tensoroffsetmean(x: np.ndarray, p) -> np.ndarray:
+        mu = np.broadcast_to(np.mean(x, axis=-1)[..., np.newaxis], x.shape)
+        tm = runner.d["tensors_mean"]
+        black = mu + tm - np.mean(tm, axis=-1)[..., np.newaxis]
+        return black_channel_pr(x, black, p)
+
     def acc_uniquant(runner: ExperimentRunner, width_sigma, levels):
         m, ws = runner.d["mean"], width_sigma * runner.d["std"]
         clip_range = (m - ws, m + ws)
@@ -834,6 +846,10 @@ def main():
             "name": "distort_black_neuron_channelmean",
         },
         {
+            "func": distort_black_neuron_tensoroffsetmean,
+            "name": "distort_black_neuron_tensoroffsetmean",
+        },
+        {
             "func": distort_black_channel_zero,
             "name": "distort_black_channel_zero",
         },
@@ -844,6 +860,10 @@ def main():
         {
             "func": distort_black_channel_channelmean,
             "name": "distort_black_channel_channelmean",
+        },
+        {
+            "func": distort_black_channel_tensoroffsetmean,
+            "name": "distort_black_channel_tensoroffsetmean",
         },
     ]
     for trial in trials:
