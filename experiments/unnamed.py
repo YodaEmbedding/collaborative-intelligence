@@ -338,6 +338,88 @@ def importance_blacken(
     return accuracies_avg
 
 
+def blacken_single_channel(
+    runner, basepath, name, func, importance_func, clim,
+):
+    npy_path = f"{basepath}_{name}.npy"
+    data = runner.data.client_tensor_batches(copy=False)
+    try:
+        importance = np.load(npy_path)
+    except FileNotFoundError:
+        importance = importance_func(runner, data, func)
+        np.save(npy_path, importance)
+    importance = importance / runner.d["accuracy"]
+    importance = np.clip(importance, 0.0, 1.0)
+    featuremap = np.broadcast_to(importance, runner.tensor_layout.shape)
+    cmap = plot.colormap_upper(levels=256, gamma=2.0)
+    fig = plot.featuremap(featuremap, runner.title, clim=clim, cmap=cmap)
+    plot.save(fig, f"{basepath}_{name}.png", bbox_inches="tight")
+
+
+def blacken_data(
+    runner: ExperimentRunner,
+    data: Iterator[Tuple[np.ndarray, np.ndarray]],
+    channel_sequence: List[int],
+    func: Callable[[np.ndarray, int], np.ndarray],
+) -> Iterator[Tuple[np.ndarray, np.ndarray]]:
+    for client_tensors, labels in data:
+        for i in range(len(client_tensors)):
+            for c in channel_sequence:
+                x = np.array(client_tensors[i])
+                black_channel = func(x, c)[..., c]
+                client_tensors[i, ..., c] = black_channel
+        yield client_tensors, labels
+
+
+def whiten_data(
+    runner: ExperimentRunner,
+    data: Iterator[Tuple[np.ndarray, np.ndarray]],
+    channel_sequence: List[int],
+    func: Callable[[np.ndarray, int], np.ndarray],
+) -> Iterator[Tuple[np.ndarray, np.ndarray]]:
+    seq = list(set(range(runner.tensor_layout.c)) - set(channel_sequence))
+    return blacken_data(runner, data, seq, func)
+
+
+def best_blacken_channel_sequence(
+    runner,
+    basepath,
+    name,
+    func,
+    data_func,
+    importance_func,
+    nanoptimize_func,
+    clim,
+) -> List[int]:
+    channel_sequence = []
+    exclude = np.zeros(runner.tensor_layout.c, dtype=np.bool)
+
+    for i in range(runner.tensor_layout.c):
+        basefilename = f"{basepath}_{name}_{i}"
+        data = runner.data.client_tensor_batches()
+        data = data_func(runner, data, channel_sequence)
+        importance = importance_func(runner, data, func)
+        importance_excluded = np.array(importance)
+        importance_excluded[exclude] = np.NaN
+        channel = nanoptimize_func(importance_excluded)
+        channel_sequence.append(channel)
+        exclude[channel] = True
+        data = runner.data_test.client_tensor_batches()
+        data = data_func(runner, data, channel_sequence)
+        importance = importance_func(runner, data, func)
+        np.save(f"{basefilename}.npy", importance)
+        importance = importance / runner.d["accuracy"]
+        importance = np.clip(importance, 0.0, 1.0)
+        featuremap = np.broadcast_to(importance, shape)
+        title = f"{runner.title} ({channel})"
+        cmap = plot.colormap_upper(levels=256, gamma=2.0)
+        fig = plot.featuremap(featuremap, title, clim=clim, cmap=cmap)
+        plot.save(fig, f"{basefilename}.png", bbox_inches="tight")
+        print(f"channel sequence: {channel_sequence}")
+
+    return channel_sequence
+
+
 def importance_whiten(
     runner: ExperimentRunner,
     data: Iterator[Tuple[np.ndarray, np.ndarray]],
@@ -618,135 +700,54 @@ def main():
         {"name": "uniquant7", "func": blacken_channel_uniquant7},
         {"name": "uniquant8", "func": blacken_channel_uniquant8},
     ]
-    cmap = plot.colormap_upper(levels=256, gamma=2.0)
 
     basepath = f"img/experiment/{runner.basename}-importance_black"
-
     for trial in trials:
         name = trial["name"]
         func = trial["func"]
         print(f"\n\nblack {name}\n")
-        npy_path = f"{basepath}_{name}.npy"
-        data = runner.data.client_tensor_batches(copy=False)
-        try:
-            importance = np.load(npy_path)
-        except FileNotFoundError:
-            importance = importance_blacken(runner, data, func)
-            np.save(npy_path, importance)
-        importance = importance / runner.d["accuracy"]
-        importance = np.clip(importance, 0.0, 1.0)
-        featuremap = np.broadcast_to(importance, shape)
-        fig = plot.featuremap(
-            featuremap, runner.title, clim=(0.9, 1.0), cmap=cmap
+        blacken_single_channel(
+            runner, basepath, name, func, importance_blacken, clim=(0.9, 1.0)
         )
-        plot.save(fig, f"{basepath}_{name}.png", bbox_inches="tight")
 
     basepath = f"img/experiment/{runner.basename}-importance_white"
-
     for trial in trials:
         name = trial["name"]
         func = trial["func"]
         print(f"\n\nwhite {name}\n")
-        npy_path = f"{basepath}_{name}.npy"
-        data = runner.data.client_tensor_batches(copy=False)
-        try:
-            importance = np.load(npy_path)
-        except FileNotFoundError:
-            importance = importance_whiten(runner, data, func)
-            np.save(npy_path, importance)
-        importance = importance / runner.d["accuracy"]
-        importance = np.clip(importance, 0.0, 1.0)
-        featuremap = np.broadcast_to(importance, shape)
-        fig = plot.featuremap(featuremap, runner.title, clim=(0.0, 1.0))
-        plot.save(fig, f"{basepath}_{name}.png", bbox_inches="tight")
-
-    def blacken_data(
-        runner: ExperimentRunner,
-        data: Iterator[Tuple[np.ndarray, np.ndarray]],
-        channel_sequence: List[int],
-    ) -> Iterator[Tuple[np.ndarray, np.ndarray]]:
-        for client_tensors, labels in data:
-            for i in range(len(client_tensors)):
-                for c in channel_sequence:
-                    x = np.array(client_tensors[i])
-                    black_channel = func(x, c)[..., c]
-                    client_tensors[i, ..., c] = black_channel
-            yield client_tensors, labels
-
-    def best_blacken_channel_sequence(
-        runner,
-        basepath,
-        name,
-        func,
-        data_func,
-        importance_func,
-        nanoptimize_func,
-        clim,
-    ) -> List[int]:
-        channel_sequence = []
-        exclude = np.zeros(runner.tensor_layout.c, dtype=np.bool)
-
-        for i in range(runner.tensor_layout.c):
-            basefilename = f"{basepath}_{name}_{i}"
-            data = runner.data.client_tensor_batches()
-            data = data_func(runner, data, channel_sequence)
-            importance = importance_func(runner, data, func)
-            importance_excluded = np.array(importance)
-            importance_excluded[exclude] = np.NaN
-            channel = nanoptimize_func(importance_excluded)
-            channel_sequence.append(channel)
-            exclude[channel] = True
-            data = runner.data_test.client_tensor_batches()
-            data = data_func(runner, data, channel_sequence)
-            importance = importance_func(runner, data, func)
-            np.save(f"{basefilename}.npy", importance)
-            importance = importance / runner.d["accuracy"]
-            importance = np.clip(importance, 0.0, 1.0)
-            featuremap = np.broadcast_to(importance, shape)
-            title = f"{runner.title} ({channel})"
-            fig = plot.featuremap(featuremap, title, clim=clim, cmap=cmap)
-            plot.save(fig, f"{basefilename}.png", bbox_inches="tight")
-            print(f"channel sequence: {channel_sequence}")
-
-        return channel_sequence
+        blacken_single_channel(
+            runner, basepath, name, func, importance_whiten, clim=(0.0, 1.0)
+        )
 
     basepath = f"img/experiment/{runner.basename}-importance_black_greedy"
-
     for trial in trials:
         name = trial["name"]
         func = trial["func"]
         print(f"\n\nblack greedy {name}\n")
+        data_func = partial(blacken_data, func=func)
         best_blacken_channel_sequence(
             runner,
             basepath,
             name,
             func,
-            blacken_data,
+            data_func,
             importance_blacken,
             np.nanargmax,
             clim=(0.9, 1.0),
         )
 
-    def whiten_data(
-        runner: ExperimentRunner,
-        data: Iterator[Tuple[np.ndarray, np.ndarray]],
-        channel_sequence: List[int],
-    ) -> Iterator[Tuple[np.ndarray, np.ndarray]]:
-        seq = list(set(range(runner.tensor_layout.c)) - set(channel_sequence))
-        return blacken_data(runner, data, seq)
-
     basepath = f"img/experiment/{runner.basename}-importance_white_greedy"
-
     for trial in trials:
         name = trial["name"]
         func = trial["func"]
         print(f"\n\nwhite greedy {name}\n")
+        data_func = partial(whiten_data, func=func)
         best_blacken_channel_sequence(
             runner,
             basepath,
             name,
             func,
-            whiten_data,
+            data_func,
             importance_whiten,  # TODO is this... correct? use blacken instead?
             # TODO ah, the problem occurs because this is called on partly
             # blackened tensor data... thus, the original client_tensor data is
