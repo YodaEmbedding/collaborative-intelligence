@@ -648,34 +648,6 @@ def main():
     # def acc_black(runner: ExperimentRunner, probability):
     #     return compute_distort(runner, distort_black, probability)
 
-    runner = ExperimentRunner(
-        model_name="resnet34",
-        layer_name="add_3",
-        # layer_name="stage2_unit1_bn1",
-        # layer_name="stage3_unit1_bn1",
-        dataset_size=DATASET_SIZE,
-        batch_size=BATCH_SIZE,
-    )
-
-    print("Computing stats...")
-    compute_stats(runner)
-    runner.summarize()
-
-    print("Uniform quantization...")
-    plot_accuracy_quant(runner, acc_uniquant, "uniquant")
-    plot_mse_quant(runner, mse_uniquant, "uniquant_mse")
-
-    # TODO optimize...
-    # print("Qcut quantization...")
-    # plot_accuracy_quant(runner, acc_qcut, "qcutquant")
-    # plot_mse_quant(runner, mse_qcut, "qcutquant_mse")
-
-    print("Independent quantization...")
-    plot_accuracy_quant(runner, acc_indepquant, "indepquant")
-    plot_mse_quant(runner, mse_indepquant, "indepquant_mse")
-
-    print("Importance...")
-
     def blacken_channel_tensorsmean(x: np.ndarray, c: int) -> np.ndarray:
         m = runner.d["tensors_mean"]
         x[..., c] = m[..., c]
@@ -704,6 +676,33 @@ def main():
     def blacken_channel_uniquant8(x: np.ndarray, c: int) -> np.ndarray:
         return blacken_channel_uniquant(x, c, levels=8)
 
+    runner = ExperimentRunner(
+        model_name="resnet34",
+        layer_name="add_3",
+        # layer_name="stage2_unit1_bn1",
+        # layer_name="stage3_unit1_bn1",
+        dataset_size=DATASET_SIZE,
+        batch_size=BATCH_SIZE,
+    )
+
+    print("Computing stats...")
+    compute_stats(runner)
+    runner.summarize()
+
+    print("Uniform quantization...")
+    plot_accuracy_quant(runner, acc_uniquant, "uniquant")
+    plot_mse_quant(runner, mse_uniquant, "uniquant_mse")
+
+    # TODO optimize...
+    # print("Qcut quantization...")
+    # plot_accuracy_quant(runner, acc_qcut, "qcutquant")
+    # plot_mse_quant(runner, mse_qcut, "qcutquant_mse")
+
+    print("Independent quantization...")
+    plot_accuracy_quant(runner, acc_indepquant, "indepquant")
+    plot_mse_quant(runner, mse_indepquant, "indepquant_mse")
+
+    print("Importance...")
     shape = runner.tensor_layout.shape
     trials = [
         {"name": "tensorsmean", "func": blacken_channel_tensorsmean},
