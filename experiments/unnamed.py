@@ -568,29 +568,41 @@ def main():
         # x[mask] = runner.d["tensors_mean"][mask]
         return x
 
-    def distort_black_neuron_zero(x: np.ndarray, p) -> np.ndarray:
+    def black_neuron_pr(x: np.ndarray, black: np.ndarray, p) -> np.ndarray:
         x = x.copy()
         mask = np.random.rand(*x.shape) < p
-        x[mask] = 0
+        x[mask] = black[mask]
         return x
+
+    def black_channel_pr(x: np.ndarray, black: np.ndarray, p) -> np.ndarray:
+        x = x.copy()
+        mask = np.random.rand(*x.shape[:-1]) < p
+        x[mask] = black[mask]
+        return x
+
+    def distort_black_neuron_zero(x: np.ndarray, p) -> np.ndarray:
+        black = np.zeros_like(x)
+        return black_neuron_pr(x, black, p)
 
     def distort_black_channel_zero(x: np.ndarray, p) -> np.ndarray:
-        x = x.copy()
-        mask = np.random.rand(*x.shape[:-1]) < p
-        x[mask] = 0
-        return x
+        black = np.zeros_like(x)
+        return black_channel_pr(x, black, p)
 
-    def distort_black_neuron_tensors_mean(x: np.ndarray, p) -> np.ndarray:
-        x = x.copy()
-        mask = np.random.rand(*x.shape) < p
-        x[mask] = runner.d["tensors_mean"][mask]
-        return x
+    def distort_black_neuron_tensorsmean(x: np.ndarray, p) -> np.ndarray:
+        black = runner.d["tensors_mean"]
+        return black_neuron_pr(x, black, p)
 
-    def distort_black_channel_tensors_mean(x: np.ndarray, p) -> np.ndarray:
-        x = x.copy()
-        mask = np.random.rand(*x.shape[:-1]) < p
-        x[mask] = runner.d["tensors_mean"][mask]
-        return x
+    def distort_black_channel_tensorsmean(x: np.ndarray, p) -> np.ndarray:
+        black = runner.d["tensors_mean"]
+        return black_channel_pr(x, black, p)
+
+    def distort_black_neuron_channelmean(x: np.ndarray, p) -> np.ndarray:
+        black = np.broadcast_to(np.mean(x, axis=-1)[..., np.newaxis], x.shape)
+        return black_neuron_pr(x, black, p)
+
+    def distort_black_channel_channelmean(x: np.ndarray, p) -> np.ndarray:
+        black = np.broadcast_to(np.mean(x, axis=-1)[..., np.newaxis], x.shape)
+        return black_channel_pr(x, black, p)
 
     def acc_uniquant(runner: ExperimentRunner, width_sigma, levels):
         m, ws = runner.d["mean"], width_sigma * runner.d["std"]
@@ -809,34 +821,38 @@ def main():
     # uniquant? still haven't determined if that's the best... meh
     probs = np.linspace(0, 1, num=20)
     black_kwargs = dict(runner=runner, xs=probs, xlabel="Probability")
-    plot_distorted(
-        compute_func=partial(
-            compute_distort, runner, distort_black_neuron_zero
-        ),
-        suffix="distort_black_neuron_zero",
-        **black_kwargs,
-    )
-    plot_distorted(
-        compute_func=partial(
-            compute_distort, runner, distort_black_neuron_tensors_mean,
-        ),
-        suffix="distort_black_neuron_tensors_mean",
-        **black_kwargs,
-    )
-    plot_distorted(
-        compute_func=partial(
-            compute_distort, runner, distort_black_channel_zero
-        ),
-        suffix="distort_black_channel_zero",
-        **black_kwargs,
-    )
-    plot_distorted(
-        compute_func=partial(
-            compute_distort, runner, distort_black_channel_tensors_mean,
-        ),
-        suffix="distort_black_channel_tensors_mean",
-        **black_kwargs,
-    )
+    trials = [
+        {
+            "func": distort_black_neuron_zero,
+            "name": "distort_black_neuron_zero",
+        },
+        {
+            "func": distort_black_neuron_tensorsmean,
+            "name": "distort_black_neuron_tensorsmean",
+        },
+        {
+            "func": distort_black_neuron_channelmean,
+            "name": "distort_black_neuron_channelmean",
+        },
+        {
+            "func": distort_black_channel_zero,
+            "name": "distort_black_channel_zero",
+        },
+        {
+            "func": distort_black_channel_tensorsmean,
+            "name": "distort_black_channel_tensorsmean",
+        },
+        {
+            "func": distort_black_channel_channelmean,
+            "name": "distort_black_channel_channelmean",
+        },
+    ]
+    for trial in trials:
+        plot_distorted(
+            compute_func=partial(compute_distort, runner, trial["func"]),
+            suffix=trial["name"],
+            **black_kwargs,
+        )
 
     print("Increasing errors in signal...")
     # plot_distorted(runner, flip_bits)
