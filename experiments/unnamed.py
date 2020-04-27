@@ -160,6 +160,19 @@ def plot_distorted(
     fig.savefig(path, **save_kwargs)
 
 
+def plot_distorted_agg(runner, data, suffix, xlabel, ylabel):
+    fig, ax = plt.subplots(tight_layout=True)
+    for x, y, label in data:
+        ax.plot(x, y, label=label)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    # ax.set_title(runner.title)
+    ax.legend(labels=[label for _, _, label in data], loc="upper right")
+    save_kwargs = dict(dpi=300, bbox_inches="tight")
+    path = f"img/experiment/{runner.basename}-{suffix}.png"
+    fig.savefig(path, **save_kwargs)
+
+
 def plot_distorted_2d(
     runner: ExperimentRunner,
     compute_func: Callable[..., float],
@@ -872,6 +885,19 @@ def main():
             suffix=trial["name"],
             **black_kwargs,
         )
+        # TODO save dataframe with assosciated probs labels instead of npys...
+
+    for prefix in ["distort_black_neuron_", "distort_black_channel_"]:
+        data = []
+        for trial in trials:
+            if not trial["name"].startswith(prefix):
+                continue
+            suffix = trial["name"][len(prefix) :]
+            npy_path = f"img/experiment/{runner.basename}-{prefix}{suffix}.npy"
+            accs = np.load(npy_path)
+            data.append((probs, accs, suffix))
+        suffix = prefix.rstrip("_")
+        plot_distorted_agg(runner, data, suffix, "Probability", "Accuracy")
 
     print("Increasing errors in signal...")
     # plot_distorted(runner, flip_bits)
