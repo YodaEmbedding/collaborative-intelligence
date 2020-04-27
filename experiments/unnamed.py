@@ -653,8 +653,8 @@ def main():
         x[..., c] = m[..., c]
         return x
 
-    def blacken_channel_actualmean(x: np.ndarray, c: int) -> np.ndarray:
-        x[..., c] = x.mean()
+    def blacken_channel_channelmean(x: np.ndarray, c: int) -> np.ndarray:
+        x[..., c] = x[..., c].mean()
         return x
 
     def blacken_channel_uniquant(
@@ -706,7 +706,7 @@ def main():
     shape = runner.tensor_layout.shape
     trials = [
         {"name": "tensorsmean", "func": blacken_channel_tensorsmean},
-        {"name": "actualmean", "func": blacken_channel_actualmean},
+        {"name": "channelmean", "func": blacken_channel_channelmean},
         {"name": "uniquant4", "func": blacken_channel_uniquant4},
         {"name": "uniquant7", "func": blacken_channel_uniquant7},
         {"name": "uniquant8", "func": blacken_channel_uniquant8},
