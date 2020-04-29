@@ -307,12 +307,21 @@ def _dataframe_normalize(df: pd.DataFrame):
 
 
 def _bin_for_plot(df: pd.DataFrame, key: str, bins: np.ndarray):
-    mids = 0.5 * (bins[:-1] + bins[1:])
     df.sort_values(key, inplace=True)
+
     drop_mask = (df[key] <= bins[0]) | (bins[-1] <= df[key])
     df.drop(df[drop_mask].index, inplace=True)
+
     idxs = np.digitize(df[key], bins) - 1
+    mids = 0.5 * (bins[:-1] + bins[1:])
     df[key] = mids[idxs]
+
+    min_samples = 3600
+    df.set_index(key, inplace=True)
+    counts = df.groupby(key).size()
+    df.drop(counts[counts < min_samples].index, inplace=True)
+    df.reset_index(inplace=True)
+
     return df
 
 
