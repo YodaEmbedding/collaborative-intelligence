@@ -58,30 +58,31 @@ def analyze_accuracyvskb_layer(
     filename_server = path.join(shareddir, f"{model_name}-server.csv")
     filename_shared = path.join(shareddir, f"{basename}-shared.csv")
 
+    bins = np.logspace(0, np.log10(30), num=30) * 1024
+
     try:
         data_server = pd.read_csv(filename_server)
     except FileNotFoundError:
-        out_sizes = np.logspace(0, np.log10(30), num=30) * 1024
-        data_server = _evaluate_accuracies_server_kb(
-            model, postencoder, batch_size, out_sizes
-        )
+        args = (model,)
+        args = (*args, postencoder, batch_size, bins)
+        data_server = _evaluate_accuracies_server_kb(*args)
         data_server.to_csv(filename_server, index=False)
         print("Analyzed server accuracy vs KB")
 
     try:
         data_shared = pd.read_csv(filename_shared)
     except FileNotFoundError:
-        data_shared = _evaluate_accuracies_shared_kb(
-            model_client, model_server, quant, dequant, postencoder, batch_size
-        )
+        args = (model_client, model_server, quant, dequant)
+        args = (*args, postencoder, batch_size, bins)
+        data_shared = _evaluate_accuracies_shared_kb(*args)
         data_shared.to_csv(filename_shared, index=False)
         print("Analyzed shared accuracy vs KB")
 
     _dataframe_normalize(data_server)
     _dataframe_normalize(data_shared)
 
-    bins = np.logspace(0, np.log10(30), num=30)
-    data_shared = _bin_for_plot(data_shared, "kbs", bins)
+    data_server = _bin_for_plot(data_server, "kbs", bins / 1024)
+    data_shared = _bin_for_plot(data_shared, "kbs", bins / 1024)
 
     fig = _plot_accuracy_vs_kb(title, data_server, data_shared)
     plot.save(fig, path.join(shareddir, f"{basename}.png"))
@@ -100,65 +101,45 @@ def _evaluate_accuracy_kb(
 
 
 def _evaluate_accuracies_server_kb(
-    model: keras.Model,
-    postencoder: str,
-    batch_size: int,
-    out_sizes: List[float],
+    model: keras.Model, postencoder: str, batch_size: int, bins: np.ndarray
 ) -> pd.DataFrame:
-    if postencoder.lower() == "jpeg":
-        kbs = range(1, 31)
-        # kbs = list(sorted(set(x // 1024 for x in out_sizes)))
-        return _evaluate_accuracies_server_jpeg_kb(model, batch_size, kbs)
-
+    mids = 0.5 * (bins[:-1] + bins[1:])
     shape = model.input_shape[1:]
-    input_dtype = model.layers[0].dtype
-    tensor_layout = TensorLayout.from_shape(shape, "hwc", input_dtype)
+    dtype = model.layers[0].dtype
+    tensor_layout = TensorLayout.from_shape(shape, "hwc", dtype)
 
-    make_prepostencoders = {
-        # "jpeg": lambda: JpegRgbPredecoder(tensor_layout),
-        "jpeg2000": lambda out_size: (
-            Jpeg2000RgbPostencoder(out_size=out_size),
-            Jpeg2000RgbPredecoder(tensor_layout),
-        ),
-        # "png": lambda: PngRgbPredecoder(tensor_layout),
-    }[postencoder.lower()]
+    quant = lambda x: x.astype(np.uint8)
+    dequant = lambda x: x.astype(dtype)
 
     dataset = ds.dataset()
+    tensors = tfds.as_numpy(dataset.map(_first))
     labels = np.array(list(tfds.as_numpy(dataset.map(_second))))
 
-    byte_sizes = []
-    accuracies = []
+    make_postencoder, make_predecoder, kwargs_list = {
+        "jpeg": (
+            JpegRgbPostencoder,
+            lambda _p: JpegRgbPredecoder(tensor_layout),
+            [{"quality": quality} for quality in range(1, 101)],
+        ),
+        "jpeg2000": (
+            Jpeg2000RgbPostencoder,
+            lambda _p: Jpeg2000RgbPredecoder(tensor_layout),
+            [{"out_size": out_size} for out_size in mids],
+        ),
+        "png": (
+            PngRgbPostencoder,
+            lambda _p: PngRgbPredecoder(tensor_layout),
+            [{}],
+        ),
+    }[postencoder.lower()]
 
-    for out_size in out_sizes:
-        postencoder, predecoder = make_prepostencoders(out_size)
+    gen_func = lambda x: _generate_tensors(
+        x, quant, dequant, make_postencoder, make_predecoder, kwargs_list
+    )
+    many_func = lambda x: _bin_uniquely(*gen_func(x), bins, mids)
 
-        def map_frame(x, postencoder=postencoder, predecoder=predecoder):
-            x = x.astype(np.uint8)
-            x = postencoder.run(x)
-            x = predecoder.run(x)
-            x = x.astype(input_dtype)
-            return x
-
-        preds = predict_dataset(model, dataset.batch(batch_size), map_frame)
-        accs = _categorical_top1_accuracy(labels, preds)
-        byte_sizes.extend([out_size] * len(accs))
-        accuracies.extend(accs)
-
-    byte_sizes = np.array(byte_sizes)
-    accuracies = np.array(accuracies)
-    return pd.DataFrame({"bytes": byte_sizes, "acc": accuracies})
-
-
-def _evaluate_accuracies_server_jpeg_kb(
-    model: keras.Model, batch_size: int, kbs: List[int],
-) -> pd.DataFrame:
-    accuracies_server = [
-        _evaluate_accuracy_kb(model, batch_size, kb) for kb in kbs
-    ]
-    accuracies_server = np.concatenate(accuracies_server, axis=1)
-    byte_sizes = accuracies_server[0] * BYTES_PER_KB
-    accuracies = accuracies_server[1]
-    return pd.DataFrame({"bytes": byte_sizes, "acc": accuracies})
+    batches = _make_batches(tensors, labels, many_func, batch_size)
+    return _predict_batches(model, batches)
 
 
 def _evaluate_accuracies_shared_kb(
@@ -168,53 +149,69 @@ def _evaluate_accuracies_shared_kb(
     dequant: Callable[[np.ndarray], np.ndarray],
     postencoder: str,
     batch_size: int,
+    bins: np.ndarray,
 ) -> pd.DataFrame:
+    mids = 0.5 * (bins[:-1] + bins[1:])
+    shape = model_client.output_shape[1:]
+    dtype = model_client.dtype
+    tensor_layout = TensorLayout.from_shape(shape, "hwc", dtype)
+
     dataset = ds.dataset()
-    client_tensors = predict_dataset(model_client, dataset.batch(batch_size))
+    tensors = predict_dataset(model_client, dataset.batch(batch_size))
     labels = np.array(list(tfds.as_numpy(dataset.map(_second))))
 
-    bins = np.logspace(0, np.log10(30), num=30)
-    many_func = {
-        "jpeg": lambda x: _generate_jpeg_tensors(
-            x, quant, dequant, quality_levels=range(1, 101)
+    make_postencoder, make_predecoder, kwargs_list = {
+        "jpeg": (
+            lambda **kwargs: JpegPostencoder(tensor_layout, **kwargs),
+            lambda p: JpegPredecoder(p.tiled_layout, p.tensor_layout),
+            [{"quality": quality} for quality in range(1, 101)],
         ),
-        "jpeg2000": lambda x: _generate_jpeg2000_tensors(
-            x, quant, dequant, out_sizes=1024 * bins
+        "jpeg2000": (
+            lambda **kwargs: Jpeg2000Postencoder(tensor_layout, **kwargs),
+            lambda p: Jpeg2000Predecoder(p.tiled_layout, p.tensor_layout),
+            [{"out_size": out_size} for out_size in mids],
         ),
-        "png": lambda x: _generate_png_tensors(x, quant, dequant),
+        "png": (
+            lambda **kwargs: PngPostencoder(tensor_layout, **kwargs),
+            lambda p: PngPredecoder(p.tiled_layout, p.tensor_layout),
+            [{}],
+        ),
     }[postencoder.lower()]
-    batches = _make_batches(client_tensors, labels, many_func, batch_size)
 
-    byte_sizes = []
-    accuracies = []
-    labels = []
-
-    for xs, ls, bs in batches:
-        xs = model_server.predict_on_batch(xs)
-        accs = _categorical_top1_accuracy(ls, xs)
-        accuracies.extend(accs)
-        labels.extend(ls)
-        byte_sizes.extend(bs)
-        print(f"processed {len(accuracies)}...")
-
-    byte_sizes = np.array(byte_sizes)
-    accuracies = np.array(accuracies)
-    labels = np.array(labels)
-
-    df = pd.DataFrame(
-        {"bytes": byte_sizes, "acc": accuracies, "label": labels}
+    gen_func = lambda x: _generate_tensors(
+        x, quant, dequant, make_postencoder, make_predecoder, kwargs_list
     )
+    many_func = lambda x: _bin_uniquely(*gen_func(x), bins, mids)
 
-    return df
+    batches = _make_batches(tensors, labels, many_func, batch_size)
+    return _predict_batches(model_server, batches)
 
 
-def _make_batches(client_tensors, labels, many_func, batch_size):
+def _make_batches(
+    tensors: Iterator[np.ndarray],
+    labels: Iterator[Any],
+    many_func: Callable[[np.ndarray], List[np.ndarray]],
+    batch_size: int,
+) -> Iterator[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    """Flatmap many_func into batches.
+
+    Essentially the same as:
+
+    ```
+    (
+        tensors
+        .zip(labels)
+        .flatMap(lambda x, l: zip(*(xs, bs := many_func(x)), [l] * len(xs)))
+        .batch(batch_size)
+    )
+    ```
+    """
     xss = []
     lss = []
     bss = []
 
-    for client_tensor, label in zip(client_tensors, labels):
-        xs, bs = many_func(client_tensor)
+    for tensor, label in zip(tensors, labels):
+        xs, bs = many_func(tensor)
         ls = [label] * len(xs)
         xss.extend(xs)
         lss.extend(ls)
@@ -232,31 +229,52 @@ def _make_batches(client_tensors, labels, many_func, batch_size):
         yield np.array(xss), np.array(lss), np.array(bss)
 
 
+def _predict_batches(
+    model: keras.Model,
+    batches: Iterator[Tuple[np.ndarray, np.ndarray, np.ndarray]],
+) -> pd.DataFrame:
+    byte_sizes = []
+    accuracies = []
+    labels = []
+
+    for xs, ls, bs in batches:
+        xs = model.predict_on_batch(xs)
+        accs = _categorical_top1_accuracy(ls, xs)
+        accuracies.extend(accs)
+        labels.extend(ls)
+        byte_sizes.extend(bs)
+        print(f"processed {len(accuracies)}...")
+
+    byte_sizes = np.array(byte_sizes)
+    accuracies = np.array(accuracies)
+    labels = np.array(labels)
+
+    return pd.DataFrame(
+        {"bytes": byte_sizes, "acc": accuracies, "label": labels}
+    )
+
+
 def _generate_tensors(
     client_tensor: np.ndarray,
     quant: Callable[[np.ndarray], np.ndarray],
     dequant: Callable[[np.ndarray], np.ndarray],
     make_postencoder: Callable[..., Postencoder],
-    make_predecoder: Callable[[TiledArrayLayout, TensorLayout], Predecoder],
+    make_predecoder: Callable[[Postencoder], Predecoder],
     kwargs_list: Iterator[Dict[str, Any]],
 ) -> Tuple[List[np.ndarray], List[int]]:
     """Returns reconstructed tensors from various compressed sizes"""
-    tensor_layout = TensorLayout.from_tensor(client_tensor, "hwc")
-    tiled_layout = make_postencoder(tensor_layout).tiled_layout
-    d = {}
     xs = []
     bs = []
 
     for kwargs in kwargs_list:
-        postencoder = make_postencoder(tensor_layout, **kwargs)
+        postencoder = make_postencoder(**kwargs)
         x = client_tensor
         x = quant(x)
         x = postencoder.run(x)
         b = len(x)
-        d[b] = x
-
-    for b, x in d.items():
-        predecoder = make_predecoder(tiled_layout, tensor_layout)
+        if b in bs:
+            continue
+        predecoder = make_predecoder(postencoder)
         x = predecoder.run(x)
         x = dequant(x)
         xs.append(x)
@@ -265,49 +283,21 @@ def _generate_tensors(
     return xs, bs
 
 
-def _generate_jpeg_tensors(
-    client_tensor: np.ndarray,
-    quant: Callable[[np.ndarray], np.ndarray],
-    dequant: Callable[[np.ndarray], np.ndarray],
-    quality_levels: Iterator[int],
-) -> Tuple[List[np.ndarray], List[int]]:
-    """Returns reconstructed tensors from various compressed sizes"""
-    return _generate_tensors(
-        client_tensor,
-        quant,
-        dequant,
-        JpegPostencoder,
-        JpegPredecoder,
-        [{"quality": quality} for quality in quality_levels],
-    )
-
-
-def _generate_jpeg2000_tensors(
-    client_tensor: np.ndarray,
-    quant: Callable[[np.ndarray], np.ndarray],
-    dequant: Callable[[np.ndarray], np.ndarray],
-    out_sizes: Iterator[int],
-) -> Tuple[List[np.ndarray], List[int]]:
-    """Returns reconstructed tensors from various compressed sizes"""
-    return _generate_tensors(
-        client_tensor,
-        quant,
-        dequant,
-        Jpeg2000Postencoder,
-        Jpeg2000Predecoder,
-        [{"out_size": out_size} for out_size in out_sizes],
-    )
-
-
-def _generate_png_tensors(
-    client_tensor: np.ndarray,
-    quant: Callable[[np.ndarray], np.ndarray],
-    dequant: Callable[[np.ndarray], np.ndarray],
-) -> Tuple[List[np.ndarray], List[int]]:
-    """Returns reconstructed tensors from various compressed sizes"""
-    return _generate_tensors(
-        client_tensor, quant, dequant, PngPostencoder, PngPredecoder, [{}],
-    )
+def _bin_uniquely(xs, bs, bins, mids) -> Tuple[np.ndarray, np.ndarray]:
+    """Keep only one value per bin"""
+    idxs = np.digitize(bs, bins) - 1
+    d = defaultdict(list)
+    for idx, x, b in zip(idxs, xs, bs):
+        if idx >= len(bins) - 1:
+            continue
+        d[idx].append((x, b))
+    xbs = [
+        min(xbs, key=lambda xb, i=i: abs(xb[1] - mids[i]))
+        for i, xbs in d.items()
+    ]
+    xs = np.array([x for x, b in xbs])
+    bs = np.array([b for x, b in xbs])
+    return xs, bs
 
 
 def _dataframe_normalize(df: pd.DataFrame):
