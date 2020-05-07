@@ -14,6 +14,18 @@ def single_sample_image() -> np.ndarray:
     return np.array(Image.open("sample224.jpg"))
 
 
+def single_sample_image_wide() -> np.ndarray:
+    return np.array(Image.open(f"{data_dir}/sample/sampleWx224.jpg"))
+
+
+def single_sample_image_xtrans(xs: List[int]) -> np.ndarray:
+    img = single_sample_image_wide()
+    frames = []
+    for x in xs:
+        frames.append(img[:, x:x+224])
+    return np.array(frames)
+
+
 def _get_imagenet_labels() -> Dict[str, List[str]]:
     try:
         with open("imagenet_class_index.json", "r") as f:
