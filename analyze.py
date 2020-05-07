@@ -30,10 +30,6 @@ from src.analysis.utils import (
     tf_disable_eager_execution,
     title_of,
 )
-from src.lib.layers import (
-    UniformQuantizationU8Decoder,
-    UniformQuantizationU8Encoder,
-)
 from src.lib.split import split_model
 
 tf_disable_eager_execution()

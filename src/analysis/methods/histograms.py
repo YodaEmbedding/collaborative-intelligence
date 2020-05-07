@@ -1,7 +1,6 @@
 from typing import Any, Dict
 
 import numpy as np
-import tensorflow_datasets as tfds
 from tensorflow import keras
 
 from src.analysis import dataset, plot

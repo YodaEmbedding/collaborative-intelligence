@@ -1,14 +1,5 @@
 from dataclasses import dataclass
-from typing import (
-    Awaitable,
-    ByteString,
-    Dict,
-    Generator,
-    Generic,
-    List,
-    Tuple,
-    TypeVar,
-)
+from typing import Dict, List, Tuple
 
 import numpy as np
 from tensorflow import keras
