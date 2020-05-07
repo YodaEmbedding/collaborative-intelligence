@@ -1,5 +1,9 @@
-__pycache__/
 .mypy_cache/
+__pycache__/
+data/
+data_*/
+ignore/
+img/
 models/
 
 *.JPEG
