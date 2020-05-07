@@ -1,4 +1,3 @@
-import textwrap
 from collections import defaultdict
 from os import path
 from typing import Any, Callable, Dict, Iterator, List, Tuple
@@ -14,7 +13,7 @@ from tensorflow import keras
 from src.analysis import dataset as ds
 from src.analysis import plot
 from src.analysis.utils import predict_dataset
-from src.lib.layouts import TensorLayout, TiledArrayLayout
+from src.lib.layouts import TensorLayout
 from src.lib.postencode import (
     Jpeg2000Postencoder,
     Jpeg2000RgbPostencoder,

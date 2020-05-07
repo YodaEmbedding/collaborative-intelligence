@@ -22,7 +22,7 @@ def single_sample_image_xtrans(xs: List[int]) -> np.ndarray:
     img = single_sample_image_wide()
     frames = []
     for x in xs:
-        frames.append(img[:, x:x+224])
+        frames.append(img[:, x : x + 224])
     return np.array(frames)
 
 

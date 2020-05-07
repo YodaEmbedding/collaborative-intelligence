@@ -154,10 +154,6 @@ def main():
     with open("models.json") as f:
         models = json.load(f)
 
-    # models = ["resnet18"]
-    models = ["resnet34"]
-    # models = ["resnet50"]
-
     for model_name in models:
         analyze_model(model_name)
 
@@ -177,8 +173,15 @@ def main2():
     analyze_featuremapcompression_layer = identity
     analyze_motions_layer = identity
 
-    layers = ["pooling0", "add_3", "add_7", "add_13"]
-    analyze_model("resnet34", layers=layers)
+    # layers = ["pooling0", "add_3", "add_7", "add_13"]
+    # layers = (
+    #     [f"add_{i}" for i in range(1, 16)]
+    #     + ["add"]
+    #     + [f"stage{i}_unit1_bn1" for i in range(1, 5)]
+    #     + [f"stage{i}_unit1_relu1" for i in range(1, 5)]
+    # )
+    # analyze_model("resnet34", layers=layers)
+    analyze_model("resnet34")
 
 
 if __name__ == "__main__":

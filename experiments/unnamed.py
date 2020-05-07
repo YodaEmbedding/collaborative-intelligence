@@ -726,6 +726,7 @@ def main():
         batch_size=BATCH_SIZE,
     )
 
+    # TODO shouldn't compute stats be part of experimentrunner?
     print("Computing stats...")
     compute_stats(runner)
     runner.summarize()
