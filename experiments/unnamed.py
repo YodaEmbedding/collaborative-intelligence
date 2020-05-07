@@ -581,15 +581,31 @@ def main():
         # x[mask] = runner.d["tensors_mean"][mask]
         return x
 
+    def random_mask(pct: float, shape: Tuple[int]) -> np.ndarray:
+        """Returns mask of given shape with pct of values set to True."""
+        n = pct * np.prod(shape)
+        mask = np.random.rand(*shape)
+        v = np.partition(mask.flatten(), int(n))[int(n)]
+        mask = mask < v  # TODO this should maybe be int(n) - 1 ... or <= ...
+        if np.random.rand() >= n - int(n):
+            return mask
+        while True:
+            idx = tuple(np.random.randint(0, i) for i in shape)
+            if mask[idx]:
+                continue
+            mask[idx] = True
+            break
+        return mask
+
     def black_neuron_pr(x: np.ndarray, black: np.ndarray, p) -> np.ndarray:
+        mask = random_mask(p, x.shape)
         x = x.copy()
-        mask = np.random.rand(*x.shape) < p
         x[mask] = black[mask]
         return x
 
     def black_channel_pr(x: np.ndarray, black: np.ndarray, p) -> np.ndarray:
+        mask = random_mask(p, x.shape[:-1])
         x = x.copy()
-        mask = np.random.rand(*x.shape[:-1]) < p
         x[mask] = black[mask]
         return x
 
