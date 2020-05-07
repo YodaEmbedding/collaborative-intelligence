@@ -423,7 +423,7 @@ def best_blacken_channel_sequence(
         np.save(f"{basefilename}.npy", importance)
         importance = importance / runner.d["accuracy"]
         importance = np.clip(importance, 0.0, 1.0)
-        featuremap = np.broadcast_to(importance, shape)
+        featuremap = np.broadcast_to(importance, runner.tensor_layout.shape)
         title = f"{runner.title} ({channel})"
         cmap = plot.colormap_upper(levels=256, gamma=2.0)
         fig = plot.featuremap(featuremap, title, clim=clim, cmap=cmap)
