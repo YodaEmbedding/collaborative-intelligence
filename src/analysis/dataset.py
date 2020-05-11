@@ -11,7 +11,7 @@ data_dir = "data"
 
 
 def single_sample_image() -> np.ndarray:
-    return np.array(Image.open("sample224.jpg"))
+    return np.array(Image.open(f"{data_dir}/sample/sample224.jpg"))
 
 
 def single_sample_image_wide() -> np.ndarray:
