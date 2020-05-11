@@ -3,6 +3,7 @@ from typing import Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
+from scipy import ndimage
 
 import src.analysis.dataset as ds
 from src.analysis import plot
@@ -67,12 +68,17 @@ def main():
 
     shape = runner.tensor_layout.shape
     dtype = runner.tensor_layout.dtype
-    h, w, _c = shape
+    h, w, c = shape
 
-    dx_input_step = 224 // runner.tensor_layout.w
-    dx_inputs = dx_input_step * np.arange(4) * 2
-    dx_clients = np.arange(4) * 2
-    dy_clients = np.zeros(4, dtype=np.int64)
+    n = 4
+    px = 2
+    offset = 0.25
+    x_in_per_cl = 224 / w
+    dx_inputs = (((np.arange(n) * px) + offset) * x_in_per_cl).astype(np.int64)
+    # dx_inputs = ((np.arange(n) * offset + px) * x_in_per_cl).astype(np.int64)
+    dx_inputs[0] = 0
+    dx_clients = dx_inputs / x_in_per_cl
+    dy_clients = np.zeros(n)
 
     frames = ds.single_sample_image_xtrans(dx_inputs)
     client_tensors = runner.model_client.predict(frames)
@@ -82,14 +88,18 @@ def main():
     psnrs = np.empty(len(client_tensors) - 1)
 
     for i, curr in enumerate(client_tensors[1:]):
-        yy, xx = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
-        yy += dy_clients[i + 1]
-        xx += dx_clients[i + 1]
-        mask = (yy < 0) | (yy >= h) | (xx < 0) | (xx >= w)
+        yy, xx, cc = np.meshgrid(
+            np.arange(h), np.arange(w), np.arange(c), indexing="ij"
+        )
+        yy = yy + dy_clients[i + 1]
+        xx = xx + dx_clients[i + 1]
+        mask = (yy < 0) | (yy > h - 1) | (xx < 0) | (xx > w - 1)
         yy = np.clip(yy, 0, h - 1).reshape(-1)
         xx = np.clip(xx, 0, w - 1).reshape(-1)
+        cc = cc.reshape(-1)
 
-        pred = prev[yy, xx].reshape(h, w, -1)
+        pred = ndimage.map_coordinates(prev, [yy, xx, cc], order=3)
+        pred = pred.reshape(h, w, -1)
         diff = curr - pred
         diff[mask] = 0
         diffs[i] = diff
@@ -99,12 +109,8 @@ def main():
         mses[i] = np.mean(x ** 2)
         psnrs[i] = 20 * np.log(r ** 2 / mses[i])
 
-    # axis = tuple(np.arange(1, diffs.ndim))
-    # mses = np.mean(diffs**2, axis=axis)
-    # r = np.max(diffs, axis=axis) - np.min(diffs, axis=axis)
-    # psnrs = 20 * np.log(r**2 / mses)
-
-    # print(diff[..., 0])
+    print(dx_inputs)
+    print(dx_clients)
     print(mses)
     print(psnrs)
 
@@ -114,17 +120,13 @@ def main():
     client_tensors = np.copysign(np.abs(off) ** 0.5, off) + np.mean(t)
     diffs = np.abs(diffs)
 
-    suffix = "motionsequence"
+    suffix = f"input_translate_{px}px_{offset}plus_order3"
     fig = featuremapsequence(frames, client_tensors, diffs, title="")
     plot.save(
         fig,
         f"img/experiment/{runner.basename}-{suffix}.png",
         bbox_inches="tight",
     )
-
-    # TODO labels? "reference"? dx?
-
-    # TODO subpixel motion compensation
 
 
 main()
