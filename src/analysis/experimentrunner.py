@@ -25,6 +25,7 @@ class ExperimentRunner:
         *,
         dataset_size: int,
         batch_size: int,
+        test_dataset_size: int = None,
     ):
         self.model_name = model_name
         self.layer_name = layer_name
@@ -50,9 +51,12 @@ class ExperimentRunner:
             c.output_shape[1:], "hwc", c.dtype
         )
 
+        if test_dataset_size is None:
+            test_dataset_size = dataset_size
+
         data_all = dataset.dataset()
         data = data_all.take(dataset_size)
-        data_test = data_all.skip(dataset_size).take(dataset_size)
+        data_test = data_all.skip(dataset_size).take(test_dataset_size)
         self.data = ClientTensorDataset(data, self.model_client, batch_size)
         self.data_test = ClientTensorDataset(
             data_test, self.model_client, batch_size

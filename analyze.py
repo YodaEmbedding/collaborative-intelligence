@@ -38,6 +38,7 @@ tf_disable_eager_execution()
 
 BATCH_SIZE = 64
 DATASET_SIZE = 4096
+TEST_DATASET_SIZE = 1024
 
 
 def analyze_layer(runner: ExperimentRunner):
@@ -48,6 +49,7 @@ def analyze_layer(runner: ExperimentRunner):
     model_server = runner.model_server
     title = runner.title
     basename = runner.basename
+    dataset = runner.data.data
 
     print(title)
 
@@ -72,7 +74,8 @@ def analyze_layer(runner: ExperimentRunner):
 
     analyze_motions_layer(model_client, title, basename)
 
-    args = (model_name, model, model_client, model_server, title, basename)
+    args = (model_name, model, model_client, model_server, dataset)
+    args = (*args, title, basename)
     clip_range = (d["mean"] - 3 * d["std"], d["mean"] + 3 * d["std"])
     quant = lambda x: uni_quant(x, clip_range=clip_range, levels=256)
     dequant = lambda x: uni_dequant(x, clip_range=clip_range, levels=256)
@@ -131,6 +134,7 @@ def analyze_model(model_name, layers=None):
             model_name,
             cut_layer_name,
             dataset_size=DATASET_SIZE,
+            test_dataset_size=TEST_DATASET_SIZE,
             batch_size=BATCH_SIZE,
         )
         return analyze_layer(runner)

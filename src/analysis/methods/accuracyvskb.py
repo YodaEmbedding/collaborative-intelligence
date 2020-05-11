@@ -10,7 +10,6 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 from tensorflow import keras
 
-from src.analysis import dataset as ds
 from src.analysis import plot
 from src.analysis.utils import predict_dataset
 from src.lib.layouts import TensorLayout
@@ -41,6 +40,7 @@ def analyze_accuracyvskb_layer(
     model: keras.Model,
     model_client: keras.Model,
     model_server: keras.Model,
+    dataset: tf.data.Dataset,
     title: str,
     basename: str,
     quant: Callable[[np.ndarray], np.ndarray],
@@ -62,7 +62,7 @@ def analyze_accuracyvskb_layer(
     try:
         data_server = pd.read_csv(filename_server)
     except FileNotFoundError:
-        args = (model,)
+        args = (model, dataset)
         args = (*args, postencoder, batch_size, bins)
         data_server = _evaluate_accuracies_server_kb(*args)
         data_server.to_csv(filename_server, index=False)
@@ -71,7 +71,7 @@ def analyze_accuracyvskb_layer(
     try:
         data_shared = pd.read_csv(filename_shared)
     except FileNotFoundError:
-        args = (model_client, model_server, quant, dequant)
+        args = (model_client, model_server, dataset, quant, dequant)
         args = (*args, postencoder, batch_size, bins)
         data_shared = _evaluate_accuracies_shared_kb(*args)
         data_shared.to_csv(filename_shared, index=False)
@@ -89,7 +89,11 @@ def analyze_accuracyvskb_layer(
 
 
 def _evaluate_accuracies_server_kb(
-    model: keras.Model, postencoder: str, batch_size: int, bins: np.ndarray
+    model: keras.Model,
+    dataset: tf.data.Dataset,
+    postencoder: str,
+    batch_size: int,
+    bins: np.ndarray,
 ) -> pd.DataFrame:
     quant = lambda x: x.astype(np.uint8)
     dequant = lambda x: x.astype(dtype)
@@ -98,7 +102,6 @@ def _evaluate_accuracies_server_kb(
     dtype = model.layers[0].dtype
     tensor_layout = TensorLayout.from_shape(shape, "hwc", dtype)
 
-    dataset = ds.dataset()
     tensors = tfds.as_numpy(dataset.map(_first))
     labels = np.array(list(tfds.as_numpy(dataset.map(_second))))
 
@@ -118,6 +121,7 @@ def _evaluate_accuracies_server_kb(
 def _evaluate_accuracies_shared_kb(
     model_client: keras.Model,
     model_server: keras.Model,
+    dataset: tf.data.Dataset,
     quant: Callable[[np.ndarray], np.ndarray],
     dequant: Callable[[np.ndarray], np.ndarray],
     postencoder: str,
@@ -128,7 +132,6 @@ def _evaluate_accuracies_shared_kb(
     dtype = model_client.dtype
     tensor_layout = TensorLayout.from_shape(shape, "hwc", dtype)
 
-    dataset = ds.dataset()
     tensors = predict_dataset(model_client, dataset.batch(batch_size))
     labels = np.array(list(tfds.as_numpy(dataset.map(_second))))
 
