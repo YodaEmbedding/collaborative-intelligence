@@ -6,6 +6,7 @@ import h5py
 import tensorflow as tf
 from tensorflow import keras
 
+from src.analysis.experimentrunner import ExperimentRunner
 from src.analysis.methods.accuracyvskb import analyze_accuracyvskb_layer
 from src.analysis.methods.featuremap import (
     analyze_featuremap_layer,
@@ -35,23 +36,21 @@ from src.lib.split import split_model
 tf_disable_eager_execution()
 
 BATCH_SIZE = 64
+DATASET_SIZE = 4096
 
 
-def analyze_layer(
-    model_name: str, model: keras.Model, layer_name: str, i: int, n: int
-):
-    print(f"cut layer: {layer_name} ({i + 1} / {n})")
+def analyze_layer(runner: ExperimentRunner):
+    model_name = runner.model_name
+    layer_name = runner.layer_name
+    model = runner.model
+    model_client = runner.model_client
+    model_server = runner.model_server
+    title = runner.title
+    basename = runner.basename
+
+    print(title)
 
     d = {"layer": layer_name}
-    title = title_of(model_name, layer_name, i, n)
-    basename = basename_of(model_name, layer_name, i, n)
-
-    model_client, model_server, model_analysis = split_model(
-        model, layer=layer_name
-    )
-    model_client.compile(**compile_kwargs)
-    model_server.compile(**compile_kwargs)
-    model_analysis.compile(**compile_kwargs)
 
     if model_client.input == model_client.output:
         model_client.predict = dataset_to_numpy_array
@@ -82,7 +81,7 @@ def analyze_layer(
 
     d["latency"] = analyze_latencies_layer(model_client, layer_name)
 
-    release_models(model_client, model_server, model_analysis)
+    runner.close()
     print("")
 
     return d
@@ -101,6 +100,12 @@ def load_model_and_run(model_name, func):
     return result
 
 
+@separate_process(sleep_after=5)
+@new_tf_graph_and_session
+def tf_run_isolated(func, *args, **kwargs):
+    return func(*args, **kwargs)
+
+
 def analyze_model(model_name, layers=None):
     print(f"Analyzing {model_name}...\n")
 
@@ -113,22 +118,26 @@ def analyze_model(model_name, layers=None):
         return cut_layers
 
     cut_layers = load_model_and_run(model_name, init)
-    n = len(cut_layers)
     dicts = []
 
     if layers is None:
         layers = cut_layers
 
-    for i, cut_layer_name in enumerate(cut_layers):
+    def analyze_layer_wrapper(cut_layer_name):
+        runner = ExperimentRunner(
+            model_name,
+            cut_layer_name,
+            dataset_size=DATASET_SIZE,
+            batch_size=BATCH_SIZE,
+        )
+        return analyze_layer(runner)
 
-        def analyze_layer_wrapper(model, cut_layer_name=cut_layer_name, i=i):
-            return analyze_layer(model_name, model, cut_layer_name, i, n)
-
+    for cut_layer_name in cut_layers:
         if cut_layer_name not in layers:
             dicts.append({})
             continue
 
-        d = load_model_and_run(model_name, analyze_layer_wrapper)
+        d = tf_run_isolated(analyze_layer_wrapper, cut_layer_name)
         dicts.append(d)
 
     analyze_latencies_post(model_name, dicts)

@@ -10,6 +10,7 @@ from src.analysis.utils import (
     basename_of,
     compile_kwargs,
     get_cut_layers,
+    release_models,
     title_of,
 )
 from src.lib.layouts import TensorLayout
@@ -58,6 +59,11 @@ class ExperimentRunner:
         )
 
         self.d = {}
+
+    def close(self):
+        release_models(
+            self.model_client, self.model_server, self.model_analysis
+        )
 
     def summarize(self):
         for k, v in self.d.items():
