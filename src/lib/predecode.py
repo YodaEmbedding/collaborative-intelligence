@@ -47,11 +47,11 @@ class RgbPredecoder(Predecoder):
 
 class _ImageRgbPredecoder(Predecoder):
     def __init__(self, tensor_layout: TensorLayout):
-        self._tensor_layout = tensor_layout
+        self.tensor_layout = tensor_layout
 
     def run(self, buf: ByteString) -> np.ndarray:
         img = _decode_raw_img(buf)
-        return np.array(img).astype(self._tensor_layout.dtype)
+        return np.array(img).astype(self.tensor_layout.dtype)
 
 
 class JpegPredecoder(Predecoder):
@@ -60,14 +60,14 @@ class JpegPredecoder(Predecoder):
     def __init__(
         self, tiled_layout: TiledArrayLayout, tensor_layout: TensorLayout
     ):
-        self._tiled_layout = tiled_layout
-        self._tensor_layout = tensor_layout
+        self.tiled_layout = tiled_layout
+        self.tensor_layout = tensor_layout
 
     def run(self, buf: ByteString) -> np.ndarray:
         img = _decode_raw_img(buf)
         img = np.array(img)
-        img = _trim(img, self._tiled_layout, self.MBU_SIZE)
-        tensor = detile(img, self._tiled_layout, self._tensor_layout)
+        img = _trim(img, self.tiled_layout, self.MBU_SIZE)
+        tensor = detile(img, self.tiled_layout, self.tensor_layout)
         return tensor
 
 
@@ -81,14 +81,14 @@ class Jpeg2000Predecoder(Predecoder):
     def __init__(
         self, tiled_layout: TiledArrayLayout, tensor_layout: TensorLayout
     ):
-        self._tiled_layout = tiled_layout
-        self._tensor_layout = tensor_layout
+        self.tiled_layout = tiled_layout
+        self.tensor_layout = tensor_layout
 
     def run(self, buf: ByteString) -> np.ndarray:
         img = _decode_raw_img(buf)
         img = np.array(img)
-        img = _trim(img, self._tiled_layout, self.MBU_SIZE)
-        tensor = detile(img, self._tiled_layout, self._tensor_layout)
+        img = _trim(img, self.tiled_layout, self.MBU_SIZE)
+        tensor = detile(img, self.tiled_layout, self.tensor_layout)
         return tensor
 
 
@@ -100,14 +100,14 @@ class PngPredecoder(Predecoder):
     def __init__(
         self, tiled_layout: TiledArrayLayout, tensor_layout: TensorLayout
     ):
-        self._tiled_layout = tiled_layout
-        self._tensor_layout = tensor_layout
+        self.tiled_layout = tiled_layout
+        self.tensor_layout = tensor_layout
 
     def run(self, buf: ByteString) -> np.ndarray:
         img = _decode_raw_img(buf)
         img = np.array(img)
-        assert self._tiled_layout.shape == img.shape
-        tensor = detile(img, self._tiled_layout, self._tensor_layout)
+        assert self.tiled_layout.shape == img.shape
+        tensor = detile(img, self.tiled_layout, self.tensor_layout)
         return tensor
 
 
