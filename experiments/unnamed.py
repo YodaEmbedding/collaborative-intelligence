@@ -18,8 +18,12 @@ from src.analysis.methods.accuracyvskb import (
     _evaluate_accuracies_shared_kb,
     _plot_accuracy_vs_kb,
 )
+from src.analysis.methods.stats import analyze_stats_layer
 from src.analysis.quant import *
-from src.analysis.utils import tf_disable_eager_execution
+from src.analysis.utils import (
+    categorical_top1_accuracy,
+    tf_disable_eager_execution,
+)
 from src.lib.postencode import (
     CallablePostencoder,
     JpegPostencoder,
@@ -41,12 +45,6 @@ BATCH_SIZE = 64
 # DATASET_SIZE = 2048
 DATASET_SIZE = 4096
 # DATASET_SIZE = 8192
-
-
-def categorical_top1_accuracy(
-    label: np.ndarray, pred: np.ndarray
-) -> np.ndarray:
-    return (np.argmax(pred, axis=-1) == label).astype(np.float32)
 
 
 def load_array(filename, f, *args, dtype=None) -> np.ndarray:
@@ -195,42 +193,14 @@ def plot_distorted_2d(
 
 
 def compute_stats(runner: ExperimentRunner):
+    basename = f"img/experiment/{runner.basename}"
+
     def plot_quick(plot_func, tensor, suffix, **kwargs):
         fig = plot_func(tensor, runner.title, **kwargs)
-        plot.save(
-            fig,
-            f"img/experiment/{runner.basename}-{suffix}.png",
-            bbox_inches="tight",
-        )
+        plot.save(fig, f"{basename}-{suffix}.png", bbox_inches="tight")
 
-    def load(suffix, f, *args, **kwargs):
-        filename = f"img/experiment/{runner.basename}-{suffix}.npy"
-        try:
-            return np.load(filename)
-        except FileNotFoundError:
-            arr = f(*args, **kwargs)
-            np.save(filename, arr)
-            return arr
-
+    d = runner.d
     client_tensors = runner.data.client_tensors
-
-    d = {}
-    d["tensors"] = client_tensors
-    d["tensors_mean"] = load("tensors_mean", np.mean, client_tensors, axis=0)
-    d["tensors_std"] = load("tensors_std", np.std, client_tensors, axis=0)
-    d["tensors_min"] = load("tensors_min", np.min, client_tensors, axis=0)
-    d["tensors_max"] = load("tensors_max", np.max, client_tensors, axis=0)
-    d["mean"] = np.mean(client_tensors)
-    d["std"] = np.std(client_tensors)
-    plot_quick(plot.featuremap, d["tensors_mean"], "mean")
-    plot_quick(plot.featuremap, d["tensors_std"], "std")
-    plot_quick(plot.featuremap, d["tensors_min"], "min")
-    plot_quick(plot.featuremap, d["tensors_max"], "max")
-    pred_tensors = runner.model_server.predict(client_tensors)
-    d["pred_tensors"] = pred_tensors
-    labels = runner.data.labels
-    d["accuracy"] = np.mean(categorical_top1_accuracy(labels, pred_tensors))
-    runner.d.update(d)
 
     x = client_tensors[0]
     m = d["mean"]
@@ -724,6 +694,7 @@ def main():
 
     # TODO shouldn't compute stats be part of experimentrunner?
     print("Computing stats...")
+    analyze_stats_layer(runner)
     compute_stats(runner)
     runner.summarize()
 

@@ -157,3 +157,9 @@ def separate_process(sleep_after: int = 0):
         return wrapper
 
     return decorator
+
+
+def categorical_top1_accuracy(
+    label: np.ndarray, pred: np.ndarray
+) -> np.ndarray:
+    return (np.argmax(pred, axis=-1) == label).astype(np.float32)

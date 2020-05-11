@@ -19,6 +19,7 @@ from src.analysis.methods.latencies import (
 )
 from src.analysis.methods.motions import analyze_motions_layer
 from src.analysis.methods.size import analyze_size_model
+from src.analysis.methods.stats import analyze_stats_layer
 from src.analysis.quant import uni_dequant, uni_quant
 from src.analysis.utils import (
     basename_of,
@@ -49,6 +50,8 @@ def analyze_layer(runner: ExperimentRunner):
     basename = runner.basename
 
     print(title)
+
+    analyze_stats_layer(runner)
 
     d = {"layer": layer_name}
 
