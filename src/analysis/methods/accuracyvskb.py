@@ -88,50 +88,24 @@ def analyze_accuracyvskb_layer(
     print("Analyzed accuracy vs KB")
 
 
-def _evaluate_accuracy_kb(
-    model: keras.Model, batch_size: int, kb: int,
-) -> np.ndarray:
-    dataset = ds.dataset_kb(kb)
-    predictions = predict_dataset(model, dataset.batch(batch_size))
-    labels = np.array(list(tfds.as_numpy(dataset.map(_second))))
-    accuracies = _categorical_top1_accuracy(labels, predictions)
-    kbs = np.ones_like(accuracies) * kb
-    return np.vstack((kbs, accuracies))
-
-
 def _evaluate_accuracies_server_kb(
     model: keras.Model, postencoder: str, batch_size: int, bins: np.ndarray
 ) -> pd.DataFrame:
-    mids = 0.5 * (bins[:-1] + bins[1:])
+    quant = lambda x: x.astype(np.uint8)
+    dequant = lambda x: x.astype(dtype)
+
     shape = model.input_shape[1:]
     dtype = model.layers[0].dtype
     tensor_layout = TensorLayout.from_shape(shape, "hwc", dtype)
-
-    quant = lambda x: x.astype(np.uint8)
-    dequant = lambda x: x.astype(dtype)
 
     dataset = ds.dataset()
     tensors = tfds.as_numpy(dataset.map(_first))
     labels = np.array(list(tfds.as_numpy(dataset.map(_second))))
 
-    make_postencoder, make_predecoder, kwargs_list = {
-        "jpeg": (
-            JpegRgbPostencoder,
-            lambda _p: JpegRgbPredecoder(tensor_layout),
-            [{"quality": quality} for quality in range(1, 101)],
-        ),
-        "jpeg2000": (
-            Jpeg2000RgbPostencoder,
-            lambda _p: Jpeg2000RgbPredecoder(tensor_layout),
-            [{"out_size": out_size} for out_size in mids],
-        ),
-        "png": (
-            PngRgbPostencoder,
-            lambda _p: PngRgbPredecoder(tensor_layout),
-            [{}],
-        ),
-    }[postencoder.lower()]
-
+    mids = 0.5 * (bins[:-1] + bins[1:])
+    make_postencoder, make_predecoder, kwargs_list = server_postencoder_maker(
+        postencoder, tensor_layout, mids
+    )
     gen_func = lambda x: _generate_tensors(
         x, quant, dequant, make_postencoder, make_predecoder, kwargs_list
     )
@@ -150,7 +124,6 @@ def _evaluate_accuracies_shared_kb(
     batch_size: int,
     bins: np.ndarray,
 ) -> pd.DataFrame:
-    mids = 0.5 * (bins[:-1] + bins[1:])
     shape = model_client.output_shape[1:]
     dtype = model_client.dtype
     tensor_layout = TensorLayout.from_shape(shape, "hwc", dtype)
@@ -159,24 +132,10 @@ def _evaluate_accuracies_shared_kb(
     tensors = predict_dataset(model_client, dataset.batch(batch_size))
     labels = np.array(list(tfds.as_numpy(dataset.map(_second))))
 
-    make_postencoder, make_predecoder, kwargs_list = {
-        "jpeg": (
-            lambda **kwargs: JpegPostencoder(tensor_layout, **kwargs),
-            lambda p: JpegPredecoder(p.tiled_layout, p.tensor_layout),
-            [{"quality": quality} for quality in range(1, 101)],
-        ),
-        "jpeg2000": (
-            lambda **kwargs: Jpeg2000Postencoder(tensor_layout, **kwargs),
-            lambda p: Jpeg2000Predecoder(p.tiled_layout, p.tensor_layout),
-            [{"out_size": out_size} for out_size in mids],
-        ),
-        "png": (
-            lambda **kwargs: PngPostencoder(tensor_layout, **kwargs),
-            lambda p: PngPredecoder(p.tiled_layout, p.tensor_layout),
-            [{}],
-        ),
-    }[postencoder.lower()]
-
+    mids = 0.5 * (bins[:-1] + bins[1:])
+    make_postencoder, make_predecoder, kwargs_list = shared_postencoder_maker(
+        postencoder, tensor_layout, mids
+    )
     gen_func = lambda x: _generate_tensors(
         x, quant, dequant, make_postencoder, make_predecoder, kwargs_list
     )
@@ -356,3 +315,55 @@ def _first(x, _y):
 @tf.function(autograph=False)
 def _second(_x, y):
     return y
+
+
+def server_postencoder_maker(
+    postencoder: str, tensor_layout: TensorLayout, mids: np.ndarray,
+) -> Tuple[
+    Callable[..., Postencoder],
+    Callable[[Postencoder], Predecoder],
+    List[dict],
+]:
+    return {
+        "jpeg": (
+            JpegRgbPostencoder,
+            lambda _p: JpegRgbPredecoder(tensor_layout),
+            [{"quality": quality} for quality in range(1, 101)],
+        ),
+        "jpeg2000": (
+            Jpeg2000RgbPostencoder,
+            lambda _p: Jpeg2000RgbPredecoder(tensor_layout),
+            [{"out_size": out_size} for out_size in mids],
+        ),
+        "png": (
+            PngRgbPostencoder,
+            lambda _p: PngRgbPredecoder(tensor_layout),
+            [{}],
+        ),
+    }[postencoder.lower()]
+
+
+def shared_postencoder_maker(
+    postencoder: str, tensor_layout: TensorLayout, mids: np.ndarray,
+) -> Tuple[
+    Callable[..., Postencoder],
+    Callable[[Postencoder], Predecoder],
+    List[dict],
+]:
+    return {
+        "jpeg": (
+            lambda **kwargs: JpegPostencoder(tensor_layout, **kwargs),
+            lambda p: JpegPredecoder(p.tiled_layout, p.tensor_layout),
+            [{"quality": quality} for quality in range(1, 101)],
+        ),
+        "jpeg2000": (
+            lambda **kwargs: Jpeg2000Postencoder(tensor_layout, **kwargs),
+            lambda p: Jpeg2000Predecoder(p.tiled_layout, p.tensor_layout),
+            [{"out_size": out_size} for out_size in mids],
+        ),
+        "png": (
+            lambda **kwargs: PngPostencoder(tensor_layout, **kwargs),
+            lambda p: PngPredecoder(p.tiled_layout, p.tensor_layout),
+            [{}],
+        ),
+    }[postencoder.lower()]
