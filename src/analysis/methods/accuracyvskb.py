@@ -1,6 +1,6 @@
 from collections import defaultdict
 from os import path
-from typing import Any, Callable, Dict, Iterator, List, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -34,6 +34,11 @@ from src.lib.predecode import (
 
 BYTES_PER_KB = 1000
 
+MakePostencoder = Callable[..., Postencoder]
+MakePredecoder = Callable[[Postencoder], Predecoder]
+MakePostencoderDecorator = Callable[[MakePostencoder], MakePostencoder]
+MakePredecoderDecorator = Callable[[MakePredecoder], MakePredecoder]
+
 
 def analyze_accuracyvskb_layer(
     model_name: str,
@@ -48,6 +53,8 @@ def analyze_accuracyvskb_layer(
     postencoder: str,
     batch_size: int,
     subdir: str = "",
+    make_postencoder_decorator: Optional[MakePostencoderDecorator] = None,
+    make_predecoder_decorator: Optional[MakePredecoderDecorator] = None,
 ):
     if len(model_client.output_shape) != 4:
         return
@@ -72,6 +79,7 @@ def analyze_accuracyvskb_layer(
         data_shared = pd.read_csv(filename_shared)
     except FileNotFoundError:
         args = (model_client, model_server, dataset, quant, dequant)
+        args = (*args, make_postencoder_decorator, make_predecoder_decorator)
         args = (*args, postencoder, batch_size, bins)
         data_shared = _evaluate_accuracies_shared_kb(*args)
         data_shared.to_csv(filename_shared, index=False)
@@ -124,6 +132,8 @@ def _evaluate_accuracies_shared_kb(
     dataset: tf.data.Dataset,
     quant: Callable[[np.ndarray], np.ndarray],
     dequant: Callable[[np.ndarray], np.ndarray],
+    make_postencoder_decorator: Optional[MakePostencoderDecorator],
+    make_predecoder_decorator: Optional[MakePredecoderDecorator],
     postencoder: str,
     batch_size: int,
     bins: np.ndarray,
@@ -139,6 +149,10 @@ def _evaluate_accuracies_shared_kb(
     make_postencoder, make_predecoder, kwargs_list = shared_postencoder_maker(
         postencoder, tensor_layout, mids
     )
+    if make_postencoder_decorator:
+        make_postencoder = make_postencoder_decorator(make_postencoder)
+    if make_predecoder_decorator:
+        make_predecoder = make_predecoder_decorator(make_predecoder)
     gen_func = lambda x: _generate_tensors(
         x, quant, dequant, make_postencoder, make_predecoder, kwargs_list
     )
@@ -219,8 +233,8 @@ def _generate_tensors(
     client_tensor: np.ndarray,
     quant: Callable[[np.ndarray], np.ndarray],
     dequant: Callable[[np.ndarray], np.ndarray],
-    make_postencoder: Callable[..., Postencoder],
-    make_predecoder: Callable[[Postencoder], Predecoder],
+    make_postencoder: MakePostencoder,
+    make_predecoder: MakePredecoder,
     kwargs_list: Iterator[Dict[str, Any]],
 ) -> Tuple[List[np.ndarray], List[int]]:
     """Returns reconstructed tensors from various compressed sizes"""
@@ -322,11 +336,7 @@ def _second(_x, y):
 
 def server_postencoder_maker(
     postencoder: str, tensor_layout: TensorLayout, mids: np.ndarray,
-) -> Tuple[
-    Callable[..., Postencoder],
-    Callable[[Postencoder], Predecoder],
-    List[dict],
-]:
+) -> Tuple[MakePostencoder, MakePredecoder, List[dict]]:
     return {
         "jpeg": (
             JpegRgbPostencoder,
@@ -348,11 +358,7 @@ def server_postencoder_maker(
 
 def shared_postencoder_maker(
     postencoder: str, tensor_layout: TensorLayout, mids: np.ndarray,
-) -> Tuple[
-    Callable[..., Postencoder],
-    Callable[[Postencoder], Predecoder],
-    List[dict],
-]:
+) -> Tuple[MakePostencoder, MakePredecoder, List[dict]]:
     return {
         "jpeg": (
             lambda **kwargs: JpegPostencoder(tensor_layout, **kwargs),
