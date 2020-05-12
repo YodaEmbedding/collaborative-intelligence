@@ -1,3 +1,4 @@
+import functools
 import json
 from io import BytesIO
 from typing import ByteString
@@ -33,6 +34,8 @@ from src.analysis.utils import (
     title_of,
 )
 from src.lib.split import split_model
+from src.lib.postencode import CallablePostencoder
+from src.lib.predecode import CallablePredecoder
 
 tf_disable_eager_execution()
 
@@ -74,15 +77,45 @@ def analyze_layer(runner: ExperimentRunner):
 
     analyze_motions_layer(model_client, title, basename)
 
-    args = (model_name, model, model_client, model_server, dataset)
-    args = (*args, title, basename)
-    clip_range = (d["mean"] - 3 * d["std"], d["mean"] + 3 * d["std"])
+    clip_range = (-4, 4)
     quant = lambda x: uni_quant(x, clip_range=clip_range, levels=256)
     dequant = lambda x: uni_dequant(x, clip_range=clip_range, levels=256)
+
+    def make_postencoder_decorator(make_postencoder):
+        @functools.wraps(make_postencoder)
+        def wrapper(*args, **kwargs):
+            postencoder = make_postencoder(*args, **kwargs)
+            mean, std = runner.d["tensors_mean"], runner.d["tensors_std"]
+            normalize = lambda x: (x - mean) / std
+            f = lambda x: postencoder.run(quant(normalize(x)))
+            p = CallablePostencoder(f)
+            p.tensor_layout = postencoder.tensor_layout
+            p.tiled_layout = postencoder.tiled_layout
+            return p
+
+        return wrapper
+
+    def make_predecoder_decorator(make_predecoder):
+        @functools.wraps(make_predecoder)
+        def wrapper(*args, **kwargs):
+            predecoder = make_predecoder(*args, **kwargs)
+            mean, std = runner.d["tensors_mean"], runner.d["tensors_std"]
+            denormalize = lambda x: x * std + mean
+            f = lambda x: denormalize(dequant(predecoder.run(x)))
+            p = CallablePredecoder(f)
+            return p
+
+        return wrapper
+
     postencoder_name = "jpeg"
-    subdir = f"{postencoder_name}_uniquant256/{model_name}"
+    subdir = f"{postencoder_name}_uniquant256_normalized/{model_name}"
+    identity = lambda x: x
+    args = (model_name, model, model_client, model_server, dataset)
+    # args = (*args, title, basename, quant, dequant)
+    args = (*args, title, basename, identity, identity)
+    args_decs = (make_postencoder_decorator, make_predecoder_decorator)
     analyze_accuracyvskb_layer(
-        *args, quant, dequant, postencoder_name, BATCH_SIZE, subdir
+        *args, postencoder_name, BATCH_SIZE, subdir, *args_decs
     )
 
     d["latency"] = analyze_latencies_layer(model_client, layer_name)
