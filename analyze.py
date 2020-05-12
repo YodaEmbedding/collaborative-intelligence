@@ -39,9 +39,12 @@ from src.lib.predecode import CallablePredecoder
 
 tf_disable_eager_execution()
 
-BATCH_SIZE = 64
-DATASET_SIZE = 4096
-TEST_DATASET_SIZE = 1024
+with open("config.json") as f:
+    config = json.load(f)
+
+BATCH_SIZE = config["batch_size"]
+DATASET_SIZE = config["dataset_size"]
+TEST_DATASET_SIZE = config["test_dataset_size"]
 
 
 def analyze_layer(runner: ExperimentRunner):

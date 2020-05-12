@@ -1,4 +1,5 @@
 import itertools
+import json
 from functools import partial
 from os import path
 from typing import Callable, Iterator, List, Tuple
@@ -38,13 +39,12 @@ from src.lib.tile import determine_tile_layout, tile
 
 tf_disable_eager_execution()
 
-BATCH_SIZE = 64
-# BATCH_SIZE = 512
-# DATASET_SIZE = 64
-# DATASET_SIZE = 1024
-# DATASET_SIZE = 2048
-DATASET_SIZE = 4096
-# DATASET_SIZE = 8192
+with open("config.json") as f:
+    config = json.load(f)
+
+BATCH_SIZE = config["batch_size"]
+DATASET_SIZE = config["dataset_size"]
+TEST_DATASET_SIZE = config["test_dataset_size"]
 
 
 def load_array(filename, f, *args, dtype=None) -> np.ndarray:
@@ -690,6 +690,7 @@ def main():
         # layer_name="stage3_unit1_bn1",
         dataset_size=DATASET_SIZE,
         batch_size=BATCH_SIZE,
+        test_dataset_size=DATASET_SIZE,
     )
 
     # TODO shouldn't compute stats be part of experimentrunner?
