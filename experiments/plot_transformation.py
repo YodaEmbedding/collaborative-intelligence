@@ -107,7 +107,7 @@ def main():
         x = diff[~mask]
         r = np.max(x) - np.min(x)
         mses[i] = np.mean(x ** 2)
-        psnrs[i] = 20 * np.log(r ** 2 / mses[i])
+        psnrs[i] = 10 * np.log(r ** 2 / mses[i])
 
     print(dx_inputs)
     print(dx_clients)
