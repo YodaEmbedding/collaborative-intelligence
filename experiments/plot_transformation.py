@@ -88,6 +88,7 @@ def main():
     psnrs = np.empty(len(client_tensors) - 1)
 
     for i, curr in enumerate(client_tensors[1:]):
+        r = np.max(curr) - np.min(curr)
         yy, xx, cc = np.meshgrid(
             np.arange(h), np.arange(w), np.arange(c), indexing="ij"
         )
@@ -105,7 +106,6 @@ def main():
         diffs[i] = diff
 
         x = diff[~mask]
-        r = np.max(x) - np.min(x)
         mses[i] = np.mean(x ** 2)
         psnrs[i] = 10 * np.log(r ** 2 / mses[i])
 
