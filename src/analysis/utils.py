@@ -6,6 +6,7 @@ from typing import Callable, Iterator, List
 
 import numpy as np
 import tensorflow as tf
+import tensorflow.python as tfpy
 import tensorflow_datasets as tfds
 from tensorflow import keras
 from tensorflow.keras.layers import Layer
@@ -74,6 +75,8 @@ def title_of(
 
 
 def dataset_to_numpy_array(xs):
+    if isinstance(xs, tfpy.data.ops.dataset_ops.BatchDataset):
+        xs = xs.unbatch()
     if isinstance(xs, (tf.Tensor, tf.data.Dataset)):
         return np.array([x[0] for x in tfds.as_numpy(xs)])
     return np.array(xs)

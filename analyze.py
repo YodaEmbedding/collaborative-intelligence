@@ -24,7 +24,6 @@ from src.analysis.methods.stats import analyze_stats_layer
 from src.analysis.quant import uni_dequant, uni_quant
 from src.analysis.utils import (
     compile_kwargs,
-    dataset_to_numpy_array,
     get_cut_layers,
     new_tf_graph_and_session,
     release_models,
@@ -59,10 +58,6 @@ def analyze_layer(runner: ExperimentRunner):
     analyze_stats_layer(runner)
 
     d = {"layer": layer_name}
-
-    if model_client.input == model_client.output:
-        model_client.predict = dataset_to_numpy_array
-        model_client.predict_on_batch = dataset_to_numpy_array
 
     d.update(analyze_histograms_layer(model_client, title, basename))
 

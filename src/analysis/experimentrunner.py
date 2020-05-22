@@ -9,6 +9,7 @@ from src.analysis import dataset
 from src.analysis.utils import (
     basename_of,
     compile_kwargs,
+    dataset_to_numpy_array,
     get_cut_layers,
     release_models,
     title_of,
@@ -46,6 +47,10 @@ class ExperimentRunner:
         self.model_analysis = a
         self.model_client.compile(**compile_kwargs)
         self.model_server.compile(**compile_kwargs)
+
+        if self.model_client.input == self.model_client.output:
+            self.model_client.predict = dataset_to_numpy_array
+            self.model_client.predict_on_batch = dataset_to_numpy_array
 
         self.tensor_layout = TensorLayout.from_shape(
             c.output_shape[1:], "hwc", c.dtype
