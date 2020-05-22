@@ -84,6 +84,8 @@ def analyze_layer(runner: ExperimentRunner):
     quant = lambda x: uni_quant(x, clip_range=clip_range, levels=256)
     dequant = lambda x: uni_dequant(x, clip_range=clip_range, levels=256)
 
+    # qtable = ...
+
     def make_postencoder_decorator(make_postencoder):
         @functools.wraps(make_postencoder)
         def wrapper(*args, **kwargs):
@@ -110,13 +112,24 @@ def analyze_layer(runner: ExperimentRunner):
 
         return wrapper
 
+    # postencoder_name = "jpeg"
+    # subdir = f"{postencoder_name}_uniquant256_qtable/{model_name}/q1"
+    # identity = lambda x: x
+    # args = (model_name, model, model_client, model_server, dataset)
+    # args = (*args, title, basename, identity, identity)
+    # args_decs = (make_postencoder_decorator, make_predecoder_decorator)
+    # analyze_accuracyvskb_layer(
+    #     *args, postencoder_name, BATCH_SIZE, subdir, *args_decs
+    # )
+
+    clip_range = (d["mean"] - 3 * d["std"], d["mean"] + 3 * d["std"])
+    quant = lambda x: uni_quant(x, clip_range=clip_range, levels=256)
+    dequant = lambda x: uni_dequant(x, clip_range=clip_range, levels=256)
     postencoder_name = "jpeg"
-    subdir = f"{postencoder_name}_uniquant256_normalized/{model_name}"
-    identity = lambda x: x
+    subdir = f"{postencoder_name}_uniquant256/{model_name}"
     args = (model_name, model, model_client, model_server, dataset)
-    # args = (*args, title, basename, quant, dequant)
-    args = (*args, title, basename, identity, identity)
-    args_decs = (make_postencoder_decorator, make_predecoder_decorator)
+    args = (*args, title, basename, quant, dequant)
+    args_decs = (None, None)
     analyze_accuracyvskb_layer(
         *args, postencoder_name, BATCH_SIZE, subdir, *args_decs
     )
