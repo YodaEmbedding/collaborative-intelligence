@@ -23,7 +23,6 @@ from src.analysis.methods.size import analyze_size_model
 from src.analysis.methods.stats import analyze_stats_layer
 from src.analysis.quant import uni_dequant, uni_quant
 from src.analysis.utils import (
-    basename_of,
     compile_kwargs,
     dataset_to_numpy_array,
     get_cut_layers,
@@ -31,9 +30,7 @@ from src.analysis.utils import (
     release_models,
     separate_process,
     tf_disable_eager_execution,
-    title_of,
 )
-from src.lib.split import split_model
 from src.lib.postencode import CallablePostencoder
 from src.lib.predecode import CallablePredecoder
 
@@ -234,6 +231,7 @@ def main2():
     analyze_featuremapcompression_layer = identity
     analyze_motions_layer = identity
 
+    # layers = ["add_3"]
     # layers = ["pooling0", "add_3", "add_7", "add_13"]
     # layers = (
     #     [f"add_{i}" for i in range(1, 16)]
