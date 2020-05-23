@@ -45,7 +45,7 @@ with open("config.json") as f:
 BATCH_SIZE = config["batch_size"]
 DATASET_SIZE = config["dataset_size"]
 TEST_DATASET_SIZE = config["test_dataset_size"]
-
+LABEL_FONTSIZE = 14
 
 def load_array(filename, f, *args, dtype=None) -> np.ndarray:
     try:
@@ -98,8 +98,8 @@ def plot_accuracy_quant(
     cs.set_clim(cmin, cmax)
     cbar = fig.colorbar(cs, ticks=np.linspace(cmin, cmax, 6))
     cbar.ax.set_title("Accuracy", fontsize="small")
-    ax.set_xlabel(r"Clip width ($\sigma$)")
-    ax.set_ylabel("Quantization levels")
+    ax.set_xlabel(r"$w$", fontsize=LABEL_FONTSIZE)
+    ax.set_ylabel("$N$", fontsize=LABEL_FONTSIZE)
     ax.set_title(runner.title)
     save_kwargs = dict(dpi=300, bbox_inches="tight")
     path = f"img/experiment/{runner.basename}-{suffix}.png"
@@ -125,8 +125,8 @@ def plot_mse_quant(
     # cbar = fig.colorbar(cs, ticks=np.logspace(-2, 1, n=5),
     #     format=ticker.LogFormatter(10, labelOnlyBase=True))
     cbar.ax.set_title("MSE", fontsize="small")
-    ax.set_xlabel(r"Clip width ($\sigma$)")
-    ax.set_ylabel("Quantization levels")
+    ax.set_xlabel(r"$w$", fontsize=LABEL_FONTSIZE)
+    ax.set_ylabel("$N$", fontsize=LABEL_FONTSIZE)
     ax.set_title(runner.title)
     save_kwargs = dict(dpi=300, bbox_inches="tight")
     path = f"img/experiment/{runner.basename}-{suffix}.png"
@@ -808,7 +808,7 @@ def main():
         partial(acc_zero, runner),
         "distortzero",
         width_sigmas,
-        xlabel=r"Clip width ($\sigma$)",
+        xlabel=r"$w$",
     )
 
     print("Distort zero 2D...")
