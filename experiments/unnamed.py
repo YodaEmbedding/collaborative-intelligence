@@ -234,7 +234,7 @@ def compute_stats(runner: ExperimentRunner):
     x = uni_dequant(x, (m - w, m + w), 256)
     pred_tensors = runner.model_server.predict(x)
     d["accuracy_256"] = np.mean(
-        categorical_top1_accuracy(labels, pred_tensors)
+        categorical_top1_accuracy(runner.data.labels, pred_tensors)
     )
     runner.d.update(d)
 
