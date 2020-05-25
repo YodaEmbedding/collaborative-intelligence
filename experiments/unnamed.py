@@ -47,6 +47,7 @@ DATASET_SIZE = config["dataset_size"]
 TEST_DATASET_SIZE = config["test_dataset_size"]
 LABEL_FONTSIZE = 14
 
+
 def load_array(filename, f, *args, dtype=None) -> np.ndarray:
     try:
         z = np.load(filename)
