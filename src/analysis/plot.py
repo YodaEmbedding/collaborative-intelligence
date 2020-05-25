@@ -33,8 +33,11 @@ def featuremap(
     clim: Tuple[int, int] = None,
     cmap="viridis",
 ) -> plt.Figure:
-    fill_value = clim[0] if clim is not None else None
-    img = featuremap_image(arr, order, fill_value=fill_value)
+    if arr.ndim != 2:
+        fill_value = clim[0] if clim is not None else None
+        img = featuremap_image(arr, order, fill_value=fill_value)
+    else:
+        img = arr
     fig, ax = plt.subplots(tight_layout=True)
     im = ax.matshow(img, cmap=cmap)
     ax.set_title(title, fontsize="xx-small")
