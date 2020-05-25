@@ -77,8 +77,10 @@ def main():
     # )
     # tensor_layout = runner.tensor_layout
 
-    basename = "resnet34-16of37-add_3"
-    title = "resnet34 add_3 (16/37)"
+    model_name = "resnet34"
+    basename = f"{model_name}-16of37-add_3"
+    title = f"{model_name} add_3 (16/37)"
+    basename_stats = f"img/stats/{model_name}/{basename}"
 
     try:
         img = ds.single_sample_image()
@@ -93,6 +95,7 @@ def main():
         fig = plot.featuremap(arr, title)
         plot.save(fig, filename, bbox_inches="tight")
 
+    tensors_mean = np.load(f"{basename_stats}-tensors_mean.npy")
     h, w, c = tensor_layout.shape
 
     plot_featuremap(x_client, "tensor_client")
