@@ -691,7 +691,7 @@ def main():
         # layer_name="stage3_unit1_bn1",
         dataset_size=DATASET_SIZE,
         batch_size=BATCH_SIZE,
-        test_dataset_size=DATASET_SIZE,
+        test_dataset_size=TEST_DATASET_SIZE,
     )
 
     # TODO shouldn't compute stats be part of experimentrunner?

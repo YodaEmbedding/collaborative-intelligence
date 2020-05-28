@@ -73,7 +73,7 @@ def main():
     #     test_dataset_size=1,
     #     # dataset_size=DATASET_SIZE,
     #     # batch_size=BATCH_SIZE,
-    #     # test_dataset_size=DATASET_SIZE,
+    #     # test_dataset_size=TEST_DATASET_SIZE,
     # )
     # tensor_layout = runner.tensor_layout
 
