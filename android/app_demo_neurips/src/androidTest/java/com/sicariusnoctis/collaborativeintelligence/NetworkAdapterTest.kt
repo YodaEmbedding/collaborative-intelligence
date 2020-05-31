@@ -18,7 +18,7 @@ class NetworkAdapterTest {
     fun uploadSimple() {
         val frame = ByteArray(224 * 224 * 3 * 4) { 0 }
 
-        val HOSTNAME = HOSTNAME
+        val HOSTNAME = "ensc-mcl-28.ensc.sfu.ca"
         val PORT = 5678
         val socket = Socket(HOSTNAME, PORT)
         socket.sendBufferSize = 1024 * 64

@@ -49,7 +49,7 @@ class NetworkAdapter {
 
     @UnstableDefault
     fun connect() {
-        val HOSTNAMES = listOf(HOSTNAME)
+        val HOSTNAMES = listOf("192.168.100.175", "ensc-mcl-28.ensc.sfu.ca")
         val PORT = 5678
 
         val networkConfig = loadJsonFromDefaultFolder("network.json")
