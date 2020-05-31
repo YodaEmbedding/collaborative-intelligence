@@ -1,5 +1,5 @@
 #pragma version(1)
-#pragma rs java_package_name(com.sicariusnoctis.collaborativeintelligence)
+#pragma rs java_package_name(io.github.yodaembedding.collaborativeintelligence)
 #pragma rs_fp_relaxed
 
 rs_allocation input;
