@@ -56,11 +56,14 @@ class ModelManager:
     # @synchronized
     def predict(
         self, model_config: ModelConfig, data_tensor: np.ndarray
-    ) -> List[Tuple[str, str, float]]:
+    ) -> np.ndarray:
         model = self.models[model_config].model
         if model is None:
             return data_tensor
-        return model.predict_on_batch(data_tensor)
+        preds = model.predict_on_batch(data_tensor)
+        if not isinstance(preds, np.ndarray):
+            preds = np.asarray([np.asarray(x) for x in preds])
+        return preds
 
     def decode_predictions(
         self,
