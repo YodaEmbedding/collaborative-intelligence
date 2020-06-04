@@ -550,6 +550,8 @@ def main():
 
     def random_mask(pct: float, shape: Tuple[int]) -> np.ndarray:
         """Returns mask of given shape with pct of values set to True."""
+        if pct == 1.0:
+            return np.ones(shape, dtype=np.bool)
         n = pct * np.prod(shape)
         mask = np.random.rand(*shape)
         v = np.partition(mask.flatten(), int(n))[int(n)]
