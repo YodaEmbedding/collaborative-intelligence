@@ -157,12 +157,12 @@ def plot_distorted(
 
 def plot_distorted_agg(runner, data, suffix, xlabel, ylabel):
     fig, ax = plt.subplots(tight_layout=True)
-    for x, y, label in data:
-        ax.plot(x, y, label=label)
+    for x, y, label, color in data:
+        ax.plot(x, y, label=label, color=color)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     # ax.set_title(runner.title)
-    ax.legend(labels=[label for _, _, label in data], loc="upper right")
+    ax.legend(labels=[label for _, _, label, _ in data], loc="upper right")
     save_kwargs = dict(dpi=300, bbox_inches="tight")
     path = f"img/experiment/{runner.basename}-{suffix}.png"
     fig.savefig(path, **save_kwargs)
@@ -837,34 +837,42 @@ def main():
         {
             "func": distort_black_neuron_zero,
             "name": "distort_black_neuron_zero",
-        },
-        {
-            "func": distort_black_neuron_tensorsmean,
-            "name": "distort_black_neuron_tensorsmean",
+            "label": "zero",
         },
         {
             "func": distort_black_neuron_channelmean,
             "name": "distort_black_neuron_channelmean",
+            "label": "real-time channel mean",
+        },
+        {
+            "func": distort_black_neuron_tensorsmean,
+            "name": "distort_black_neuron_tensorsmean",
+            "label": "precomputed dataset mean",
         },
         {
             "func": distort_black_neuron_tensoroffsetmean,
             "name": "distort_black_neuron_tensoroffsetmean",
+            "label": "hybrid",
         },
         {
             "func": distort_black_channel_zero,
             "name": "distort_black_channel_zero",
-        },
-        {
-            "func": distort_black_channel_tensorsmean,
-            "name": "distort_black_channel_tensorsmean",
+            "label": "zero",
         },
         {
             "func": distort_black_channel_channelmean,
             "name": "distort_black_channel_channelmean",
+            "label": "real-time channel mean",
+        },
+        {
+            "func": distort_black_channel_tensorsmean,
+            "name": "distort_black_channel_tensorsmean",
+            "label": "precomputed dataset mean",
         },
         {
             "func": distort_black_channel_tensoroffsetmean,
             "name": "distort_black_channel_tensoroffsetmean",
+            "label": "hybrid",
         },
     ]
     for trial in trials:
@@ -875,15 +883,23 @@ def main():
         )
         # TODO save dataframe with assosciated probs labels instead of npys...
 
+    colors = [
+        (1.0, 0.5, 0.0),  # orange
+        (0.0, 0.4, 0.8),  # blue
+        (1.0, 0.0, 1.0),  # magenta
+        (0.0, 0.7, 0.4),  # green
+    ]
     for prefix in ["distort_black_neuron_", "distort_black_channel_"]:
         data = []
-        for trial in trials:
+        prefix_trials = [x for x in trials if x["name"].startswith(prefix)]
+        for trial, color in zip(prefix_trials, colors):
             if not trial["name"].startswith(prefix):
                 continue
             suffix = trial["name"][len(prefix) :]
+            label = trial["label"]
             npy_path = f"img/experiment/{runner.basename}-{prefix}{suffix}.npy"
             accs = np.load(npy_path)
-            data.append((probs, accs, suffix))
+            data.append((probs, accs, label, color))
         suffix = prefix.rstrip("_")
         plot_distorted_agg(runner, data, suffix, "Probability", "Accuracy")
 
