@@ -9,6 +9,8 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 from matplotlib.colors import LogNorm
+from matplotlib.ticker import PercentFormatter
+from scipy.interpolate import interp1d
 
 from src.analysis import plot
 from src.analysis.experimentrunner import ExperimentRunner
@@ -140,27 +142,40 @@ def plot_distorted(
     suffix: str,
     xs: np.ndarray,
     xlabel: str,
+    *,
+    x_pct: bool = False,
 ):
     path = f"img/experiment/{runner.basename}-{suffix}.npy"
     accuracies = load_array(path, compute_func, xs)
     accuracies = np.clip(accuracies, 0.0, 1.0)
     x, y = xs, accuracies
     fig, ax = plt.subplots(tight_layout=True)
+    if x_pct:
+        x = x * 100
     ax.plot(x, y)
     ax.set_xlabel(xlabel)
     ax.set_ylabel("Accuracy")
+    if x_pct:
+        ax.xaxis.set_major_formatter(PercentFormatter())
     ax.set_title(runner.title)
     save_kwargs = dict(dpi=300, bbox_inches="tight")
     path = f"img/experiment/{runner.basename}-{suffix}.png"
     fig.savefig(path, **save_kwargs)
 
 
-def plot_distorted_agg(runner, data, suffix, xlabel, ylabel):
+def plot_distorted_agg(runner, data, suffix, xlabel, ylabel, *, x_pct=False):
     fig, ax = plt.subplots(tight_layout=True)
     for x, y, label, color in data:
-        ax.plot(x, y, label=label, color=color)
+        f = interp1d(x, y, kind="cubic")
+        t = np.linspace(x.min(), x.max(), num=(x.size - 1) * 4 + 1)
+        ft = f(t)
+        if x_pct:
+            t = t * 100
+        ax.plot(t, ft, label=label, color=color)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
+    if x_pct:
+        ax.xaxis.set_major_formatter(PercentFormatter())
     # ax.set_title(runner.title)
     ax.legend(labels=[label for _, _, label, _ in data], loc="upper right")
     save_kwargs = dict(dpi=300, bbox_inches="tight")
@@ -832,7 +847,12 @@ def main():
     # black out by channel, or by LSBs, etc; black randomly?
     # uniquant? still haven't determined if that's the best... meh
     probs = np.linspace(0, 1, num=20)
-    black_kwargs = dict(runner=runner, xs=probs, xlabel="Probability")
+    black_kwargs = dict(
+        runner=runner,
+        xs=probs,
+        xlabel="Percentage of lost tensor data",
+        x_pct=True,
+    )
     trials = [
         {
             "func": distort_black_neuron_zero,
@@ -889,6 +909,9 @@ def main():
         (1.0, 0.0, 1.0),  # magenta
         (0.0, 0.7, 0.4),  # green
     ]
+    black_agg_kwargs = dict(
+        xlabel="Percentage of lost tensor data", ylabel="Accuracy", x_pct=True
+    )
     for prefix in ["distort_black_neuron_", "distort_black_channel_"]:
         data = []
         prefix_trials = [x for x in trials if x["name"].startswith(prefix)]
@@ -901,7 +924,7 @@ def main():
             accs = np.load(npy_path)
             data.append((probs, accs, label, color))
         suffix = prefix.rstrip("_")
-        plot_distorted_agg(runner, data, suffix, "Probability", "Accuracy")
+        plot_distorted_agg(runner, data, suffix, **black_agg_kwargs)
 
     print("Increasing errors in signal...")
     # plot_distorted(runner, flip_bits)
