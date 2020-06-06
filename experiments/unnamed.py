@@ -565,20 +565,13 @@ def main():
 
     def random_mask(pct: float, shape: Tuple[int]) -> np.ndarray:
         """Returns mask of given shape with pct of values set to True."""
-        if pct == 1.0:
-            return np.ones(shape, dtype=np.bool)
-        n = pct * np.prod(shape)
-        mask = np.random.rand(*shape)
-        v = np.partition(mask.flatten(), int(n))[int(n)]
-        mask = mask < v  # TODO this should maybe be int(n) - 1 ... or <= ...
-        if np.random.rand() >= n - int(n):
-            return mask
-        while True:
-            idx = tuple(np.random.randint(0, i) for i in shape)
-            if mask[idx]:
-                continue
-            mask[idx] = True
-            break
+        size = np.prod(shape)
+        n = int(pct * size)
+        if np.random.rand() < pct * size - n:
+            n = n + 1
+        idxs = np.random.choice(size, n, replace=False)
+        mask = np.zeros(shape, dtype=np.bool)
+        mask.reshape(-1)[idxs] = True
         return mask
 
     def black_neuron_pr(x: np.ndarray, black: np.ndarray, p) -> np.ndarray:
@@ -588,9 +581,9 @@ def main():
         return x
 
     def black_channel_pr(x: np.ndarray, black: np.ndarray, p) -> np.ndarray:
-        mask = random_mask(p, x.shape[:-1])
+        mask = random_mask(p, (x.shape[-1],))
         x = x.copy()
-        x[mask] = black[mask]
+        x[..., mask] = black[..., mask]
         return x
 
     def distort_black_neuron_zero(x: np.ndarray, p) -> np.ndarray:
