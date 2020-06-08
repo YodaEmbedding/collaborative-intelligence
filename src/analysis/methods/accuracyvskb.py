@@ -312,7 +312,7 @@ def _plot_accuracy_vs_kb(
         loc="lower right",
     )
     ax.set(xlim=(0, 30), ylim=(0, 1))
-    ax.set_xlabel("KB")
+    ax.set_xlabel("Compressed size (KB)")
     ax.set_ylabel("Accuracy")
     ax.set_title(title, fontsize="xx-small")
     return fig
