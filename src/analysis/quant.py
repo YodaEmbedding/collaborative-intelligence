@@ -6,7 +6,9 @@ import numpy as np
 def uni_quant(
     x: np.ndarray, clip_range: Tuple[float, float], levels: int
 ) -> np.ndarray:
-    x = levels * (x - clip_range[0]) / (clip_range[1] - clip_range[0])
+    x = x.astype(np.float32)
+    x -= clip_range[0]
+    x *= levels / (clip_range[1] - clip_range[0])
     x = np.clip(x, 0, levels - 1)
     x = x.astype(np.uint8)
     return x
@@ -15,10 +17,11 @@ def uni_quant(
 def uni_dequant(
     x: np.ndarray, clip_range: Tuple[float, float], levels: int
 ) -> np.ndarray:
-    np.clip(x, 0, levels - 1)
     width = (clip_range[1] - clip_range[0]) / levels
     x = x.astype(np.float32)
-    x = x * width + (0.5 * width + clip_range[0])
+    x = np.clip(x, 0, levels - 1)
+    x *= width
+    x += 0.5 * width + clip_range[0]
     return x
 
 
