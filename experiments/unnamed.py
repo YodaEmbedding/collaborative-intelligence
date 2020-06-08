@@ -14,6 +14,7 @@ from scipy.interpolate import interp1d
 
 from src.analysis import plot
 from src.analysis.experimentrunner import ExperimentRunner
+from src.analysis.dataset import single_sample_image
 from src.analysis.methods.accuracyvskb import (
     _bin_for_plot,
     _dataframe_normalize,
@@ -218,18 +219,22 @@ def compute_stats(runner: ExperimentRunner):
     d = runner.d
     client_tensors = runner.data.client_tensors
 
-    x = client_tensors[0]
+    x = single_sample_image()
+    x = runner.model_client.predict(x[np.newaxis])[0]
+    sample_client_tensor = x
+
+    x = sample_client_tensor
     m = d["mean"]
     w = d["std"] * 3
     x = uni_quant(x, (m - w, m + w), 4)
     plot_quick(plot.featuremap, x, "uniquant_featuremap")
 
-    x = client_tensors[0]
+    x = sample_client_tensor
     x = indep_quant(x, d, 3, 4)
     # x = indep_dequant(x, d, 3, 4)
     plot_quick(plot.featuremap, x, "indepquant_featuremap")
 
-    x = client_tensors[0]
+    x = sample_client_tensor
     tensor_layout = runner.tensor_layout
     tiled_layout = determine_tile_layout(tensor_layout)
     xt = tile(x, tensor_layout, tiled_layout)
