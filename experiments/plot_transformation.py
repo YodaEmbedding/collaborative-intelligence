@@ -19,27 +19,31 @@ DATASET_SIZE = 64
 def featuremapsequence(
     frames: np.ndarray,
     tensors: np.ndarray,
+    preds: np.ndarray,
     diffs: np.ndarray,
     title: str,
     order: str = "hwc",
     *,
     clim: Tuple[int, int] = None,
+    clim_diff: Tuple[int, int] = None,
     cmap="viridis",
 ) -> plt.Figure:
     n = len(frames)
-    ncols = 3
+    ncols = 4
     nrows = n
     fig, axes = plt.subplots(
-        nrows, ncols, figsize=(7, 10), constrained_layout=True
+        nrows, ncols, figsize=(10, 10), constrained_layout=True
     )
     fill_value = clim[0] if clim is not None else None
 
-    def plot_ax(ax, img):
+    def plot_ax(ax, img, *, clim=clim, cbar=False):
         im = ax.matshow(img, cmap=cmap)
         ax.set_xticks([])
         ax.set_yticks([])
         if clim is not None:
             im.set_clim(*clim)
+        if cbar:
+            fig.colorbar(im, ax=ax)
 
     for i, img in enumerate(frames):
         plot_ax(axes[i, 0], img)
@@ -48,11 +52,16 @@ def featuremapsequence(
         img = plot.featuremap_image(arr, order, fill_value=fill_value)
         plot_ax(axes[i, 1], img)
 
-    for i, arr in enumerate(diffs, start=1):
+    for i, arr in enumerate(preds, start=1):
         img = plot.featuremap_image(arr, order, fill_value=fill_value)
         plot_ax(axes[i, 2], img)
 
+    for i, arr in enumerate(diffs, start=1):
+        img = plot.featuremap_image(arr, order, fill_value=fill_value)
+        plot_ax(axes[i, 3], img, cbar=True, clim=clim_diff)
+
     axes[0, 2].axis("off")
+    axes[0, 3].axis("off")
 
     # fig.suptitle(title, fontsize="xx-small")
     return fig
@@ -84,6 +93,7 @@ def main():
     client_tensors = runner.model_client.predict(frames)
     prev = client_tensors[0]
     diffs = np.empty((len(client_tensors) - 1, *shape), dtype=dtype)
+    preds = np.empty((len(client_tensors) - 1, *shape), dtype=dtype)
     mses = np.empty(len(client_tensors) - 1)
     psnrs = np.empty(len(client_tensors) - 1)
 
@@ -101,6 +111,8 @@ def main():
 
         pred = ndimage.map_coordinates(prev, [yy, xx, cc], order=3)
         pred = pred.reshape(h, w, -1)
+        preds[i] = pred
+
         diff = curr - pred
         diff[mask] = 0
         diffs[i] = diff
@@ -109,19 +121,32 @@ def main():
         mses[i] = np.mean(x ** 2)
         psnrs[i] = 10 * np.log(r ** 2 / mses[i])
 
+        # preds[mask] = 0
+
     print(dx_inputs)
     print(dx_clients)
     print(mses)
     print(psnrs)
 
+    def visual_adjust_tensor(t):
+        off = t - np.mean(t)
+        return np.copysign(np.abs(off) ** 0.5, off) + np.mean(t)
+
     # Adjust for visual purposes
-    t = client_tensors
-    off = t - np.mean(t)
-    client_tensors = np.copysign(np.abs(off) ** 0.5, off) + np.mean(t)
+    client_tensors = visual_adjust_tensor(client_tensors)
+    preds = visual_adjust_tensor(preds)
     diffs = np.abs(diffs)
 
+    # Show only k channels
+    koff = 0
+    k = 4**2
+    client_tensors = client_tensors[..., koff:koff + k]
+    preds = preds[..., koff:koff + k]
+    diffs = diffs[..., koff:koff + k]
+
     suffix = f"input_translate_{px}px_{offset}plus_order3"
-    fig = featuremapsequence(frames, client_tensors, diffs, title="")
+    # fig = featuremapsequence(frames, client_tensors, preds, diffs, title="", clim_diff=(0, client_tensors.max() - client_tensors.min()))
+    fig = featuremapsequence(frames, client_tensors, preds, diffs, title="", clim_diff=(0, 3))
     plot.save(
         fig,
         f"img/experiment/{runner.basename}-{suffix}.png",
