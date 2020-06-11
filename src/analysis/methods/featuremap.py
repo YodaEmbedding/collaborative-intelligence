@@ -19,7 +19,7 @@ def analyze_featuremap_layer(
     data = single_sample_image()[np.newaxis].astype(np.float32)
     tensor = model_client.predict(data)[0]
     fig = plot.featuremap(tensor, title, cbar=False)
-    plot.save(fig, f"img/featuremap/{basename}.png")
+    plot.save(fig, f"img/featuremap/{basename}.png", bbox_inches="tight")
     print("Analyzed featuremap")
 
 
