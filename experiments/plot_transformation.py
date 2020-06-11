@@ -3,6 +3,7 @@ from typing import Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy import ndimage
 
 import src.analysis.dataset as ds
@@ -31,9 +32,8 @@ def featuremapsequence(
     n = len(frames)
     ncols = 4
     nrows = n
-    fig, axes = plt.subplots(
-        nrows, ncols, figsize=(10, 10), constrained_layout=True
-    )
+    fig, axes = plt.subplots(nrows, ncols, figsize=(10.3, 10))
+    fig.subplots_adjust(wspace=0.0, hspace=0.1)
     fill_value = clim[0] if clim is not None else None
 
     def plot_ax(ax, img, *, clim=clim, cbar=False):
@@ -43,7 +43,14 @@ def featuremapsequence(
         if clim is not None:
             im.set_clim(*clim)
         if cbar:
-            fig.colorbar(im, ax=ax)
+            cax = fig.add_axes([
+                ax.get_position().x1 + 0.01,
+                ax.get_position().y0,
+                0.01,
+                ax.get_position().height,
+            ])
+            cax.tick_params(labelsize=8)
+            fig.colorbar(im, cax=cax)
 
     for i, img in enumerate(frames):
         plot_ax(axes[i, 0], img)
@@ -63,7 +70,6 @@ def featuremapsequence(
     axes[0, 2].axis("off")
     axes[0, 3].axis("off")
 
-    # fig.suptitle(title, fontsize="xx-small")
     return fig
 
 
@@ -84,7 +90,6 @@ def main():
     offset = 0.25
     x_in_per_cl = 224 / w
     dx_inputs = (((np.arange(n) * px) + offset) * x_in_per_cl).astype(np.int64)
-    # dx_inputs = ((np.arange(n) * offset + px) * x_in_per_cl).astype(np.int64)
     dx_inputs[0] = 0
     dx_clients = dx_inputs / x_in_per_cl
     dy_clients = np.zeros(n)
@@ -133,20 +138,60 @@ def main():
         return np.copysign(np.abs(off) ** 0.5, off) + np.mean(t)
 
     # Adjust for visual purposes
-    client_tensors = visual_adjust_tensor(client_tensors)
-    preds = visual_adjust_tensor(preds)
-    diffs = np.abs(diffs)
+    tensors_ = visual_adjust_tensor(client_tensors)
+    preds_ = visual_adjust_tensor(preds)
+    diffs_ = np.abs(diffs)
 
     # Show only k channels
     koff = 0
-    k = 4**2
-    client_tensors = client_tensors[..., koff:koff + k]
-    preds = preds[..., koff:koff + k]
-    diffs = diffs[..., koff:koff + k]
+    k = 4 ** 2
+    tensors_ = tensors_[..., koff : koff + k]
+    preds_ = preds_[..., koff : koff + k]
+    diffs_ = diffs_[..., koff : koff + k]
+
+    # Scale colorbar in a consistent manner
+    clim = (tensors_.min(), tensors_.max())
+    r = clim[1] - clim[0]
+    clim_diff = (0, r)
+
+    # Manual overrides
+    clim = (-1.6, 1.4)
+    clim_diff = (0, 3.0)
+
+    fig = featuremapsequence(
+        frames,
+        tensors_,
+        preds_,
+        diffs_,
+        title="",
+        clim=clim,
+        clim_diff=clim_diff,
+    )
+
+    def idx(y, x):
+        return 4 * y + x
+
+    pad = 6
+    ax_opts = dict(
+        xy=(0.5, 1),
+        xycoords="axes fraction",
+        xytext=(0, pad),
+        textcoords="offset points",
+        size="medium",
+        ha="center",
+        va="baseline",
+    )
+    axes = fig.axes
+    axes[idx(0, 0)].annotate("Image", **ax_opts)
+    axes[idx(0, 1)].annotate("Tensor", **ax_opts)
+    axes[idx(1, 2)].annotate("Motion compensated\ntensor", **ax_opts)
+    axes[idx(1, 3)].annotate("Difference", **ax_opts)
+    axes[idx(0, 0)].set_ylabel("Reference")
+    axes[idx(1, 0)].set_ylabel(f"{dx_inputs[1]} px")
+    axes[idx(2, 0)].set_ylabel(f"{dx_inputs[2]} px")
+    axes[idx(3, 0)].set_ylabel(f"{dx_inputs[3]} px")
 
     suffix = f"input_translate_{px}px_{offset}plus_order3"
-    # fig = featuremapsequence(frames, client_tensors, preds, diffs, title="", clim_diff=(0, client_tensors.max() - client_tensors.min()))
-    fig = featuremapsequence(frames, client_tensors, preds, diffs, title="", clim_diff=(0, 3))
     plot.save(
         fig,
         f"img/experiment/{runner.basename}-{suffix}.png",
