@@ -17,62 +17,6 @@ BATCH_SIZE = 64
 DATASET_SIZE = 64
 
 
-def featuremapsequence(
-    frames: np.ndarray,
-    tensors: np.ndarray,
-    preds: np.ndarray,
-    diffs: np.ndarray,
-    title: str,
-    order: str = "hwc",
-    *,
-    clim: Tuple[int, int] = None,
-    clim_diff: Tuple[int, int] = None,
-    cmap="viridis",
-) -> plt.Figure:
-    n = len(frames)
-    ncols = 4
-    nrows = n
-    fig, axes = plt.subplots(nrows, ncols, figsize=(10.3, 10))
-    fig.subplots_adjust(wspace=0.0, hspace=0.1)
-    fill_value = clim[0] if clim is not None else None
-
-    def plot_ax(ax, img, *, clim=clim, cbar=False):
-        im = ax.matshow(img, cmap=cmap)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        if clim is not None:
-            im.set_clim(*clim)
-        if cbar:
-            cax = fig.add_axes([
-                ax.get_position().x1 + 0.01,
-                ax.get_position().y0,
-                0.01,
-                ax.get_position().height,
-            ])
-            cax.tick_params(labelsize=8)
-            fig.colorbar(im, cax=cax)
-
-    for i, img in enumerate(frames):
-        plot_ax(axes[i, 0], img)
-
-    for i, arr in enumerate(tensors):
-        img = plot.featuremap_image(arr, order, fill_value=fill_value)
-        plot_ax(axes[i, 1], img)
-
-    for i, arr in enumerate(preds, start=1):
-        img = plot.featuremap_image(arr, order, fill_value=fill_value)
-        plot_ax(axes[i, 2], img)
-
-    for i, arr in enumerate(diffs, start=1):
-        img = plot.featuremap_image(arr, order, fill_value=fill_value)
-        plot_ax(axes[i, 3], img, cbar=True, clim=clim_diff)
-
-    axes[0, 2].axis("off")
-    axes[0, 3].axis("off")
-
-    return fig
-
-
 def main():
     runner = ExperimentRunner(
         model_name="resnet34",
@@ -158,7 +102,7 @@ def main():
     clim = (-1.6, 1.4)
     clim_diff = (0, 3.0)
 
-    fig = featuremapsequence(
+    fig = plot.featuremapsequence(
         frames,
         tensors_,
         preds_,
