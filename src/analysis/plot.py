@@ -92,6 +92,7 @@ def featuremapsequence(
     clim: Tuple[float, float] = None,
     clim_diff: Tuple[float, float] = None,
     cmap="viridis",
+    figsize=(10.3, 10.0),
 ) -> plt.Figure:
     """Show how frame transformations influence intermediate layer.
 
@@ -104,7 +105,7 @@ def featuremapsequence(
     n = len(frames)
     ncols = 4
     nrows = n
-    fig, axes = plt.subplots(nrows, ncols, figsize=(10.3, 10))
+    fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
     fig.subplots_adjust(wspace=0.0, hspace=0.1)
     fill_value = clim[0] if clim is not None else None
 
